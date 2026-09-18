@@ -8,7 +8,7 @@ pub enum ParseError<'a, E> {
   Field {
     /// Whether the field is missing or excess.
     kind: FieldKind,
-    /// Complete, trimmed file content returned by the kernel.
+    /// Verbatim input passed to the parser.
     raw: Cow<'a, str>,
     /// Name of the missing field or position of the excess field.
     field: &'static str,
@@ -19,7 +19,7 @@ pub enum ParseError<'a, E> {
     "cgroup content {raw:?} has an invalid field {field:?} value {value:?}"
   )]
   Invalid {
-    /// Complete, trimmed file content returned by the kernel.
+    /// Verbatim input passed to the parser.
     raw: Cow<'a, str>,
     /// Name of the field whose value could not be parsed.
     field: &'static str,

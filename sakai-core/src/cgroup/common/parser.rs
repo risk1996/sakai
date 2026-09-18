@@ -22,16 +22,27 @@ pub enum ParseValueError {
   OutOfRange,
 }
 
-/// Iterator over fields from one cgroup interface file.
+/// Parser for fields from one cgroup interface file.
 pub struct Parser<'a> {
   raw: &'a str,
   fields: SplitAsciiWhitespace<'a>,
 }
 
 impl<'a> Parser<'a> {
+  /// Parses a value, rejecting any fields left after the closure succeeds.
+  pub fn parse<T, E>(
+    raw: &'a str,
+    f: impl FnOnce(&mut Self) -> Result<T, ParseError<'static, E>>,
+  ) -> Result<T, ParseError<'static, E>> {
+    let mut parser = Self::new(raw);
+    let value = f(&mut parser)?;
+    parser.finish()?;
+    Ok(value)
+  }
+
   /// Creates a parser that records `raw` in any parse error.
   #[must_use]
-  pub fn new(raw: &'a str) -> Self {
+  fn new(raw: &'a str) -> Self {
     Self {
       raw,
       fields: raw.split_ascii_whitespace(),
@@ -60,7 +71,7 @@ impl<'a> Parser<'a> {
   }
 
   /// Returns an error if an excess field remains.
-  pub fn finish<E>(&mut self) -> Result<(), ParseError<'static, E>> {
+  fn finish<E>(&mut self) -> Result<(), ParseError<'static, E>> {
     if self.fields.next().is_some() {
       return Err(ParseError::Field {
         kind: FieldKind::Excess,
@@ -117,9 +128,9 @@ mod tests {
   #[test]
   fn rejects_times_that_overflow_nanosecond_storage() {
     for input in ["18446744073709552", "18446744073709551615"] {
-      let mut parser = Parser::new(input);
-      let error =
-        assert_err!(parser.next_field::<ParseMicroseconds, Time>("duration"));
+      let error = assert_err!(Parser::parse(input, |parser| {
+        parser.next_field::<ParseMicroseconds, Time>("duration")
+      }));
       match error {
         | ParseError::Invalid {
           raw,

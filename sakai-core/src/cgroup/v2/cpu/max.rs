@@ -34,12 +34,12 @@ impl FromStr for CpuMax {
   type Err = ParseError<'static, ParseValueError>;
 
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    let mut iters = Parser::new(contents.trim());
-    let quota = iters.next_field::<ParseMicroseconds, _>("quota")?;
-    let period = iters.next_field::<ParseMicroseconds, _>("period")?;
-    iters.finish()?;
-
-    Ok(Self { quota, period })
+    Parser::parse(contents, |parser| {
+      Ok(Self {
+        quota: parser.next_field::<ParseMicroseconds, _>("quota")?,
+        period: parser.next_field::<ParseMicroseconds, _>("period")?,
+      })
+    })
   }
 }
 
@@ -54,25 +54,37 @@ mod tests {
   fn parses_cpu_max() {
     struct TestCase {
       input: &'static str,
-      expected: Result<(MaxOr<u64>, u64), &'static str>,
+      expected: Result<CpuMax, &'static str>,
     }
 
     let cases = [
       TestCase {
         input: "25000 100000\n",
-        expected: Ok((MaxOr::Value(25_000), 100_000)),
+        expected: Ok(CpuMax {
+          quota: MaxOr::Value(Time::new::<microsecond>(25_000)),
+          period: Time::new::<microsecond>(100_000),
+        }),
       },
       TestCase {
         input: "max 100000\n",
-        expected: Ok((MaxOr::Max, 100_000)),
+        expected: Ok(CpuMax {
+          quota: MaxOr::Max,
+          period: Time::new::<microsecond>(100_000),
+        }),
       },
       TestCase {
         input: "1500001 100000\n",
-        expected: Ok((MaxOr::Value(1_500_001), 100_000)),
+        expected: Ok(CpuMax {
+          quota: MaxOr::Value(Time::new::<microsecond>(1_500_001)),
+          period: Time::new::<microsecond>(100_000),
+        }),
       },
       TestCase {
         input: "18446744073709551 100000\n",
-        expected: Ok((MaxOr::Value(u64::MAX / 1_000), 100_000)),
+        expected: Ok(CpuMax {
+          quota: MaxOr::Value(Time::new::<microsecond>(u64::MAX / 1_000)),
+          period: Time::new::<microsecond>(100_000),
+        }),
       },
       TestCase {
         input: "",
@@ -102,27 +114,31 @@ mod tests {
            value \"forever\"",
         ),
       },
+      TestCase {
+        input: "max max",
+        expected: Err(
+          "cgroup content \"max max\" has an invalid field \"period\" value \
+           \"max\"",
+        ),
+      },
+      TestCase {
+        input: " max forever\n",
+        expected: Err(
+          "cgroup content \" max forever\\n\" has an invalid field \"period\" \
+           value \"forever\"",
+        ),
+      },
     ];
 
     for case in cases {
       let actual = case.input.parse::<CpuMax>();
       match case.expected {
-        | Ok((quota, period)) => {
-          let actual = assert_ok!(actual);
-          let actual_quota = match actual.quota() {
-            | MaxOr::Max => MaxOr::Max,
-            | MaxOr::Value(value) => MaxOr::Value(value.get::<microsecond>()),
-          };
-          assert_eq!(actual_quota, quota, "input: {:?}", case.input);
-          assert_eq!(
-            actual.period().get::<microsecond>(),
-            period,
-            "input: {:?}",
-            case.input
-          );
+        | Ok(expected) => {
+          let actual = assert_ok!(actual, "input: {:?}", case.input);
+          assert_eq!(actual, expected, "input: {:?}", case.input);
         },
         | Err(message) => {
-          let actual = assert_err!(actual);
+          let actual = assert_err!(actual, "input: {:?}", case.input);
           assert_eq!(actual.to_string(), message, "input: {:?}", case.input);
         },
       }
