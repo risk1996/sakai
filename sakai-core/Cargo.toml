@@ -10,7 +10,7 @@ workspace = true
 nutype = "0.7.0"
 strum = { version = "0.28.0", features = ["derive"] }
 thiserror = "2.0.20"
-uom = { version = "0.38.0", default-features = false, features = ["u64", "si"] }
+uom = { version = "0.38.0", default-features = false, features = ["f64", "u64", "si"] }
 
 [dev-dependencies]
 assertables = "10.1.0"

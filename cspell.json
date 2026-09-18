@@ -6,6 +6,7 @@
     "libpython",
     "maturin",
     "nextest",
+    "nutype",
     "pkgs",
     "thiserror"
   ]

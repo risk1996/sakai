@@ -1,3 +1,4 @@
+use nutype::nutype;
 use uom::si::{
   amount_of_substance::mole, electric_current::ampere, length::meter,
   luminous_intensity::candela, mass::kilogram,
@@ -30,6 +31,20 @@ const _: () = {
   assert!(size_of::<Time>() == size_of::<u64>());
   assert!(align_of::<Time>() == align_of::<u64>());
 };
+
+/// A nonzero [`Time`].
+#[nutype(
+  validate(predicate = |time| time.get::<nanosecond>() != 0),
+  derive(Debug, Clone, Copy, PartialEq, Eq, Hash, AsRef, Deref),
+)]
+pub struct NonZeroTime(Time);
+const _: () = {
+  assert!(size_of::<NonZeroTime>() == size_of::<Time>());
+  assert!(align_of::<NonZeroTime>() == align_of::<Time>());
+};
+
+/// A dimensionless ratio stored as an `f64`.
+pub type Ratio = uom::si::f64::Ratio;
 
 #[cfg(test)]
 mod tests {

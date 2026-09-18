@@ -4,12 +4,8 @@ use uom::si::time::nanosecond;
 
 use crate::cgroup::common::{
   error::{FieldKind, ParseError},
-  unit::{MaxOr, Time},
+  unit::{MaxOr, NonZeroTime, Time},
 };
-
-/// A zero-sized marker for cgroup values encoded in microseconds.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ParseMicroseconds;
 
 /// A numeric field is malformed or outside the target type's supported range.
 #[derive(Debug, thiserror::Error)]
@@ -93,6 +89,10 @@ pub trait ParseCgroup<Unit>: Sized {
   fn parse_cgroup(value: &str) -> Result<Self, Self::Error>;
 }
 
+/// A zero-sized marker for cgroup values encoded in microseconds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ParseMicroseconds;
+
 impl ParseCgroup<ParseMicroseconds> for Time {
   type Error = ParseValueError;
 
@@ -102,6 +102,19 @@ impl ParseCgroup<ParseMicroseconds> for Time {
       .checked_mul(1_000)
       .ok_or(ParseValueError::OutOfRange)?;
     Ok(Self::new::<nanosecond>(nanoseconds))
+  }
+}
+
+/// A zero-sized marker for nonzero cgroup values encoded in microseconds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ParseNonZeroMicroseconds;
+
+impl ParseCgroup<ParseNonZeroMicroseconds> for NonZeroTime {
+  type Error = ParseValueError;
+
+  fn parse_cgroup(value: &str) -> Result<Self, Self::Error> {
+    let time = <Time as ParseCgroup<ParseMicroseconds>>::parse_cgroup(value)?;
+    Self::try_new(time).map_err(|_error| ParseValueError::OutOfRange)
   }
 }
 
