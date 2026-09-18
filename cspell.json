@@ -1,0 +1,12 @@
+{
+  "words": [
+    "assertables",
+    "clippy",
+    "devenv",
+    "libpython",
+    "maturin",
+    "nextest",
+    "pkgs",
+    "thiserror"
+  ]
+}

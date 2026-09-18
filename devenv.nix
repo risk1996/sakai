@@ -20,6 +20,7 @@
   };
 
   packages = [
+    pkgs.cargo-nextest
     pkgs.pkg-config
   ];
 

@@ -182,7 +182,7 @@ Use `uom` with **`u64` storage** (`default-features = false`, `features = ["u64"
 
 | Domain                | uom quantity                                         | Canonical unit when parsing kernel text | Notes                                                                                                                                           |
 | --------------------- | ---------------------------------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| Time                  | `si::u64::Time` as `Time`                            | **microsecond**                         | Kernel default is µs. Convert with `.get::<nanosecond>()` / `millisecond` / `second`. `MaxOr<Time>` for the `max` token.                        |
+| Time                  | `si::time::Time<BaseUnits, u64>` as `Time`     | **microsecond**                         | Kernel default is µs; nanosecond storage also preserves finer I/O times. `MaxOr<Time>` for the `max` token.                     |
 | Memory amounts        | `si::u64::Information` as `Bytes`                    | **byte**                                | `memory.current`, `anon`, …                                                                                                                     |
 | Percents              | `si::u64::Ratio` as `Ratio`                          | **`part_per_ten_thousand`**             | Kernel `1234` = 12.34%. **Never** `.get::<percent>()` on `u64` — that truncates 12.34 → 12.                                                     |
 | Event / period counts | custom **`Count`** (own `Kind`, dimensionless)       | 1                                       | `nr_periods`, `pgfault`, `oom`. **Not** `Ratio` and **not** `Information`.                                                                      |
@@ -190,6 +190,8 @@ Use `uom` with **`u64` storage** (`default-features = false`, `features = ["u64"
 | Rates                 | `Count / Time`                                       | —                                       | Dimension T⁻¹. Prefer a distinct **`EventRate` Kind** if mixing with SI `Frequency` (Hz) would confuse rustdoc; otherwise `si::u64::Frequency`. |
 
 **`cpu.max` quota/period** is a **dimensionless duty cycle** (`Time / Time`), not a frequency. **`cpu.max.burst` and `burst_usec` are time** (µs), same dimension as `$MAX` — **not** cycles/s.
+
+`BaseUnits` uses the existing `uom` SI dimensions with nanoseconds as the base time unit (other base units remain SI). `Time` uses `u64` storage, holding about 584 years of accumulated time with nanosecond precision. CPU counters aggregate across CPUs: 1,024 continuously busy CPUs reach this range in about 208 days. This is a practical range limit, not a guarantee for every valid kernel counter. Microsecond parsing must use checked multiplication by 1,000 and return a parse error above 18,446,744,073,709,551 µs; never panic, wrap, or saturate. Do not use `si::u64::Time`: its whole-second storage truncates subsecond values. Conversions to coarser units truncate and finer units can overflow. To compute fractional quota/period ratios, convert the counts to a fractional representation before dividing; integer quantity division truncates.
 
 **Pages ≠ bytes** until `PAGE_SIZE` is known. Do not treat `pswpin` as `Information`. In SI, `uom`’s `Information` is **dimensionless** (kind-separated from `Ratio`); that does **not** make pages interchangeable with bytes.
 
@@ -241,7 +243,7 @@ pub enum Error {
     Io(std::io::Error),
 }
 
-pub type Time = si::u64::Time;
+pub type Time = si::time::Time<BaseUnits, u64>;
 pub type Bytes = si::u64::Information;
 pub type Ratio = si::u64::Ratio;
 pub struct Pages(/* custom Kind or newtype */);
