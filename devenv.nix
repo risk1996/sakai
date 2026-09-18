@@ -1,9 +1,18 @@
 # Rust library that exposes Python (with uv, ty, and ruff) interface via PyO3, with each language ecosystem in its own Nix profile
-{ pkgs, lib, config, ... }:
+{
+  pkgs,
+  lib,
+  config,
+  ...
+}:
 {
   # devenv.sh/languages/
   # The base library is written in Rust, should be available on all profiles
   languages = {
+    nix = {
+      enable = true;
+      lsp.package = pkgs.nil;
+    };
     rust = {
       enable = true;
       channel = "stable";
@@ -17,10 +26,6 @@
   # devenv.sh/profiles/
   # namespaced profiles keep the Rust and Python toolchains isolated
   profiles = {
-    rust.module = {
-      languages.rust.enable = true;
-    };
-
     python.module = {
       languages.python = {
         enable = true;
