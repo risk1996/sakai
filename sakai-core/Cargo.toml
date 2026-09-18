@@ -3,6 +3,9 @@ name = "sakai-core"
 version = "0.1.0"
 edition = "2024"
 
+[lints]
+workspace = true
+
 [dependencies]
 nutype = "0.7.0"
 strum = { version = "0.28.0", features = ["derive"] }

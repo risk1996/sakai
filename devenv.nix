@@ -3,6 +3,7 @@
   pkgs,
   lib,
   config,
+  inputs,
   ...
 }:
 {
@@ -16,6 +17,8 @@
     rust = {
       enable = true;
       channel = "stable";
+      # .rustfmt.toml needs nightly; devenv.lock pins both toolchains.
+      toolchain.rustfmt = (inputs.rust-overlay.lib.mkRustBin { } pkgs).nightly.latest.rustfmt;
     };
   };
 
@@ -23,6 +26,30 @@
     pkgs.cargo-nextest
     pkgs.pkg-config
   ];
+
+  # Run together with `devenv test`, or individually with `devenv tasks run check:fmt`.
+  tasks = {
+    # Attach checks only in test mode, keeping shell entry and Zed formatting fast.
+    "devenv:enterTest".after = lib.optionals config.devenv.isTesting [
+      "check:fmt"
+      "check:clippy"
+      "check:test"
+      "check:doc"
+    ];
+    "check:fmt" = {
+      exec = "cargo fmt --all -- --check";
+    };
+    "check:clippy" = {
+      exec = "cargo clippy --workspace --all-targets --all-features --locked -- -D warnings";
+    };
+    "check:test" = {
+      exec = "cargo nextest run --workspace --all-targets --all-features --locked";
+    };
+    "check:doc" = {
+      # nextest does not execute documentation tests.
+      exec = "cargo test --workspace --all-features --doc --locked";
+    };
+  };
 
   # devenv.sh/profiles/
   # namespaced profiles keep the Rust and Python toolchains isolated

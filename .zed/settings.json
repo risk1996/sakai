@@ -3,6 +3,18 @@
 // For a full list of overridable settings, and general information on folder-specific settings,
 // see the documentation: https://zed.dev/docs/configuring-zed#settings-files
 {
+  "languages": {
+    "Rust": {
+      "format_on_save": "on",
+      "formatter": {
+        "external": {
+          // Use the same locked nightly formatter as the shell and CI.
+          "command": "devenv",
+          "arguments": ["shell", "--", "rustfmt", "--emit", "stdout"],
+        },
+      },
+    },
+  },
   "lsp": {
     "rust-analyzer": {
       "initialization_options": {

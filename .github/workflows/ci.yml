@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Tests and lints
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CARGO_TERM_COLOR: always
+      CARGO_INCREMENTAL: '0'
+    steps:
+      - uses: actions/checkout@v5
+
+      # https://devenv.sh/integrations/github-actions/
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            keep-env-derivations = true
+            keep-outputs = true
+
+      - name: Cache Nix store and fetch metadata
+        uses: nix-community/cache-nix-action@v7
+        with:
+          primary-key: nix-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('devenv.lock', 'devenv.yaml', '**/*.nix', '.github/workflows/ci.yml') }}
+          restore-prefixes-first-match: nix-v1-${{ runner.os }}-${{ runner.arch }}-
+          paths: ~/.cache/nix
+
+      - uses: cachix/cachix-action@v16
+        with:
+          name: devenv
+          skipPush: true
+
+      - name: Install devenv from the locked nixpkgs revision
+        run: |
+          nixpkgs_rev=$(jq -r '.nodes.nixpkgs.locked.rev' devenv.lock)
+          nix profile add "github:NixOS/nixpkgs/$nixpkgs_rev#devenv"
+
+      # Keep workspace artifacts as well as dependencies. New commits save a
+      # fresh snapshot, reusing the closest dependency/toolchain match first.
+      - name: Cache Cargo downloads and compiled targets
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('devenv.lock', 'devenv.yaml', '**/*.nix', '.github/workflows/ci.yml') }}-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}-${{ github.sha }}
+          restore-keys: |
+            cargo-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('devenv.lock', 'devenv.yaml', '**/*.nix', '.github/workflows/ci.yml') }}-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}-
+            cargo-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('devenv.lock', 'devenv.yaml', '**/*.nix', '.github/workflows/ci.yml') }}-
+
+      - name: Run formatting, Clippy, tests, and doctests
+        run: devenv test
