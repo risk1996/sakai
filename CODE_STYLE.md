@@ -1,5 +1,7 @@
 # Rust
 
+- Ground the design based on the domain:
+  - in this case, the cgroup v2 kernel interface and its semantics.
 - Follow the existing code for reference and keeping the code style consistent.
 - Prioritize function purity and immutability, avoid side effects, use declarative and functional paradigm instead of imperative, avoid `let mut` whenever possible.
 - Leave formatting to `devenv task check:fmt`.
