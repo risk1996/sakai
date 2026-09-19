@@ -23,8 +23,8 @@ unknown keyed fields must be preserved when the public type provides an
       `CpuWeight::Shares(Weight)`.
 - [ ] `cpu.stat.local` — local throttled time, including its older-kernel
       `FileMissing` behavior.
-- [ ] `cpu.uclamp.max` — `max` or a ratio expressed in hundredths of a percent.
-- [ ] `cpu.uclamp.min` — ratio expressed in hundredths of a percent.
+- [x] `cpu.uclamp.max` — `max` or a ratio expressed in hundredths of a percent.
+- [x] `cpu.uclamp.min` — ratio expressed in hundredths of a percent.
 - [ ] `cpu.max.burst` — burst duration in microseconds, not a frequency.
 - [ ] `cpu.weight.nice` — validated nice value in `-20..=19`.
 - [ ] `cpu.idle` — boolean idle scheduling state.

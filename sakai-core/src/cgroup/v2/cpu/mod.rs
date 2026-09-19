@@ -2,10 +2,12 @@
 
 mod max;
 mod stat;
+mod uclamp;
 mod weight;
 
 pub use max::*;
 pub use stat::*;
+pub use uclamp::*;
 pub use weight::*;
 
 pub use crate::cgroup::common::pressure::{Pressure, PressureLine};
