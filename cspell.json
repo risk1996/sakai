@@ -2,15 +2,28 @@
   "words": [
     "assertables",
     "clippy",
+    "cpus",
+    "cpuset",
     "devenv",
+    "dmem",
+    "evented",
+    "hugetlb",
     "indoc",
+    "inotify",
     "libpython",
     "maturin",
     "nextest",
+    "numa",
     "nutype",
+    "openat",
+    "pids",
     "pkgs",
+    "rdma",
+    "rustix",
     "thiserror",
     "uclamp",
-    "usec"
+    "usec",
+    "writeback",
+    "zswap"
   ]
 }
