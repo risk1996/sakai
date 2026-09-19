@@ -1,10 +1,14 @@
-use std::{num::ParseIntError, str::SplitAsciiWhitespace};
+use std::{
+  num::{ParseFloatError, ParseIntError},
+  str::SplitAsciiWhitespace,
+};
 
-use uom::si::time::nanosecond;
+use nutype::nutype;
+use uom::si::{ratio::percent, time::nanosecond};
 
 use crate::cgroup::common::{
   error::ParseError,
-  unit::{Count, MaxOr, NonZeroTime, Time},
+  unit::{Count, MaxOr, NonZeroTime, Ratio, Time},
 };
 
 /// A numeric field is malformed or outside the target type's supported range.
@@ -13,6 +17,9 @@ pub enum ParseValueError {
   /// The field is not a valid integer in the input storage type.
   #[error(transparent)]
   Integer(#[from] ParseIntError),
+  /// The field is not a valid floating-point number.
+  #[error(transparent)]
+  Float(#[from] ParseFloatError),
   /// The value exceeds a supported range, including after unit conversion.
   #[error("value is outside the supported range")]
   OutOfRange,
@@ -114,6 +121,27 @@ impl ParseCgroup<ParseCount> for Count {
 
   fn parse_cgroup(value: &str) -> Result<Self, Self::Error> {
     Ok(Self::new(value.parse()?))
+  }
+}
+
+/// A zero-sized marker for cgroup percentages encoded as decimal percents.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ParsePercent;
+
+#[nutype(
+  validate(finite, greater_or_equal = 0.0, less_or_equal = 100.0),
+  derive(Debug, Clone, Copy, PartialEq)
+)]
+struct Percent(f64);
+
+impl ParseCgroup<ParsePercent> for Ratio {
+  type Error = ParseValueError;
+
+  fn parse_cgroup(value: &str) -> Result<Self, Self::Error> {
+    let percent_value = Percent::try_new(value.parse::<f64>()?)
+      .map_err(|_error| ParseValueError::OutOfRange)?;
+
+    Ok(Self::new::<percent>(percent_value.into_inner()))
   }
 }
 

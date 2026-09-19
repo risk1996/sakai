@@ -12,12 +12,12 @@ unknown keyed fields must be preserved when the public type provides an
 
 ## P0 — CPU (complete first)
 
-- [ ] `cpu.stat` — usage, user, system, and optional bandwidth counters; parse
+- [x] `cpu.stat` — usage, user, system, and optional bandwidth counters; parse
       times as microseconds and tolerate bandwidth keys missing when the
       controller is disabled.
-- [ ] `cpu.max` — quota and period as `MaxOr<NonZeroTime>` and `NonZeroTime`;
+- [x] `cpu.max` — quota and period as `MaxOr<NonZeroTime>` and `NonZeroTime`;
       retain the existing typed parser and add the cgroup reader/live coverage.
-- [ ] `cpu.pressure` — shared PSI `some`/`full` averages and total stall time;
+- [x] `cpu.pressure` — shared PSI `some`/`full` averages and total stall time;
       never write to the file on the read path.
 - [ ] `cpu.weight` — map `0` to `CpuWeight::Idle` and `1..=10000` to
       `CpuWeight::Shares(Weight)`.
@@ -112,3 +112,4 @@ as `FileMissing`, not a parse failure or panic.
 - [ ] cgroup v2 write
 - [ ] Benchmark
 - [ ] E2E tests
+- [ ] "Since Linux x.x" documentation
