@@ -19,7 +19,7 @@ unknown keyed fields must be preserved when the public type provides an
       retain the existing typed parser and add the cgroup reader/live coverage.
 - [x] `cpu.pressure` — shared PSI `some`/`full` averages and total stall time;
       never write to the file on the read path.
-- [ ] `cpu.weight` — map `0` to `CpuWeight::Idle` and `1..=10000` to
+- [x] `cpu.weight` — map `0` to `CpuWeight::Idle` and `1..=10000` to
       `CpuWeight::Shares(Weight)`.
 - [ ] `cpu.stat.local` — local throttled time, including its older-kernel
       `FileMissing` behavior.
