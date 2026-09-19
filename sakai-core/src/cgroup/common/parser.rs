@@ -1,10 +1,10 @@
-use std::{borrow::Cow, num::ParseIntError, str::SplitAsciiWhitespace};
+use std::{num::ParseIntError, str::SplitAsciiWhitespace};
 
 use uom::si::time::nanosecond;
 
 use crate::cgroup::common::{
-  error::{FieldKind, ParseError},
-  unit::{MaxOr, NonZeroTime, Time},
+  error::ParseError,
+  unit::{Count, MaxOr, NonZeroTime, Time},
 };
 
 /// A numeric field is malformed or outside the target type's supported range.
@@ -30,7 +30,16 @@ impl<'a> Parser<'a> {
     raw: &'a str,
     f: impl FnOnce(&mut Self) -> Result<T, ParseError<'static, E>>,
   ) -> Result<T, ParseError<'static, E>> {
-    let mut parser = Self::new(raw);
+    Self::parse_line(raw, raw, f)
+  }
+
+  /// Parses one line while recording the complete file in parse errors.
+  pub fn parse_line<T, E>(
+    raw: &'a str,
+    line: &'a str,
+    f: impl FnOnce(&mut Self) -> Result<T, ParseError<'static, E>>,
+  ) -> Result<T, ParseError<'static, E>> {
+    let mut parser = Self::new(raw, line);
     let value = f(&mut parser)?;
     parser.finish()?;
     Ok(value)
@@ -38,11 +47,22 @@ impl<'a> Parser<'a> {
 
   /// Creates a parser that records `raw` in any parse error.
   #[must_use]
-  fn new(raw: &'a str) -> Self {
+  fn new(raw: &'a str, fields: &'a str) -> Self {
     Self {
       raw,
-      fields: raw.split_ascii_whitespace(),
+      fields: fields.split_ascii_whitespace(),
     }
+  }
+
+  /// Returns the next field without interpreting its value.
+  pub fn next_raw_field<E>(
+    &mut self,
+    field: &'static str,
+  ) -> Result<&'a str, ParseError<'static, E>> {
+    self
+      .fields
+      .next()
+      .ok_or_else(|| ParseError::missing(self.raw, field))
   }
 
   /// Parses the next field as `T` using the `Unit` marker.
@@ -52,31 +72,17 @@ impl<'a> Parser<'a> {
   ) -> Result<T, ParseError<'static, T::Error>>
   where
     T: ParseCgroup<Unit>, {
-    let value = self.fields.next().ok_or_else(|| ParseError::Field {
-      kind: FieldKind::Missing,
-      raw: Cow::Owned(self.raw.into()),
-      field,
-    })?;
+    let value = self.next_raw_field(field)?;
 
-    T::parse_cgroup(value).map_err(|source| ParseError::Invalid {
-      raw: Cow::Owned(self.raw.into()),
-      field,
-      value: Cow::Owned(value.into()),
-      source,
-    })
+    T::parse_field(self.raw, field, value)
   }
 
   /// Returns an error if an excess field remains.
   fn finish<E>(&mut self) -> Result<(), ParseError<'static, E>> {
-    if self.fields.next().is_some() {
-      return Err(ParseError::Field {
-        kind: FieldKind::Excess,
-        raw: Cow::Owned(self.raw.into()),
-        field: "additional",
-      });
+    match self.fields.next() {
+      | Some(..) => Err(ParseError::excess(self.raw)),
+      | None => Ok(()),
     }
-
-    Ok(())
   }
 }
 
@@ -87,6 +93,28 @@ pub trait ParseCgroup<Unit>: Sized {
 
   /// Parses a cgroup field.
   fn parse_cgroup(value: &str) -> Result<Self, Self::Error>;
+
+  /// Parses a cgroup field and attaches its source context to an error.
+  fn parse_field(
+    raw: &str,
+    field: &'static str,
+    value: &str,
+  ) -> Result<Self, ParseError<'static, Self::Error>> {
+    Self::parse_cgroup(value)
+      .map_err(|source| ParseError::invalid(raw, field, value, source))
+  }
+}
+
+/// A zero-sized marker for cgroup event counts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ParseCount;
+
+impl ParseCgroup<ParseCount> for Count {
+  type Error = ParseValueError;
+
+  fn parse_cgroup(value: &str) -> Result<Self, Self::Error> {
+    Ok(Self::new(value.parse()?))
+  }
 }
 
 /// A zero-sized marker for cgroup values encoded in microseconds.

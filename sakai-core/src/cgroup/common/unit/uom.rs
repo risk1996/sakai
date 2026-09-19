@@ -32,6 +32,14 @@ const _: () = {
   assert!(align_of::<Time>() == align_of::<u64>());
 };
 
+/// A monotonically increasing event count reported by the kernel.
+#[nutype(derive(Debug, Clone, Copy, PartialEq, Eq, Hash, AsRef, Deref))]
+pub struct Count(u64);
+const _: () = {
+  assert!(size_of::<Count>() == size_of::<u64>());
+  assert!(align_of::<Count>() == align_of::<u64>());
+};
+
 /// A nonzero [`Time`].
 #[nutype(
   validate(predicate = |time| time.get::<nanosecond>() != 0),

@@ -3,11 +3,13 @@
     "assertables",
     "clippy",
     "devenv",
+    "indoc",
     "libpython",
     "maturin",
     "nextest",
     "nutype",
     "pkgs",
-    "thiserror"
+    "thiserror",
+    "usec"
   ]
 }
