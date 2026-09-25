@@ -54,48 +54,118 @@ impl Kernel {
   pub(super) fn report_boot_config(path: &Path) -> Result<()> {
     const OPTIONS: &[&str] = &[
       "CONFIG_BLK_DEV_INITRD",
+      "CONFIG_CGROUPS",
       "CONFIG_DEVTMPFS",
       "CONFIG_EXT4_FS",
       "CONFIG_FUSE_FS",
+      "CONFIG_INET",
       "CONFIG_MODULES",
+      "CONFIG_NAMESPACES",
+      "CONFIG_OVERLAY_FS",
       "CONFIG_SERIAL_8250_CONSOLE",
+      "CONFIG_USER_NS",
       "CONFIG_VIRTIO",
       "CONFIG_VIRTIO_BLK",
       "CONFIG_VIRTIO_CONSOLE",
       "CONFIG_VIRTIO_FS",
+      "CONFIG_VIRTIO_NET",
       "CONFIG_VIRTIO_PCI",
       "CONFIG_VIRTIO_VSOCKETS",
+      "CONFIG_VSOCKETS",
     ];
 
     let image = fs::read(path)?;
     eprintln!("Kernel image: {} ({} bytes)", path.display(), image.len());
     eprintln!("Kernel SHA-256: {}", hex::encode(Sha256::digest(&image)));
-    let Some(config_bytes) = image
-      .windows(8)
-      .position(|bytes| bytes == b"IKCFG_ST")
-      .and_then(|offset| image.get(offset..))
-      .and_then(|bytes| bytes.strip_prefix(b"IKCFG_ST"))
-    else {
+    let Some(config) = Self::embedded_config(&image) else {
       eprintln!("Embedded kernel config: unavailable");
       return Ok(());
     };
-    let mut config = String::new();
-    if let Err(error) = GzDecoder::new(config_bytes).read_to_string(&mut config)
-    {
-      eprintln!("Embedded kernel config could not be decoded: {error}");
-      return Ok(());
-    }
     eprintln!("Embedded kernel boot configuration:");
     for option in OPTIONS {
+      let disabled = format!("# {option} is not set");
       match config.lines().find(|line| {
-        line.starts_with(option)
-          || line.starts_with(&format!("# {option} is not set"))
+        line
+          .strip_prefix(option)
+          .is_some_and(|value| value.starts_with('='))
+          || *line == disabled
       }) {
         | Some(line) => eprintln!("  {line}"),
         | None => eprintln!("  {option}: unavailable"),
       }
     }
+    for option in [
+      "CONFIG_EXT4_FS=y",
+      "CONFIG_VIRTIO_BLK=y",
+      "CONFIG_VIRTIO_VSOCKETS=y",
+    ] {
+      if !config.lines().any(|line| line == option) {
+        eprintln!(
+          "BOOT WARNING: {option} is not built in; this fixture has no \
+           matching initramfs"
+        );
+      }
+    }
     Ok(())
+  }
+
+  fn embedded_config(image: &[u8]) -> Option<String> {
+    const ZSTD_MAGIC: &[u8] = &[0x28, 0xb5, 0x2f, 0xfd];
+
+    let unpacked = image
+      .windows(ZSTD_MAGIC.len())
+      .position(|bytes| bytes == ZSTD_MAGIC)
+      .and_then(|offset| {
+        image.get(offset..).map(|compressed| (offset, compressed))
+      })
+      .map(|(offset, compressed)| {
+        eprintln!("Embedded Zstd kernel payload at offset {offset}");
+        let mut unpacked = Vec::new();
+        let result = zstd::stream::copy_decode(compressed, &mut unpacked);
+        eprintln!(
+          "Unpacked kernel payload: {} bytes, ELF={}",
+          unpacked.len(),
+          unpacked.starts_with(b"\x7fELF")
+        );
+        (unpacked, result)
+      });
+    if let Some((payload, result)) = unpacked {
+      if let Some(config) = Self::config_in_payload(&payload) {
+        return Some(config);
+      }
+      if let Err(error) = result {
+        eprintln!("Kernel payload decompression warning: {error}");
+      }
+    }
+    Self::config_in_payload(image)
+  }
+
+  pub(super) fn export_config(source: &Path, destination: &Path) -> Result<()> {
+    let image = fs::read(source)?;
+    if let Some(config) = Self::embedded_config(&image) {
+      fs::write(destination, config)?;
+      eprintln!("Exported kernel config to {}", destination.display());
+    }
+    Ok(())
+  }
+
+  fn config_in_payload(payload: &[u8]) -> Option<String> {
+    const CONFIG_MAGIC: &[u8] = b"IKCFG_ST\x1f\x8b\x08";
+
+    payload
+      .windows(CONFIG_MAGIC.len())
+      .position(|bytes| bytes == CONFIG_MAGIC)
+      .and_then(|offset| payload.get(offset..))
+      .and_then(|bytes| bytes.strip_prefix(b"IKCFG_ST"))
+      .and_then(|compressed| {
+        let mut config = String::new();
+        if let Err(error) =
+          GzDecoder::new(compressed).read_to_string(&mut config)
+        {
+          eprintln!("Embedded config decompression warning: {error}");
+        }
+        config.contains("CONFIG_").then_some(config)
+      })
   }
 
   const fn x86_64(
@@ -143,5 +213,31 @@ impl Kernel {
 
   fn matches(path: &Path, expected: &str) -> Result<bool> {
     Ok(hex::encode(Sha256::digest(fs::read(path)?)) == expected)
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use std::io::Write;
+
+  use flate2::{Compression, write::GzEncoder};
+
+  use super::Kernel;
+
+  #[test]
+  fn extracts_config_from_plain_and_zstd_wrapped_images() {
+    let config = "CONFIG_VIRTIO_BLK=m\nCONFIG_EXT4_FS=m\n";
+    let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+    encoder.write_all(config.as_bytes()).unwrap();
+    let compressed_config = encoder.finish().unwrap();
+    let payload =
+      [b"kernel".as_slice(), b"IKCFG_ST", &compressed_config].concat();
+    let compressed_payload =
+      zstd::stream::encode_all(payload.as_slice(), 0).unwrap();
+    let image = [b"boot header".as_slice(), &compressed_payload].concat();
+
+    for candidate in [payload, image] {
+      assert_eq!(Kernel::embedded_config(&candidate), Some(config.into()));
+    }
   }
 }

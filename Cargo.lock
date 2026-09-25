@@ -4076,6 +4076,7 @@ dependencies = [
  "reqwest",
  "sha2 0.11.0",
  "tokio",
+ "zstd",
 ]
 
 [[package]]

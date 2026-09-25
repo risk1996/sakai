@@ -1,3 +1,4 @@
+mod diagnostics;
 mod kernel;
 
 use std::{
@@ -19,11 +20,16 @@ use boxlite::{
   },
 };
 use clap::{Args, ValueEnum};
+use diagnostics::Diagnostics;
 use futures::{Stream, StreamExt, TryFutureExt, TryStreamExt, stream};
 use kernel::{KERNELS, Kernel};
 
 const ROOTFS: &str = env!("SAKAI_VMTEST_ROOTFS");
-const DEBUG_KERNEL_COMMAND_LINE: &str =
+const VERBOSE_KERNEL_COMMAND_LINE: &str =
+  "reboot=k panic=-1 panic_print=31 nomodule console=hvc0 rootfstype=virtiofs \
+   rw no-kvmapf init=/init.krun loglevel=8 ignore_loglevel initcall_debug \
+   printk.time=1";
+const SERIAL_KERNEL_COMMAND_LINE: &str =
   "reboot=k panic=-1 panic_print=31 console=ttyS0,115200 console=hvc0 \
    rootfstype=virtiofs rw no-kvmapf init=/init.krun loglevel=8 \
    ignore_loglevel initcall_debug printk.time=1 earlycon=uart,io,0x3f8,115200";
@@ -33,9 +39,15 @@ pub(crate) struct Vmtest {
   /// Boot BoxLite's bundled kernel and run a minimal guest command.
   #[arg(long)]
   bundled_kernel_smoke: bool,
-  /// Boot a selected custom kernel with verbose diagnostics and a minimal guest command.
+  /// Boot a selected kernel with a minimal guest command and chosen kernel arguments.
+  #[arg(long, value_enum)]
+  boot_probe: Option<BootProbe>,
+  /// Inspect selected kernel images without launching BoxLite.
   #[arg(long)]
-  boot_probe: bool,
+  inspect_kernel: bool,
+  /// Copy only BoxLite log files into a safe artifact staging directory.
+  #[arg(long)]
+  collect_diagnostics: bool,
   /// Choose the quick, complete, or host-native matrix.
   #[arg(long, value_enum, default_value_t = Profile::Smoke)]
   profile: Profile,
@@ -49,6 +61,23 @@ enum Profile {
   Smoke,
   Full,
   Native,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum BootProbe {
+  Default,
+  Verbose,
+  Serial,
+}
+
+impl BootProbe {
+  fn command_line(self) -> Option<&'static str> {
+    match self {
+      | Self::Default => None,
+      | Self::Verbose => Some(VERBOSE_KERNEL_COMMAND_LINE),
+      | Self::Serial => Some(SERIAL_KERNEL_COMMAND_LINE),
+    }
+  }
 }
 
 impl Profile {
@@ -70,6 +99,9 @@ impl Vmtest {
     if self.bundled_kernel_smoke {
       return Self::run_bundled_kernel_smoke(&repository).await;
     }
+    if self.collect_diagnostics {
+      return Diagnostics::collect(&repository);
+    }
     let selected = KERNELS
       .iter()
       .filter(|kernel| match self.kernel.is_empty() {
@@ -84,6 +116,18 @@ impl Vmtest {
       !selected.is_empty(),
       "no kernel fixtures matched the request"
     );
+
+    if self.inspect_kernel {
+      for kernel in selected {
+        if let Some(path) = kernel
+          .image(&repository.join("tests/.cache/sakai-vmtest/kernels"))
+          .await?
+        {
+          Kernel::report_boot_config(&path)?;
+        }
+      }
+      return Ok(());
+    }
 
     stream::iter(selected)
       .then(|kernel| Self::run_kernel(&repository, kernel, self.boot_probe))
@@ -149,19 +193,24 @@ impl Vmtest {
   async fn run_kernel(
     repository: &Path,
     kernel: &Kernel,
-    boot_probe: bool,
+    boot_probe: Option<BootProbe>,
   ) -> Result<()> {
     let cache = repository.join("tests/.cache/sakai-vmtest");
     let architecture = kernel.architecture;
-    let boxlite_home = cache
-      .join("boxlite")
-      .join(architecture)
-      .join(if boot_probe { "boot-probe" } else { "test" });
+    let boxlite_home =
+      cache
+        .join("boxlite")
+        .join(architecture)
+        .join(if boot_probe.is_some() {
+          "boot-probe"
+        } else {
+          "test"
+        });
     fs::create_dir_all(&boxlite_home)?;
     boxlite::init_logging_for(&boxlite_home)?;
 
     eprintln!(
-      "==> Linux {} ({architecture}), boot_probe={boot_probe}",
+      "==> Linux {} ({architecture}), boot_probe={boot_probe:?}",
       kernel.name
     );
     let runtime = RuntimeBuilder::new(BoxliteOptions {
@@ -204,8 +253,8 @@ impl Vmtest {
       auto_delete: Some(1),
       advanced,
       cmd: Some(match boot_probe {
-        | true => ["uname", "-r"].map(String::from).into(),
-        | false => [
+        | Some(_) => ["uname", "-r"].map(String::from).into(),
+        | None => [
           "cargo",
           "test",
           "--locked",
@@ -223,14 +272,13 @@ impl Vmtest {
     };
     if let Some(path) = kernel.image(&cache.join("kernels")).await? {
       Kernel::report_boot_config(&path)?;
-      let mut kernel_options = KernelOptions::new(path);
-      if boot_probe {
-        kernel_options =
-          kernel_options.with_command_line(DEBUG_KERNEL_COMMAND_LINE);
-        eprintln!(
-          "Diagnostic kernel command line: {DEBUG_KERNEL_COMMAND_LINE}"
-        );
-      }
+      let kernel_options = match boot_probe.and_then(BootProbe::command_line) {
+        | Some(command_line) => {
+          eprintln!("Diagnostic kernel command line: {command_line}");
+          KernelOptions::new(path).with_command_line(command_line)
+        },
+        | None => KernelOptions::new(path),
+      };
       custom_kernel::configure(&mut options, kernel_options);
     }
 

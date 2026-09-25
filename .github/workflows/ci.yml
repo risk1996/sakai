@@ -80,10 +80,13 @@ jobs:
       - name: Cache kernels and BoxLite Cargo artifacts
         uses: actions/cache@v6
         with:
-          path: tests/.cache/sakai-vmtest
-          key: boxlite-v1-${{ matrix.kernel }}-${{ hashFiles('Cargo.lock', 'devenv.nix', 'tools/vmtest/**', 'xtask/**') }}-${{ github.sha }}
+          path: |
+            tests/.cache/sakai-vmtest/kernels
+            tests/.cache/sakai-vmtest/cargo
+            tests/.cache/sakai-vmtest/target
+          key: boxlite-v2-${{ matrix.kernel }}-${{ hashFiles('Cargo.lock', 'devenv.nix', 'tools/vmtest/**', 'xtask/**') }}-${{ github.sha }}
           restore-keys: |
-            boxlite-v1-${{ matrix.kernel }}-${{ hashFiles('Cargo.lock', 'devenv.nix', 'tools/vmtest/**', 'xtask/**') }}-
+            boxlite-v2-${{ matrix.kernel }}-${{ hashFiles('Cargo.lock', 'devenv.nix', 'tools/vmtest/**', 'xtask/**') }}-
 
       - uses: cachix/install-nix-action@v31
 
@@ -104,31 +107,63 @@ jobs:
       - name: Allow BoxLite to create user namespaces
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 
+      - name: Inspect Linux ${{ matrix.kernel }} kernel image and boot drivers
+        run: devenv shell -- vmtest --kernel "${{ matrix.kernel }}" --inspect-kernel
+
       - name: Smoke-test BoxLite's bundled kernel
         env:
           RUST_LOG: boxlite=debug
         run: devenv shell -- vmtest --bundled-kernel-smoke
 
-      - name: Probe Linux ${{ matrix.kernel }} boot with verbose kernel output
-        id: boot-probe
+      - name: Probe Linux ${{ matrix.kernel }} with default kernel arguments
+        id: default-probe
+        continue-on-error: true
+        env:
+          RUST_LOG: boxlite=debug
+        run: devenv shell -- vmtest --kernel "${{ matrix.kernel }}" --boot-probe default
+
+      - name: Probe Linux ${{ matrix.kernel }} with verbose kernel output
+        id: verbose-probe
+        continue-on-error: true
+        env:
+          RUST_LOG: boxlite=debug
+        run: devenv shell -- vmtest --kernel "${{ matrix.kernel }}" --boot-probe verbose
+
+      - name: Probe Linux ${{ matrix.kernel }} with serial kernel output
+        id: serial-probe
         continue-on-error: true
         env:
           RUST_LOG: boxlite=trace
-        run: devenv shell -- vmtest --kernel "${{ matrix.kernel }}" --boot-probe
+        run: devenv shell -- vmtest --kernel "${{ matrix.kernel }}" --boot-probe serial
 
       - name: Test cgroup v2 against Linux ${{ matrix.kernel }}
         env:
           RUST_LOG: boxlite=debug
         run: devenv shell -- vmtest --kernel "${{ matrix.kernel }}"
 
+      - name: Stage BoxLite diagnostics without traversing rootfs images
+        if: always()
+        run: devenv shell -- vmtest --collect-diagnostics
+
       - name: Show BoxLite diagnostics
         if: always()
         run: |
-          echo "Verbose boot probe outcome: ${{ steps.boot-probe.outcome }}"
+          set +e
+          echo "Default probe outcome: ${{ steps.default-probe.outcome }}"
+          echo "Verbose probe outcome: ${{ steps.verbose-probe.outcome }}"
+          echo "Serial probe outcome: ${{ steps.serial-probe.outcome }}"
+          id
           uname -a
           ls -l /dev/kvm
+          lscpu
+          lsmod | grep -E '^(kvm|virtio|vsock)'
+          free -h
+          df -h .
+          ulimit -a
+          grep -m1 -E '^(flags|Features)' /proc/cpuinfo
+          sysctl kernel.apparmor_restrict_unprivileged_userns
           sudo dmesg --color=never | tail -n 100
-          find tests/.cache/sakai-vmtest/boxlite -type f \
+          find tests/.cache/sakai-vmtest/diagnostics/${{ github.run_id }} -type f \
             \( -name 'boxlite.log*' -o -name 'shim.stderr' -o -name 'console.log' -o -name 'exit' \) \
             -printf '%p (%s bytes)\n' -exec tail -n 300 {} \;
 
@@ -137,10 +172,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: boxlite-linux-${{ matrix.kernel }}-diagnostics
-          path: |
-            tests/.cache/sakai-vmtest/boxlite/**/logs/*
-            tests/.cache/sakai-vmtest/boxlite/**/shim.stderr
-            tests/.cache/sakai-vmtest/boxlite/**/exit
-          if-no-files-found: ignore
+          path: tests/.cache/sakai-vmtest/diagnostics/${{ github.run_id }}
+          if-no-files-found: error
           include-hidden-files: true
           retention-days: 7
