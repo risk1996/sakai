@@ -24,8 +24,15 @@
 
   packages = [
     pkgs.cargo-nextest
+    pkgs.coreutils
+    pkgs.curl
     pkgs.pkg-config
   ];
+
+  env.SAKAI_VMTEST_ROOTFS =
+    "docker.io/library/rust:${config.languages.rust.toolchainPackage.version}-bookworm";
+
+  scripts.vmtest.exec = ''cargo xtask vmtest "$@"'';
 
   # Run together with `devenv test`, or individually with `devenv tasks run check:fmt`.
   tasks = {

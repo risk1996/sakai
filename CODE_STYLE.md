@@ -17,3 +17,16 @@
   - avoid creating multiple tests for similar outcomes, use table test instead,
   - use `indoc!` for multi-line strings, move to fixtures and `include_str!` if it surpasses 20 lines,
   - construct the expected struct and assert equality with the parsed struct, not asserting field-by-field.
+
+# Shell Scripts
+
+- The ideal number of shell script lines is zero. Write Rust code instead of Bash scripts whenever possible.
+- Bash is OK for a one-off job, but should never considered to be something committed to the repository.
+
+## Note
+
+If you find contradictions, these are the priority (lower ones should follow the above):
+
+- The latest instructions given
+- This code style guide
+- The existing code in the repository

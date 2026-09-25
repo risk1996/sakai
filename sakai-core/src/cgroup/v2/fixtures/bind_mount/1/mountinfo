@@ -1,0 +1,2 @@
+36 29 0:32 /other /sys/fs/cgroup rw,nosuid,nodev,noexec,relatime - cgroup2 cgroup rw
+37 29 0:32 /kubepods.slice/pod-1 /run/delegated rw,nosuid,nodev,noexec,relatime - cgroup2 cgroup rw

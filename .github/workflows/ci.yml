@@ -4,6 +4,8 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+  schedule:
+    - cron: '17 3 * * 1'
 
 permissions:
   contents: read
@@ -63,3 +65,38 @@ jobs:
 
       - name: Run formatting, Clippy, tests, and doctests
         run: devenv test
+
+  kernels:
+    name: Linux ${{ matrix.kernel }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        kernel: ${{ fromJSON(github.event_name == 'schedule' && '["5.15","6.1","6.6","6.12","6.18"]' || '["5.15","6.18"]') }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache kernels and BoxLite Cargo artifacts
+        uses: actions/cache@v6
+        with:
+          path: tests/.cache/sakai-vmtest
+          key: boxlite-v1-${{ matrix.kernel }}-${{ hashFiles('Cargo.lock', 'devenv.nix', 'tools/vmtest/**', 'xtask/**') }}-${{ github.sha }}
+          restore-keys: |
+            boxlite-v1-${{ matrix.kernel }}-${{ hashFiles('Cargo.lock', 'devenv.nix', 'tools/vmtest/**', 'xtask/**') }}-
+
+      - uses: cachix/install-nix-action@v31
+
+      - name: Install devenv from the locked nixpkgs revision
+        run: |
+          nixpkgs_rev=$(jq -r '.nodes.nixpkgs.locked.rev' devenv.lock)
+          nix profile add "github:NixOS/nixpkgs/$nixpkgs_rev#devenv"
+
+      - name: Allow BoxLite to use KVM
+        run: |
+          if [[ -e /dev/kvm ]]; then
+            sudo chmod 666 /dev/kvm
+          fi
+
+      - name: Test cgroup v2 against Linux ${{ matrix.kernel }}
+        run: devenv shell -- vmtest --kernel "${{ matrix.kernel }}"

@@ -1,6 +1,7 @@
 {
   "words": [
     "assertables",
+    "boxlite",
     "clippy",
     "cpus",
     "cpuset",
@@ -19,11 +20,14 @@
     "pids",
     "pkgs",
     "rdma",
+    "rootfs",
     "rustix",
     "thiserror",
     "uclamp",
     "usec",
+    "vmtest",
     "writeback",
+    "xtask",
     "zswap"
   ]
 }
