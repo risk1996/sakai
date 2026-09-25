@@ -1,9 +1,11 @@
 use std::{
   fs,
+  io::Read,
   path::{Path, PathBuf},
 };
 
 use anyhow::{Result, ensure};
+use flate2::read::GzDecoder;
 use sha2::{Digest, Sha256};
 
 pub(super) const KERNELS: &[Kernel] = &[
@@ -49,6 +51,53 @@ pub(super) struct Kernel {
 }
 
 impl Kernel {
+  pub(super) fn report_boot_config(path: &Path) -> Result<()> {
+    const OPTIONS: &[&str] = &[
+      "CONFIG_BLK_DEV_INITRD",
+      "CONFIG_DEVTMPFS",
+      "CONFIG_EXT4_FS",
+      "CONFIG_FUSE_FS",
+      "CONFIG_MODULES",
+      "CONFIG_SERIAL_8250_CONSOLE",
+      "CONFIG_VIRTIO",
+      "CONFIG_VIRTIO_BLK",
+      "CONFIG_VIRTIO_CONSOLE",
+      "CONFIG_VIRTIO_FS",
+      "CONFIG_VIRTIO_PCI",
+      "CONFIG_VIRTIO_VSOCKETS",
+    ];
+
+    let image = fs::read(path)?;
+    eprintln!("Kernel image: {} ({} bytes)", path.display(), image.len());
+    eprintln!("Kernel SHA-256: {}", hex::encode(Sha256::digest(&image)));
+    let Some(config_bytes) = image
+      .windows(8)
+      .position(|bytes| bytes == b"IKCFG_ST")
+      .and_then(|offset| image.get(offset..))
+      .and_then(|bytes| bytes.strip_prefix(b"IKCFG_ST"))
+    else {
+      eprintln!("Embedded kernel config: unavailable");
+      return Ok(());
+    };
+    let mut config = String::new();
+    if let Err(error) = GzDecoder::new(config_bytes).read_to_string(&mut config)
+    {
+      eprintln!("Embedded kernel config could not be decoded: {error}");
+      return Ok(());
+    }
+    eprintln!("Embedded kernel boot configuration:");
+    for option in OPTIONS {
+      match config.lines().find(|line| {
+        line.starts_with(option)
+          || line.starts_with(&format!("# {option} is not set"))
+      }) {
+        | Some(line) => eprintln!("  {line}"),
+        | None => eprintln!("  {option}: unavailable"),
+      }
+    }
+    Ok(())
+  }
+
   const fn x86_64(
     name: &'static str,
     smoke: bool,

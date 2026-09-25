@@ -23,12 +23,19 @@ use futures::{Stream, StreamExt, TryFutureExt, TryStreamExt, stream};
 use kernel::{KERNELS, Kernel};
 
 const ROOTFS: &str = env!("SAKAI_VMTEST_ROOTFS");
+const DEBUG_KERNEL_COMMAND_LINE: &str =
+  "reboot=k panic=-1 panic_print=31 console=ttyS0,115200 console=hvc0 \
+   rootfstype=virtiofs rw no-kvmapf init=/init.krun loglevel=8 \
+   ignore_loglevel initcall_debug printk.time=1 earlycon=uart,io,0x3f8,115200";
 
 #[derive(Debug, Args)]
 pub(crate) struct Vmtest {
   /// Boot BoxLite's bundled kernel and run a minimal guest command.
   #[arg(long)]
   bundled_kernel_smoke: bool,
+  /// Boot a selected custom kernel with verbose diagnostics and a minimal guest command.
+  #[arg(long)]
+  boot_probe: bool,
   /// Choose the quick, complete, or host-native matrix.
   #[arg(long, value_enum, default_value_t = Profile::Smoke)]
   profile: Profile,
@@ -79,7 +86,7 @@ impl Vmtest {
     );
 
     stream::iter(selected)
-      .then(|kernel| Self::run_kernel(&repository, kernel))
+      .then(|kernel| Self::run_kernel(&repository, kernel, self.boot_probe))
       .try_collect::<Vec<_>>()
       .await
       .map(|_| ())
@@ -139,14 +146,24 @@ impl Vmtest {
     Ok(())
   }
 
-  async fn run_kernel(repository: &Path, kernel: &Kernel) -> Result<()> {
+  async fn run_kernel(
+    repository: &Path,
+    kernel: &Kernel,
+    boot_probe: bool,
+  ) -> Result<()> {
     let cache = repository.join("tests/.cache/sakai-vmtest");
     let architecture = kernel.architecture;
-    let boxlite_home = cache.join("boxlite").join(architecture);
+    let boxlite_home = cache
+      .join("boxlite")
+      .join(architecture)
+      .join(if boot_probe { "boot-probe" } else { "test" });
     fs::create_dir_all(&boxlite_home)?;
     boxlite::init_logging_for(&boxlite_home)?;
 
-    eprintln!("==> Linux {} ({architecture})", kernel.name);
+    eprintln!(
+      "==> Linux {} ({architecture}), boot_probe={boot_probe}",
+      kernel.name
+    );
     let runtime = RuntimeBuilder::new(BoxliteOptions {
       home_dir: boxlite_home,
       ..Default::default()
@@ -186,8 +203,9 @@ impl Vmtest {
       )],
       auto_delete: Some(1),
       advanced,
-      cmd: Some(
-        [
+      cmd: Some(match boot_probe {
+        | true => ["uname", "-r"].map(String::from).into(),
+        | false => [
           "cargo",
           "test",
           "--locked",
@@ -200,11 +218,20 @@ impl Vmtest {
         ]
         .map(String::from)
         .into(),
-      ),
+      }),
       ..Default::default()
     };
     if let Some(path) = kernel.image(&cache.join("kernels")).await? {
-      custom_kernel::configure(&mut options, KernelOptions::new(path));
+      Kernel::report_boot_config(&path)?;
+      let mut kernel_options = KernelOptions::new(path);
+      if boot_probe {
+        kernel_options =
+          kernel_options.with_command_line(DEBUG_KERNEL_COMMAND_LINE);
+        eprintln!(
+          "Diagnostic kernel command line: {DEBUG_KERNEL_COMMAND_LINE}"
+        );
+      }
+      custom_kernel::configure(&mut options, kernel_options);
     }
 
     let boxlite = runtime.create(options, None).await?;

@@ -109,14 +109,38 @@ jobs:
           RUST_LOG: boxlite=debug
         run: devenv shell -- vmtest --bundled-kernel-smoke
 
+      - name: Probe Linux ${{ matrix.kernel }} boot with verbose kernel output
+        id: boot-probe
+        continue-on-error: true
+        env:
+          RUST_LOG: boxlite=trace
+        run: devenv shell -- vmtest --kernel "${{ matrix.kernel }}" --boot-probe
+
       - name: Test cgroup v2 against Linux ${{ matrix.kernel }}
         env:
           RUST_LOG: boxlite=debug
         run: devenv shell -- vmtest --kernel "${{ matrix.kernel }}"
 
       - name: Show BoxLite diagnostics
-        if: failure()
+        if: always()
         run: |
+          echo "Verbose boot probe outcome: ${{ steps.boot-probe.outcome }}"
+          uname -a
+          ls -l /dev/kvm
+          sudo dmesg --color=never | tail -n 100
           find tests/.cache/sakai-vmtest/boxlite -type f \
             \( -name 'boxlite.log*' -o -name 'shim.stderr' -o -name 'console.log' -o -name 'exit' \) \
-            -print -exec tail -n 80 {} \;
+            -printf '%p (%s bytes)\n' -exec tail -n 300 {} \;
+
+      - name: Upload BoxLite boot diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: boxlite-linux-${{ matrix.kernel }}-diagnostics
+          path: |
+            tests/.cache/sakai-vmtest/boxlite/**/logs/*
+            tests/.cache/sakai-vmtest/boxlite/**/shim.stderr
+            tests/.cache/sakai-vmtest/boxlite/**/exit
+          if-no-files-found: ignore
+          include-hidden-files: true
+          retention-days: 7
