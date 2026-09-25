@@ -32,9 +32,31 @@ const _: () = {
   assert!(align_of::<Time>() == align_of::<u64>());
 };
 
-/// A monotonically increasing event count reported by the kernel.
-#[nutype(derive(Debug, Clone, Copy, PartialEq, Eq, Hash, AsRef, Deref))]
-pub struct Count(u64);
+/// Separates event counts from other dimensionless quantities.
+pub trait CountKind: uom::Kind {}
+
+/// An event count, with a distinct dimensionless kind and integer storage.
+///
+/// Construct with `Count { value: 42, ..Default::default() }`.
+/// `Count / Time` yields [`EventRate`]. Integer arithmetic truncates: convert
+/// operands to fractional storage before computing sub-unit rates.
+pub type Count = uom::si::Quantity<
+  uom::si::ISQ<
+    uom::typenum::Z0,
+    uom::typenum::Z0,
+    uom::typenum::Z0,
+    uom::typenum::Z0,
+    uom::typenum::Z0,
+    uom::typenum::Z0,
+    uom::typenum::Z0,
+    dyn CountKind,
+  >,
+  BaseUnits,
+  u64,
+>;
+
+/// An integer event rate stored in events per nanosecond.
+pub type EventRate = uom::si::frequency::Frequency<BaseUnits, u64>;
 const _: () = {
   assert!(size_of::<Count>() == size_of::<u64>());
   assert!(align_of::<Count>() == align_of::<u64>());
@@ -51,7 +73,8 @@ const _: () = {
   assert!(align_of::<NonZeroTime>() == align_of::<Time>());
 };
 
-/// A dimensionless ratio stored as an `f64`.
+/// A dimensionless ratio stored as an `f64` to preserve fractional values.
+/// Standard SI integer ratios normalize to whole units and truncate percents.
 pub type Ratio = uom::si::f64::Ratio;
 
 #[cfg(test)]
@@ -59,6 +82,34 @@ mod tests {
   use uom::si::time::{microsecond, millisecond, nanosecond, second};
 
   use super::*;
+
+  #[test]
+  fn count_has_dimensionally_typed_rates() {
+    let count = Count {
+      value: 2_000_000_000,
+      ..Default::default()
+    };
+    let rate: EventRate = count / Time::new::<second>(1);
+    assert_eq!(rate.get::<uom::si::frequency::hertz>(), 2_000_000_000);
+  }
+
+  #[test]
+  fn fractional_ratios_preserve_kernel_percentages() {
+    use assertables::{assert_in_delta, assert_ok};
+
+    use crate::cgroup::common::parser::{ParseCgroup, ParsePercent};
+    for (input, expected) in
+      [("12.34", 0.1234), ("0.01", 0.0001), ("100.00", 1.0)]
+    {
+      let parsed =
+        assert_ok!(<Ratio as ParseCgroup<ParsePercent>>::parse_cgroup(input));
+      assert_in_delta!(
+        parsed.get::<uom::si::ratio::ratio>(),
+        expected,
+        f64::EPSILON
+      );
+    }
+  }
 
   #[test]
   fn preserves_representable_microseconds_as_nanoseconds() {

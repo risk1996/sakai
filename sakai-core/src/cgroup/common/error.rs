@@ -1,4 +1,38 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, io, path::PathBuf};
+
+/// A cgroup discovery, read, or parse failure.
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+  /// An interface is unavailable (controller disabled, root, or older kernel).
+  #[error("cgroup interface is missing: {path}")]
+  FileMissing { path: PathBuf },
+  /// The kernel does not support this operation for the cgroup.
+  #[error("operation is not supported for this cgroup")]
+  NotSupported,
+  /// The directory is not on a cgroup v2 filesystem.
+  #[error("not a cgroup v2 filesystem")]
+  NotCgroupV2,
+  /// Procfs reports a cgroup that has already been removed.
+  #[error("cgroup has been deleted: {path}")]
+  DeletedCgroup { path: PathBuf },
+  /// Malformed interface contents, including the verbatim input in the detail.
+  #[error("failed to parse {file}: {detail}")]
+  Parse { file: &'static str, detail: String },
+  /// Other operating-system errors, including permission failures.
+  #[error(transparent)]
+  Io(#[from] io::Error),
+}
+
+impl Error {
+  #[cfg(target_os = "linux")]
+  pub(crate) fn read(path: PathBuf, error: io::Error) -> Self {
+    match error.kind() {
+      | io::ErrorKind::NotFound => Self::FileMissing { path },
+      | io::ErrorKind::Unsupported => Self::NotSupported,
+      | _ => Self::Io(error),
+    }
+  }
+}
 
 /// An error parsing a cgroup interface file.
 #[derive(Debug, thiserror::Error)]

@@ -3,13 +3,56 @@
 use std::{fmt::Debug, fs, io, path::PathBuf, process::Command, str::FromStr};
 
 use assertables::assert_ok;
-use sakai_core::cgroup::v2::{
-  CgroupPath,
-  cpu::{
-    CpuIdle, CpuMax, CpuMaxBurst, CpuStat, CpuUclampMax, CpuUclampMin,
-    CpuWeight, Nice, Pressure,
+use sakai_core::{
+  Cgroup, Error,
+  cgroup::v2::{
+    CgroupPath,
+    cpu::{
+      CpuIdle, CpuMax, CpuMaxBurst, CpuStat, CpuUclampMax, CpuUclampMin,
+      CpuWeight, Nice, Pressure,
+    },
   },
+  v2::{core::ReadCore, cpu::ReadCpu},
 };
+
+#[test]
+fn reads_current_cpu_without_privileges() {
+  let cgroup = match Cgroup::from_current_process() {
+    | Ok(cgroup) => cgroup,
+    | Err(Error::NotCgroupV2) => return,
+    | Err(error) => panic!("cgroup discovery failed: {error}"),
+  };
+  assert_ok!(cgroup.stat());
+  assert_ok!(cgroup.controllers());
+  assert_ok!(cgroup.subtree_control());
+  for result in [
+    cgroup.stat_local().map(|_| ()),
+    cgroup.weight().map(|_| ()),
+    cgroup.weight_nice().map(|_| ()),
+    cgroup.max().map(|_| ()),
+    cgroup.max_burst().map(|_| ()),
+    cgroup.pressure().map(|_| ()),
+    cgroup.uclamp_min().map(|_| ()),
+    cgroup.uclamp_max().map(|_| ()),
+    cgroup.idle().map(|_| ()),
+    cgroup.ty().map(|_| ()),
+  ] {
+    match result {
+      | Ok(()) | Err(Error::FileMissing { .. }) => {},
+      | Err(error) => panic!("CPU read failed: {error}"),
+    }
+  }
+  assert_ok!(Cgroup::from_pid(std::process::id()));
+  assert_ok!(cgroup.children());
+}
+
+#[test]
+fn rejects_non_cgroup_filesystems() {
+  assert!(matches!(
+    Cgroup::from_path(std::path::Path::new("/")),
+    Err(Error::NotCgroupV2)
+  ));
+}
 
 #[derive(Debug)]
 struct CgroupFixture {
@@ -75,11 +118,33 @@ fn parses_live_delegated_cpu_interfaces() {
   }
 
   let fixture = assert_ok!(CgroupFixture::create());
+  let reader = assert_ok!(Cgroup::from_path(&fixture.path));
+  let child_path = fixture.path.join("cpu.future");
+  assert_ok!(fs::create_dir(&child_path));
+  let child = assert_ok!(reader.child(std::ffi::OsStr::new("cpu.future")));
+  assert!(
+    assert_ok!(reader.children())
+      .iter()
+      .any(|entry| entry.path() == child_path)
+  );
+  assert_ok!(child.stat());
+  assert_ok!(fs::remove_dir(&child_path));
+  let finite = assert_ok!(reader.max());
+  assert_eq!(finite, assert_ok!("25000 100000".parse::<CpuMax>()));
   assert_eq!(
     assert_ok!(fs::read_to_string(fixture.path.join("cpu.max"))).trim(),
     "25000 100000"
   );
   assert_ok!(fs::write(fixture.path.join("cpu.max"), "max 100000"));
+  assert_eq!(
+    assert_ok!(reader.max()),
+    assert_ok!("max 100000".parse::<CpuMax>())
+  );
+  assert_ok!(reader.stat());
+  match reader.stat_local() {
+    | Ok(_) | Err(Error::FileMissing { .. }) => {},
+    | Err(error) => panic!("local CPU read failed: {error}"),
+  }
 
   fixture.check::<CpuIdle>("cpu.idle", true);
   fixture.check::<CpuMax>("cpu.max", false);

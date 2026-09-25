@@ -13,23 +13,67 @@ use crate::cgroup::common::{
 /// Values are a point-in-time read of the kernel interface. Read the file
 /// again to obtain fresh values. All durations are reported by the kernel in
 /// microseconds and stored as [`Time`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CpuStat {
   time: CpuTimeStat,
   bandwidth: Option<CpuBandwidthStat>,
+  extra: BTreeMap<String, u64>,
 }
 
 impl CpuStat {
   /// Returns CPU usage times.
   #[must_use]
-  pub const fn time(self) -> CpuTimeStat {
+  pub const fn time(&self) -> CpuTimeStat {
     self.time
   }
 
   /// Returns CPU bandwidth counters when the CPU controller reports them.
   #[must_use]
-  pub const fn bandwidth(self) -> Option<CpuBandwidthStat> {
+  pub const fn bandwidth(&self) -> Option<CpuBandwidthStat> {
     self.bandwidth
+  }
+
+  /// Returns unknown counters in their original kernel units.
+  pub fn extra(&self) -> &BTreeMap<String, u64> {
+    &self.extra
+  }
+}
+
+/// Runqueue throttling in `cpu.stat.local`, including ancestor bandwidth limits.
+///
+/// This is a live snapshot. An empty file means the controller reports no
+/// local counter; an absent file is handled separately by the reader.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct CpuStatLocal {
+  throttled: Option<Time>,
+  extra: BTreeMap<String, u64>,
+}
+
+impl CpuStatLocal {
+  /// Returns throttling of this cgroup's own runqueues, when reported.
+  pub const fn throttled(&self) -> Option<Time> {
+    self.throttled
+  }
+
+  /// Returns unknown counters in their original kernel units.
+  pub fn extra(&self) -> &BTreeMap<String, u64> {
+    &self.extra
+  }
+}
+
+impl FromStr for CpuStatLocal {
+  type Err = ParseError<'static, ParseValueError>;
+
+  fn from_str(contents: &str) -> Result<Self, Self::Err> {
+    let fields = CpuStatFields::parse(contents)?;
+    Ok(Self {
+      throttled: fields
+        .values
+        .get("throttled_usec")
+        .map(|value| Time::parse_field(contents, "throttled_usec", value))
+        .transpose()?,
+      extra: fields.extra(|key| key == "throttled_usec")?,
+    })
   }
 }
 
@@ -74,6 +118,7 @@ impl CpuTimeStat {
 }
 
 /// CPU bandwidth counters from a cgroup's `cpu.stat` file.
+/// These are non-hierarchical: ancestor-imposed throttling is excluded.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CpuBandwidthStat {
   nr_periods: Count,
@@ -166,6 +211,7 @@ impl FromStr for CpuStat {
 
     Ok(Self {
       time: CpuTimeStat::from_fields(&fields)?,
+      extra: fields.extra(|key| CpuStatField::from_str(key).is_ok())?,
       bandwidth: if fields.has_bandwidth() {
         Some(CpuBandwidthStat::from_fields(&fields)?)
       } else {
@@ -242,7 +288,7 @@ impl CpuStatField {
 
 struct CpuStatFields<'a> {
   raw: &'a str,
-  values: BTreeMap<CpuStatField, &'a str>,
+  values: BTreeMap<&'a str, &'a str>,
 }
 
 impl<'a> CpuStatFields<'a> {
@@ -250,16 +296,15 @@ impl<'a> CpuStatFields<'a> {
     let values = raw
       .lines()
       .filter(|line| !line.trim().is_empty())
-      .filter_map(|line| {
+      .map(|line| {
         Parser::parse_line(raw, line, |parser| {
           let key = parser.next_raw_field("key")?;
           let field = CpuStatField::from_str(key).ok();
           let name: &'static str = field.map(Into::into).unwrap_or("value");
           let value = parser.next_raw_field(name)?;
 
-          Ok(field.map(|field| (field, value)))
+          Ok((key, value))
         })
-        .transpose()
       })
       .collect::<Result<_, _>>()?;
 
@@ -267,7 +312,27 @@ impl<'a> CpuStatFields<'a> {
   }
 
   fn contains(&self, field: CpuStatField) -> bool {
-    self.values.contains_key(&field)
+    let name: &'static str = field.into();
+    self.values.contains_key(name)
+  }
+
+  fn extra(
+    &self,
+    known: impl Fn(&str) -> bool,
+  ) -> Result<BTreeMap<String, u64>, ParseError<'static, ParseValueError>> {
+    self
+      .values
+      .iter()
+      .filter(|(key, _)| !known(key))
+      .map(|(key, value)| {
+        value
+          .parse::<u64>()
+          .map(|value| ((*key).to_owned(), value))
+          .map_err(|error| {
+            ParseError::invalid(self.raw, "extra", value, error.into())
+          })
+      })
+      .collect()
   }
 
   fn has_bandwidth(&self) -> bool {
@@ -291,7 +356,7 @@ impl<'a> CpuStatFields<'a> {
     let name = field.into();
     let value = self
       .values
-      .get(&field)
+      .get(name)
       .ok_or_else(|| ParseError::missing(self.raw, name))?;
 
     T::parse_field(self.raw, name, value)
@@ -305,6 +370,38 @@ mod tests {
   use uom::si::time::microsecond;
 
   use super::*;
+
+  #[test]
+  fn parses_local_throttling_and_preserves_unknowns() {
+    for (input, expected) in [
+      ("", CpuStatLocal {
+        throttled: None,
+        extra: BTreeMap::new(),
+      }),
+      ("throttled_usec 123\n", CpuStatLocal {
+        throttled: Some(Time::new::<microsecond>(123)),
+        extra: BTreeMap::new(),
+      }),
+      ("future 7\nthrottled_usec 0\n", CpuStatLocal {
+        throttled: Some(Time::new::<microsecond>(0)),
+        extra: BTreeMap::from([("future".into(), 7)]),
+      }),
+      ("future 7\n", CpuStatLocal {
+        throttled: None,
+        extra: BTreeMap::from([("future".into(), 7)]),
+      }),
+    ] {
+      assert_eq!(assert_ok!(input.parse::<CpuStatLocal>()), expected);
+    }
+    for input in [
+      "throttled_usec nope",
+      "throttled_usec 18446744073709552",
+      "future nope",
+      "throttled_usec 1 extra",
+    ] {
+      assert_err!(input.parse::<CpuStatLocal>());
+    }
+  }
 
   #[test]
   fn parses_cpu_stat() {
@@ -321,6 +418,7 @@ mod tests {
           system_usec 22221
         "},
         expected: Ok(CpuStat {
+          extra: BTreeMap::new(),
           time: CpuTimeStat {
             usage: Time::new::<microsecond>(54_321),
             user: Time::new::<microsecond>(32_100),
@@ -341,17 +439,27 @@ mod tests {
           burst_usec 456
         "},
         expected: Ok(CpuStat {
+          extra: BTreeMap::new(),
           time: CpuTimeStat {
             usage: Time::new::<microsecond>(54_321),
             user: Time::new::<microsecond>(32_100),
             system: Time::new::<microsecond>(22_221),
           },
           bandwidth: Some(CpuBandwidthStat {
-            nr_periods: Count::new(100),
-            nr_throttled: Count::new(7),
+            nr_periods: Count {
+              value: 100,
+              ..Default::default()
+            },
+            nr_throttled: Count {
+              value: 7,
+              ..Default::default()
+            },
             throttled: Time::new::<microsecond>(1_234),
             burst: Some(CpuBurstStat {
-              nr_bursts: Count::new(3),
+              nr_bursts: Count {
+                value: 3,
+                ..Default::default()
+              },
               burst: Time::new::<microsecond>(456),
             }),
           }),
@@ -367,14 +475,21 @@ mod tests {
           throttled_usec 6
         "},
         expected: Ok(CpuStat {
+          extra: BTreeMap::new(),
           time: CpuTimeStat {
             usage: Time::new::<microsecond>(1),
             user: Time::new::<microsecond>(2),
             system: Time::new::<microsecond>(3),
           },
           bandwidth: Some(CpuBandwidthStat {
-            nr_periods: Count::new(4),
-            nr_throttled: Count::new(5),
+            nr_periods: Count {
+              value: 4,
+              ..Default::default()
+            },
+            nr_throttled: Count {
+              value: 5,
+              ..Default::default()
+            },
             throttled: Time::new::<microsecond>(6),
             burst: None,
           }),
@@ -392,17 +507,27 @@ mod tests {
           burst_usec 0
         "},
         expected: Ok(CpuStat {
+          extra: BTreeMap::new(),
           time: CpuTimeStat {
             usage: Time::new::<microsecond>(0),
             user: Time::new::<microsecond>(0),
             system: Time::new::<microsecond>(0),
           },
           bandwidth: Some(CpuBandwidthStat {
-            nr_periods: Count::new(0),
-            nr_throttled: Count::new(0),
+            nr_periods: Count {
+              value: 0,
+              ..Default::default()
+            },
+            nr_throttled: Count {
+              value: 0,
+              ..Default::default()
+            },
             throttled: Time::new::<microsecond>(0),
             burst: Some(CpuBurstStat {
-              nr_bursts: Count::new(0),
+              nr_bursts: Count {
+                value: 0,
+                ..Default::default()
+              },
               burst: Time::new::<microsecond>(0),
             }),
           }),
@@ -417,6 +542,10 @@ mod tests {
           user_usec 2
         "},
         expected: Ok(CpuStat {
+          extra: BTreeMap::from([
+            ("future_counter".into(), 99),
+            ("nice_usec".into(), 4),
+          ]),
           time: CpuTimeStat {
             usage: Time::new::<microsecond>(1),
             user: Time::new::<microsecond>(2),
@@ -510,11 +639,11 @@ mod tests {
     assert_eq!(time.usage().get::<microsecond>(), 54_321);
     assert_eq!(time.user().get::<microsecond>(), 32_100);
     assert_eq!(time.system().get::<microsecond>(), 22_221);
-    assert_eq!(bandwidth.nr_periods().into_inner(), 100);
-    assert_eq!(bandwidth.nr_throttled().into_inner(), 7);
+    assert_eq!(bandwidth.nr_periods().value, 100);
+    assert_eq!(bandwidth.nr_throttled().value, 7);
     assert_eq!(bandwidth.throttled().get::<microsecond>(), 1_234);
     assert_eq!(bandwidth.burst(), Some(burst));
-    assert_eq!(burst.nr_bursts().into_inner(), 3);
+    assert_eq!(burst.nr_bursts().value, 3);
     assert_eq!(burst.burst().get::<microsecond>(), 456);
   }
 }

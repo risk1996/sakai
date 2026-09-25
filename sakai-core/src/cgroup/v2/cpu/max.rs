@@ -31,9 +31,10 @@ impl CpuMax {
     self.period
   }
 
-  /// Returns the number of CPUs made available by the quota.
+  /// Returns the CPU bandwidth implied by this cgroup's quota and period.
   ///
   /// An unlimited quota is returned as [`MaxOr::Max`].
+  /// This does not account for ancestor limits, affinity, or scheduling policy.
   #[must_use]
   pub fn cpu_count(self) -> MaxOr<Ratio> {
     match self.quota {

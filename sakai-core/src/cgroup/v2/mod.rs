@@ -1,4 +1,10 @@
+pub mod core;
 pub mod cpu;
+
+#[cfg(target_os = "linux")]
+mod handle;
+#[cfg(target_os = "linux")]
+pub use handle::{Cgroup, OpenCgroup};
 
 #[cfg(target_os = "linux")]
 mod path;
@@ -7,8 +13,4 @@ mod path;
 pub use path::{CgroupPath, CgroupPathError};
 
 #[cfg(target_os = "linux")]
-#[cfg_attr(
-  not(test),
-  expect(dead_code, reason = "used by Linux cgroup readers as they are added")
-)]
 mod io;
