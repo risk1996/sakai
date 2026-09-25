@@ -3,7 +3,7 @@ use std::{fs, path::Path, process::Command};
 use anyhow::{Context, Result, ensure};
 use sha2::{Digest, Sha256};
 
-use super::kernel::Kernel;
+use super::kernel::{Kernel, KernelImageFormat};
 
 const BUILT_INS: &[&str] = &[
   "CONFIG_EXT4_FS=y",
@@ -34,7 +34,9 @@ impl Kernel {
       self.name, source_sha256
     );
 
-    let image = self.built_image(cache);
+    let elf_image = self.built_image(cache, KernelImageFormat::Elf);
+    let compressed_image =
+      self.built_image(cache, KernelImageFormat::Compressed);
     let build = cache
       .parent()
       .context("kernel cache has no parent")?
@@ -43,9 +45,12 @@ impl Kernel {
     let output = build.join("output");
     let config = output.join(".config");
     let cached_config = cache.join(format!("config-v{}-boxlite", self.name));
-    if image.is_file() && cached_config.is_file() {
+    if elf_image.is_file()
+      && compressed_image.is_file()
+      && cached_config.is_file()
+    {
       Self::verify_built_ins(&fs::read_to_string(&cached_config)?)?;
-      eprintln!("Reusing built kernel {}", image.display());
+      eprintln!("Reusing built kernel {}", elf_image.display());
       return Ok(());
     }
 
@@ -159,13 +164,15 @@ impl Kernel {
 
     let jobs = std::thread::available_parallelism()?.get();
     eprintln!("Compiling with {jobs} parallel jobs");
-    Self::run(
-      Command::new("make")
-        .arg(format!("-j{jobs}"))
-        .arg(format!("O={}", output.display()))
-        .arg("bzImage")
-        .current_dir(&source_dir),
-    )?;
+    let mut compile = Command::new("make");
+    compile
+      .arg(format!("-j{jobs}"))
+      .arg(format!("O={}", output.display()));
+    if self.name == "5.15" {
+      // Old objtool treats GCC's newer use-after-free diagnostic as fatal.
+      compile.arg("WERROR=0");
+    }
+    Self::run(compile.arg("bzImage").current_dir(&source_dir))?;
     fs::create_dir_all(cache)?;
     let compiled = output.join("arch/x86/boot/bzImage");
     ensure!(
@@ -173,9 +180,17 @@ impl Kernel {
       "kernel build did not produce {}",
       compiled.display()
     );
-    fs::copy(&compiled, &image)?;
+    let elf = output.join("vmlinux");
+    ensure!(
+      elf.is_file(),
+      "kernel build did not produce {}",
+      elf.display()
+    );
+    fs::copy(&compiled, &compressed_image)?;
+    fs::copy(&elf, &elf_image)?;
     fs::copy(&config, &cached_config)?;
-    Self::report_boot_config(&image)?;
+    Self::report_boot_config(&elf_image)?;
+    Self::report_boot_config(&compressed_image)?;
     Ok(())
   }
 

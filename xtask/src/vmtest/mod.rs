@@ -23,7 +23,7 @@ use boxlite::{
 use clap::{Args, ValueEnum};
 use diagnostics::Diagnostics;
 use futures::{Stream, StreamExt, TryFutureExt, TryStreamExt, stream};
-use kernel::{KERNELS, Kernel};
+use kernel::{KERNELS, Kernel, KernelImageFormat};
 
 const ROOTFS: &str = env!("SAKAI_VMTEST_ROOTFS");
 const VERBOSE_KERNEL_COMMAND_LINE: &str =
@@ -43,6 +43,9 @@ pub(crate) struct Vmtest {
   /// Boot a selected kernel with a minimal guest command and chosen kernel arguments.
   #[arg(long, value_enum)]
   boot_probe: Option<BootProbe>,
+  /// Select the ELF vmlinux or compressed bzImage custom-kernel loader.
+  #[arg(long, value_enum, default_value_t = KernelImageFormat::Elf)]
+  kernel_image_format: KernelImageFormat,
   /// Inspect selected kernel images without launching BoxLite.
   #[arg(long)]
   inspect_kernel: bool,
@@ -132,18 +135,30 @@ impl Vmtest {
 
     if self.inspect_kernel {
       for kernel in selected {
-        if let Some(path) = kernel
-          .image(&repository.join("tests/.cache/sakai-vmtest/kernels"))
-          .await?
-        {
-          Kernel::report_boot_config(&path)?;
+        for format in [KernelImageFormat::Elf, KernelImageFormat::Compressed] {
+          if let Some(path) = kernel
+            .image(
+              &repository.join("tests/.cache/sakai-vmtest/kernels"),
+              format,
+            )
+            .await?
+          {
+            Kernel::report_boot_config(&path)?;
+          }
         }
       }
       return Ok(());
     }
 
     stream::iter(selected)
-      .then(|kernel| Self::run_kernel(&repository, kernel, self.boot_probe))
+      .then(|kernel| {
+        Self::run_kernel(
+          &repository,
+          kernel,
+          self.boot_probe,
+          self.kernel_image_format,
+        )
+      })
       .try_collect::<Vec<_>>()
       .await
       .map(|_| ())
@@ -207,6 +222,7 @@ impl Vmtest {
     repository: &Path,
     kernel: &Kernel,
     boot_probe: Option<BootProbe>,
+    format: KernelImageFormat,
   ) -> Result<()> {
     let cache = repository.join("tests/.cache/sakai-vmtest");
     let architecture = kernel.architecture;
@@ -223,7 +239,8 @@ impl Vmtest {
     boxlite::init_logging_for(&boxlite_home)?;
 
     eprintln!(
-      "==> Linux {} ({architecture}), boot_probe={boot_probe:?}",
+      "==> Linux {} ({architecture}), boot_probe={boot_probe:?}, \
+       image={format:?}",
       kernel.name
     );
     let runtime = RuntimeBuilder::new(BoxliteOptions {
@@ -283,7 +300,7 @@ impl Vmtest {
       }),
       ..Default::default()
     };
-    if let Some(path) = kernel.image(&cache.join("kernels")).await? {
+    if let Some(path) = kernel.image(&cache.join("kernels"), format).await? {
       Kernel::report_boot_config(&path)?;
       let kernel_options = match boot_probe.and_then(BootProbe::command_line) {
         | Some(command_line) => {

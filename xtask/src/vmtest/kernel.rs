@@ -5,8 +5,25 @@ use std::{
 };
 
 use anyhow::{Result, ensure};
+use clap::ValueEnum;
 use flate2::read::GzDecoder;
 use sha2::{Digest, Sha256};
+
+#[derive(Debug, Clone, Copy, Default, ValueEnum)]
+pub(super) enum KernelImageFormat {
+  #[default]
+  Elf,
+  Compressed,
+}
+
+impl KernelImageFormat {
+  const fn file_stem(self) -> &'static str {
+    match self {
+      | Self::Elf => "vmlinux",
+      | Self::Compressed => "bzImage",
+    }
+  }
+}
 
 pub(super) const KERNELS: &[Kernel] = &[
   Kernel {
@@ -119,6 +136,10 @@ impl Kernel {
   pub(super) fn embedded_config(image: &[u8]) -> Option<String> {
     const ZSTD_MAGIC: &[u8] = &[0x28, 0xb5, 0x2f, 0xfd];
 
+    if image.starts_with(b"\x7fELF") {
+      return Self::config_in_payload(image);
+    }
+
     let unpacked = image
       .windows(ZSTD_MAGIC.len())
       .position(|bytes| bytes == ZSTD_MAGIC)
@@ -190,11 +211,15 @@ impl Kernel {
     }
   }
 
-  pub(super) async fn image(&self, cache: &Path) -> Result<Option<PathBuf>> {
+  pub(super) async fn image(
+    &self,
+    cache: &Path,
+    format: KernelImageFormat,
+  ) -> Result<Option<PathBuf>> {
     match self.sha256 {
       | None => Ok(None),
       | Some(_) => {
-        let path = self.built_image(cache);
+        let path = self.built_image(cache, format);
         ensure!(
           path.is_file(),
           "built kernel missing: {}; run vmtest --kernel {} --build-kernel",
@@ -206,8 +231,12 @@ impl Kernel {
     }
   }
 
-  pub(super) fn built_image(&self, cache: &Path) -> PathBuf {
-    cache.join(format!("bzImage-v{}-boxlite", self.name))
+  pub(super) fn built_image(
+    &self,
+    cache: &Path,
+    format: KernelImageFormat,
+  ) -> PathBuf {
+    cache.join(format!("{}-v{}-boxlite", format.file_stem(), self.name))
   }
 
   pub(super) async fn fixture(&self, cache: &Path) -> Result<Option<PathBuf>> {
@@ -265,7 +294,8 @@ mod tests {
       zstd::stream::encode_all(payload.as_slice(), 0).unwrap();
     let image = [b"boot header".as_slice(), &compressed_payload].concat();
 
-    for candidate in [payload, image] {
+    let elf = [b"\x7fELF".as_slice(), &payload].concat();
+    for candidate in [payload, image, elf] {
       assert_eq!(Kernel::embedded_config(&candidate), Some(config.into()));
     }
   }

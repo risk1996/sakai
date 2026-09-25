@@ -34,7 +34,7 @@ impl Diagnostics {
         let image = image?;
         if image.file_type()?.is_file() {
           let name = image.file_name().to_string_lossy().into_owned();
-          if name.starts_with("bzImage-") {
+          if name.starts_with("bzImage-") || name.starts_with("vmlinux-") {
             Kernel::export_config(
               &image.path(),
               &destination.join(format!("{name}.config")),

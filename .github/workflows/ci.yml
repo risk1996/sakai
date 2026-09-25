@@ -88,6 +88,7 @@ jobs:
           key: boxlite-v3-${{ matrix.kernel }}-${{ hashFiles('Cargo.lock', 'devenv.nix', 'tools/vmtest/**', 'xtask/**') }}-${{ github.sha }}
           restore-keys: |
             boxlite-v3-${{ matrix.kernel }}-${{ hashFiles('Cargo.lock', 'devenv.nix', 'tools/vmtest/**', 'xtask/**') }}-
+            boxlite-v3-${{ matrix.kernel }}-
 
       - uses: cachix/install-nix-action@v31
 
@@ -129,26 +130,49 @@ jobs:
           RUST_LOG: boxlite=debug
         run: devenv shell -- vmtest --bundled-kernel-smoke
 
-      - name: Probe Linux ${{ matrix.kernel }} with default kernel arguments
+      - name: Probe Linux ${{ matrix.kernel }} ELF with default kernel arguments
         id: default-probe
         continue-on-error: true
         env:
           RUST_LOG: boxlite=debug
         run: devenv shell -- vmtest --kernel "${{ matrix.kernel }}" --boot-probe default
 
-      - name: Probe Linux ${{ matrix.kernel }} with verbose kernel output
+      - name: Stage default-probe diagnostics
+        if: always()
+        run: devenv shell -- vmtest --collect-diagnostics
+
+      - name: Probe Linux ${{ matrix.kernel }} compressed image with default arguments
+        id: compressed-probe
+        continue-on-error: true
+        env:
+          RUST_LOG: boxlite=debug
+        run: devenv shell -- vmtest --kernel "${{ matrix.kernel }}" --kernel-image-format compressed --boot-probe default
+
+      - name: Stage compressed-probe diagnostics
+        if: always()
+        run: devenv shell -- vmtest --collect-diagnostics
+
+      - name: Probe Linux ${{ matrix.kernel }} ELF with verbose kernel output
         id: verbose-probe
         continue-on-error: true
         env:
           RUST_LOG: boxlite=debug
         run: devenv shell -- vmtest --kernel "${{ matrix.kernel }}" --boot-probe verbose
 
-      - name: Probe Linux ${{ matrix.kernel }} with serial kernel output
+      - name: Stage verbose-probe diagnostics
+        if: always()
+        run: devenv shell -- vmtest --collect-diagnostics
+
+      - name: Probe Linux ${{ matrix.kernel }} ELF with serial kernel output
         id: serial-probe
         continue-on-error: true
         env:
           RUST_LOG: boxlite=trace
         run: devenv shell -- vmtest --kernel "${{ matrix.kernel }}" --boot-probe serial
+
+      - name: Stage serial-probe diagnostics
+        if: always()
+        run: devenv shell -- vmtest --collect-diagnostics
 
       - name: Test cgroup v2 against Linux ${{ matrix.kernel }}
         env:
@@ -164,8 +188,13 @@ jobs:
         run: |
           set +e
           echo "Default probe outcome: ${{ steps.default-probe.outcome }}"
+          echo "Compressed probe outcome: ${{ steps.compressed-probe.outcome }}"
           echo "Verbose probe outcome: ${{ steps.verbose-probe.outcome }}"
           echo "Serial probe outcome: ${{ steps.serial-probe.outcome }}"
+          ls -lh tests/.cache/sakai-vmtest/kernels/*-v${{ matrix.kernel }}-boxlite
+          file tests/.cache/sakai-vmtest/kernels/*-v${{ matrix.kernel }}-boxlite
+          readelf -h tests/.cache/sakai-vmtest/kernels/vmlinux-v${{ matrix.kernel }}-boxlite
+          readelf -l tests/.cache/sakai-vmtest/kernels/vmlinux-v${{ matrix.kernel }}-boxlite
           id
           uname -a
           ls -l /dev/kvm
