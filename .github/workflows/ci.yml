@@ -98,5 +98,10 @@ jobs:
             sudo chmod 666 /dev/kvm
           fi
 
+      # Ubuntu 24.04's default AppArmor policy blocks BoxLite's bundled
+      # bubblewrap from creating the user namespace used by its jailer.
+      - name: Allow BoxLite to create user namespaces
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
       - name: Test cgroup v2 against Linux ${{ matrix.kernel }}
         run: devenv shell -- vmtest --kernel "${{ matrix.kernel }}"
