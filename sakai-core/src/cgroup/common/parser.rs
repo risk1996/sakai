@@ -112,6 +112,22 @@ pub trait ParseCgroup<Unit>: Sized {
   }
 }
 
+/// A zero-sized marker for cgroup booleans encoded as `0` or `1`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ParseBoolean;
+
+impl ParseCgroup<ParseBoolean> for bool {
+  type Error = ParseValueError;
+
+  fn parse_cgroup(value: &str) -> Result<Self, Self::Error> {
+    match value.parse::<u8>()? {
+      | 0 => Ok(false),
+      | 1 => Ok(true),
+      | _ => Err(ParseValueError::OutOfRange),
+    }
+  }
+}
+
 /// A zero-sized marker for cgroup event counts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ParseCount;
