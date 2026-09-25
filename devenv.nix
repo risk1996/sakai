@@ -27,6 +27,7 @@
     pkgs.coreutils
     pkgs.curl
     pkgs.pkg-config
+    pkgs.protobuf
   ];
 
   env.SAKAI_VMTEST_ROOTFS =
