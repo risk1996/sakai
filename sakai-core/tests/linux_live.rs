@@ -5,7 +5,10 @@ use std::{fmt::Debug, fs, io, path::PathBuf, process::Command, str::FromStr};
 use assertables::assert_ok;
 use sakai_core::cgroup::v2::{
   CgroupPath,
-  cpu::{CpuMax, CpuStat, CpuUclampMax, CpuUclampMin, CpuWeight, Pressure},
+  cpu::{
+    CpuMax, CpuMaxBurst, CpuStat, CpuUclampMax, CpuUclampMin, CpuWeight,
+    Pressure,
+  },
 };
 
 #[derive(Debug)]
@@ -79,6 +82,7 @@ fn parses_live_delegated_cpu_interfaces() {
   assert_ok!(fs::write(fixture.path.join("cpu.max"), "max 100000"));
 
   fixture.check::<CpuMax>("cpu.max", false);
+  fixture.check::<CpuMaxBurst>("cpu.max.burst", true);
   fixture.check::<Pressure>("cpu.pressure", false);
   fixture.check::<CpuStat>("cpu.stat", false);
   fixture.check::<CpuUclampMax>("cpu.uclamp.max", true);
