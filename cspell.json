@@ -1,5 +1,6 @@
 {
   "words": [
+    "archlinux",
     "assertables",
     "boxlite",
     "clippy",
@@ -13,12 +14,16 @@
     "inotify",
     "libpython",
     "maturin",
+    "newtype",
     "nextest",
+    "nocapture",
     "numa",
     "nutype",
     "openat",
     "pids",
     "pkgs",
+    "procs",
+    "reqwest",
     "rdma",
     "rootfs",
     "rustix",
