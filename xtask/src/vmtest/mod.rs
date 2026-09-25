@@ -26,6 +26,9 @@ const ROOTFS: &str = env!("SAKAI_VMTEST_ROOTFS");
 
 #[derive(Debug, Args)]
 pub(crate) struct Vmtest {
+  /// Boot BoxLite's bundled kernel and run a minimal guest command.
+  #[arg(long)]
+  bundled_kernel_smoke: bool,
   /// Choose the quick, complete, or host-native matrix.
   #[arg(long, value_enum, default_value_t = Profile::Smoke)]
   profile: Profile,
@@ -57,6 +60,9 @@ impl Vmtest {
       .parent()
       .context("xtask must be in the repository root")?
       .canonicalize()?;
+    if self.bundled_kernel_smoke {
+      return Self::run_bundled_kernel_smoke(&repository).await;
+    }
     let selected = KERNELS
       .iter()
       .filter(|kernel| match self.kernel.is_empty() {
@@ -77,6 +83,60 @@ impl Vmtest {
       .try_collect::<Vec<_>>()
       .await
       .map(|_| ())
+  }
+
+  async fn run_bundled_kernel_smoke(repository: &Path) -> Result<()> {
+    let boxlite_home =
+      repository.join("tests/.cache/sakai-vmtest/boxlite/bundled-smoke");
+    fs::create_dir_all(&boxlite_home)?;
+    boxlite::init_logging_for(&boxlite_home)?;
+
+    eprintln!("==> BoxLite bundled-kernel smoke test");
+    let runtime = RuntimeBuilder::new(BoxliteOptions {
+      home_dir: boxlite_home,
+      ..Default::default()
+    })
+    .build()?;
+    let boxlite = runtime
+      .create(
+        BoxOptions {
+          cpus: Some(1),
+          memory_mib: Some(1536),
+          disk_size_gb: Some(2),
+          rootfs: RootfsSpec::Image(ROOTFS.into()),
+          auto_delete: Some(1),
+          cmd: Some(["uname", "-r"].map(String::from).into()),
+          ..Default::default()
+        },
+        None,
+      )
+      .await?;
+    let mut execution =
+      boxlite.attach(AttachOptions::main().read_only()).await?;
+    let stdout = execution
+      .stdout()
+      .context("BoxLite did not provide stdout")?;
+    let stderr = execution
+      .stderr()
+      .context("BoxLite did not provide stderr")?;
+    boxlite.start().await?;
+    let (_, _, result) = tokio::try_join!(
+      Self::forward(stdout, io::stdout()),
+      Self::forward(stderr, io::stderr()),
+      execution.wait().map_err(anyhow::Error::from),
+    )?;
+    runtime.shutdown(None).await?;
+    ensure!(
+      result.success(),
+      "BoxLite bundled-kernel smoke test failed with exit code {}{}",
+      result.exit_code,
+      result
+        .error_message
+        .map(|message| format!(": {message}"))
+        .unwrap_or_default(),
+    );
+
+    Ok(())
   }
 
   async fn run_kernel(repository: &Path, kernel: &Kernel) -> Result<()> {

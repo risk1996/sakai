@@ -94,14 +94,20 @@ jobs:
 
       - name: Allow BoxLite to use KVM
         run: |
-          if [[ -e /dev/kvm ]]; then
-            sudo chmod 666 /dev/kvm
-          fi
+          test -c /dev/kvm
+          sudo chmod 666 /dev/kvm
+          test -r /dev/kvm
+          test -w /dev/kvm
 
       # Ubuntu 24.04's default AppArmor policy blocks BoxLite's bundled
       # bubblewrap from creating the user namespace used by its jailer.
       - name: Allow BoxLite to create user namespaces
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      - name: Smoke-test BoxLite's bundled kernel
+        env:
+          RUST_LOG: boxlite=debug
+        run: devenv shell -- vmtest --bundled-kernel-smoke
 
       - name: Test cgroup v2 against Linux ${{ matrix.kernel }}
         env:
