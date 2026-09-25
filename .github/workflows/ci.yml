@@ -69,7 +69,7 @@ jobs:
   kernels:
     name: Linux ${{ matrix.kernel }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -77,16 +77,17 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Cache kernels and BoxLite Cargo artifacts
-        uses: actions/cache@v6
+      - name: Restore kernels and BoxLite Cargo artifacts
+        id: vmtest-cache
+        uses: actions/cache/restore@v6
         with:
           path: |
             tests/.cache/sakai-vmtest/kernels
             tests/.cache/sakai-vmtest/cargo
             tests/.cache/sakai-vmtest/target
-          key: boxlite-v2-${{ matrix.kernel }}-${{ hashFiles('Cargo.lock', 'devenv.nix', 'tools/vmtest/**', 'xtask/**') }}-${{ github.sha }}
+          key: boxlite-v3-${{ matrix.kernel }}-${{ hashFiles('Cargo.lock', 'devenv.nix', 'tools/vmtest/**', 'xtask/**') }}-${{ github.sha }}
           restore-keys: |
-            boxlite-v2-${{ matrix.kernel }}-${{ hashFiles('Cargo.lock', 'devenv.nix', 'tools/vmtest/**', 'xtask/**') }}-
+            boxlite-v3-${{ matrix.kernel }}-${{ hashFiles('Cargo.lock', 'devenv.nix', 'tools/vmtest/**', 'xtask/**') }}-
 
       - uses: cachix/install-nix-action@v31
 
@@ -107,8 +108,21 @@ jobs:
       - name: Allow BoxLite to create user namespaces
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 
+      - name: Build Linux ${{ matrix.kernel }} with BoxLite boot drivers
+        run: devenv shell -- vmtest --kernel "${{ matrix.kernel }}" --build-kernel
+
       - name: Inspect Linux ${{ matrix.kernel }} kernel image and boot drivers
         run: devenv shell -- vmtest --kernel "${{ matrix.kernel }}" --inspect-kernel
+
+      - name: Save verified kernel build cache
+        if: steps.vmtest-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            tests/.cache/sakai-vmtest/kernels
+            tests/.cache/sakai-vmtest/cargo
+            tests/.cache/sakai-vmtest/target
+          key: ${{ steps.vmtest-cache.outputs.cache-primary-key }}
 
       - name: Smoke-test BoxLite's bundled kernel
         env:

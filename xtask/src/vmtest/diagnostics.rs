@@ -32,12 +32,33 @@ impl Diagnostics {
       fs::create_dir_all(&destination)?;
       for image in fs::read_dir(kernels)? {
         let image = image?;
-        if image.file_type()?.is_file()
-          && image.file_name().to_string_lossy().starts_with("bzImage-")
-        {
-          let config = destination
-            .join(format!("{}.config", image.file_name().to_string_lossy()));
-          Kernel::export_config(&image.path(), &config)?;
+        if image.file_type()?.is_file() {
+          let name = image.file_name().to_string_lossy().into_owned();
+          if name.starts_with("bzImage-") {
+            Kernel::export_config(
+              &image.path(),
+              &destination.join(format!("{name}.config")),
+            )?;
+          } else if name.starts_with("config-v") {
+            Self::copy_file(&image.path(), &destination.join(name))?;
+          }
+        }
+      }
+    }
+    let builds = cache.join("kernel-build");
+    if builds.is_dir() {
+      for entry in fs::read_dir(builds)? {
+        let entry = entry?;
+        if entry.file_type()?.is_dir() {
+          let destination = staging.join("builds").join(entry.file_name());
+          Self::copy_file(
+            &entry.path().join("output/.config"),
+            &destination.join("kernel.config"),
+          )?;
+          Self::copy_file(
+            &entry.path().join("output/include/config/kernel.release"),
+            &destination.join("kernel.release"),
+          )?;
         }
       }
     }

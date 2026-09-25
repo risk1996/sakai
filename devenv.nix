@@ -22,13 +22,28 @@
     };
   };
 
-  packages = [
-    pkgs.cargo-nextest
-    pkgs.coreutils
-    pkgs.curl
-    pkgs.pkg-config
-    pkgs.protobuf
-  ];
+  packages =
+    [
+      pkgs.cargo-nextest
+      pkgs.coreutils
+      pkgs.curl
+      pkgs.pkg-config
+      pkgs.protobuf
+    ]
+    ++ lib.optionals pkgs.stdenv.isLinux [
+      pkgs.bc
+      pkgs.bison
+      pkgs.binutils
+      pkgs.elfutils.dev
+      pkgs.flex
+      pkgs.gcc
+      pkgs.gnumake
+      pkgs.openssl
+      pkgs.openssl.dev
+      pkgs.perl
+      pkgs.xz
+      pkgs.zstd
+    ];
 
   env.SAKAI_VMTEST_ROOTFS =
     "docker.io/library/rust:${config.languages.rust.toolchainPackage.version}-bookworm";

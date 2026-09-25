@@ -14,31 +14,37 @@ pub(super) const KERNELS: &[Kernel] = &[
     architecture: "aarch64",
     smoke: true,
     sha256: None,
+    source_sha256: None,
   },
   Kernel::x86_64(
     "5.15",
     true,
     "23879f21c7e3c7137902904fd89695fc9d8a938f1d2c1549dd1658443cb7a084",
+    "57b2cf6991910e3b67a1b3490022e8a0674b6965c74c12da1e99d138d1991ee8",
   ),
   Kernel::x86_64(
     "6.1",
     false,
     "303b9010d92e4a9cf3930114f5c854edb2c5f7d1f9da2c3c29df7b1f7ab86a3c",
+    "2ca1f17051a430f6fed1196e4952717507171acfd97d96577212502703b25deb",
   ),
   Kernel::x86_64(
     "6.6",
     false,
     "3b47b1fefe02d49208da139bb1ad0363971ca5c02ab4ce89b9b8a52504b0fedf",
+    "d926a06c63dd8ac7df3f86ee1ffc2ce2a3b81a2d168484e76b5b389aba8e56d0",
   ),
   Kernel::x86_64(
     "6.12",
     false,
     "a389c774c4bf035fbb7685be8493d128d8196c62862f750a8ef49b3b58428738",
+    "b1a2562be56e42afb3f8489d4c2a7ac472ac23098f1ef1c1e40da601f54625eb",
   ),
   Kernel::x86_64(
     "6.18",
     true,
     "c2a05883f9556e73f5665d5979679163d80ff17754c4090e8d801df2a2e92551",
+    "9106a4605da9e31ff17659d958782b815f9591ab308d03b0ee21aad6c7dced4b",
   ),
 ];
 
@@ -48,6 +54,7 @@ pub(super) struct Kernel {
   pub(super) architecture: &'static str,
   pub(super) smoke: bool,
   pub(super) sha256: Option<&'static str>,
+  pub(super) source_sha256: Option<&'static str>,
 }
 
 impl Kernel {
@@ -109,7 +116,7 @@ impl Kernel {
     Ok(())
   }
 
-  fn embedded_config(image: &[u8]) -> Option<String> {
+  pub(super) fn embedded_config(image: &[u8]) -> Option<String> {
     const ZSTD_MAGIC: &[u8] = &[0x28, 0xb5, 0x2f, 0xfd];
 
     let unpacked = image
@@ -172,16 +179,38 @@ impl Kernel {
     name: &'static str,
     smoke: bool,
     sha256: &'static str,
+    source_sha256: &'static str,
   ) -> Self {
     Self {
       name,
       architecture: "x86_64",
       smoke,
       sha256: Some(sha256),
+      source_sha256: Some(source_sha256),
     }
   }
 
   pub(super) async fn image(&self, cache: &Path) -> Result<Option<PathBuf>> {
+    match self.sha256 {
+      | None => Ok(None),
+      | Some(_) => {
+        let path = self.built_image(cache);
+        ensure!(
+          path.is_file(),
+          "built kernel missing: {}; run vmtest --kernel {} --build-kernel",
+          path.display(),
+          self.name
+        );
+        Ok(Some(path))
+      },
+    }
+  }
+
+  pub(super) fn built_image(&self, cache: &Path) -> PathBuf {
+    cache.join(format!("bzImage-v{}-boxlite", self.name))
+  }
+
+  pub(super) async fn fixture(&self, cache: &Path) -> Result<Option<PathBuf>> {
     let sha256 = match self.sha256 {
       | None => return Ok(None),
       | Some(sha256) => sha256,

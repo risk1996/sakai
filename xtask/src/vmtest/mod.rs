@@ -1,3 +1,4 @@
+mod build;
 mod diagnostics;
 mod kernel;
 
@@ -45,6 +46,9 @@ pub(crate) struct Vmtest {
   /// Inspect selected kernel images without launching BoxLite.
   #[arg(long)]
   inspect_kernel: bool,
+  /// Build selected kernels with BoxLite's boot drivers built in.
+  #[arg(long)]
+  build_kernel: bool,
   /// Copy only BoxLite log files into a safe artifact staging directory.
   #[arg(long)]
   collect_diagnostics: bool,
@@ -116,6 +120,15 @@ impl Vmtest {
       !selected.is_empty(),
       "no kernel fixtures matched the request"
     );
+
+    if self.build_kernel {
+      for kernel in selected {
+        kernel
+          .build(&repository.join("tests/.cache/sakai-vmtest/kernels"))
+          .await?;
+      }
+      return Ok(());
+    }
 
     if self.inspect_kernel {
       for kernel in selected {
