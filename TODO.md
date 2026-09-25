@@ -26,7 +26,7 @@ unknown keyed fields must be preserved when the public type provides an
 - [x] `cpu.uclamp.max` — `max` or a ratio expressed in hundredths of a percent.
 - [x] `cpu.uclamp.min` — ratio expressed in hundredths of a percent.
 - [x] `cpu.max.burst` — burst duration in microseconds, not a frequency.
-- [ ] `cpu.weight.nice` — validated nice value in `-20..=19`.
+- [x] `cpu.weight.nice` — validated nice value in `-20..=19`.
 - [ ] `cpu.idle` — boolean idle scheduling state.
 
 ## P1 — Memory (start only after P0)

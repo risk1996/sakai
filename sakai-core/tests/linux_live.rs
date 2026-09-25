@@ -6,7 +6,7 @@ use assertables::assert_ok;
 use sakai_core::cgroup::v2::{
   CgroupPath,
   cpu::{
-    CpuMax, CpuMaxBurst, CpuStat, CpuUclampMax, CpuUclampMin, CpuWeight,
+    CpuMax, CpuMaxBurst, CpuStat, CpuUclampMax, CpuUclampMin, CpuWeight, Nice,
     Pressure,
   },
 };
@@ -88,4 +88,5 @@ fn parses_live_delegated_cpu_interfaces() {
   fixture.check::<CpuUclampMax>("cpu.uclamp.max", true);
   fixture.check::<CpuUclampMin>("cpu.uclamp.min", true);
   fixture.check::<CpuWeight>("cpu.weight", false);
+  fixture.check::<Nice>("cpu.weight.nice", false);
 }
