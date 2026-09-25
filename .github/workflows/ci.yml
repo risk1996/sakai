@@ -104,4 +104,13 @@ jobs:
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 
       - name: Test cgroup v2 against Linux ${{ matrix.kernel }}
+        env:
+          RUST_LOG: boxlite=debug
         run: devenv shell -- vmtest --kernel "${{ matrix.kernel }}"
+
+      - name: Show BoxLite diagnostics
+        if: failure()
+        run: |
+          find tests/.cache/sakai-vmtest/boxlite -type f \
+            \( -name 'boxlite.log*' -o -name 'shim.stderr' -o -name 'console.log' -o -name 'exit' \) \
+            -print -exec tail -n 80 {} \;

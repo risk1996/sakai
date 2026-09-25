@@ -84,6 +84,7 @@ impl Vmtest {
     let architecture = kernel.architecture;
     let boxlite_home = cache.join("boxlite").join(architecture);
     fs::create_dir_all(&boxlite_home)?;
+    boxlite::init_logging_for(&boxlite_home)?;
 
     eprintln!("==> Linux {} ({architecture})", kernel.name);
     let runtime = RuntimeBuilder::new(BoxliteOptions {
