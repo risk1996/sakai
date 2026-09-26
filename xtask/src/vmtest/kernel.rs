@@ -92,6 +92,8 @@ impl Kernel {
       "CONFIG_VIRTIO_BLK",
       "CONFIG_VIRTIO_CONSOLE",
       "CONFIG_VIRTIO_FS",
+      "CONFIG_VIRTIO_MMIO",
+      "CONFIG_VIRTIO_MMIO_CMDLINE_DEVICES",
       "CONFIG_VIRTIO_NET",
       "CONFIG_VIRTIO_PCI",
       "CONFIG_VIRTIO_VSOCKETS",
@@ -121,6 +123,8 @@ impl Kernel {
     for option in [
       "CONFIG_EXT4_FS=y",
       "CONFIG_VIRTIO_BLK=y",
+      "CONFIG_VIRTIO_MMIO=y",
+      "CONFIG_VIRTIO_MMIO_CMDLINE_DEVICES=y",
       "CONFIG_VIRTIO_VSOCKETS=y",
     ] {
       if !config.lines().any(|line| line == option) {

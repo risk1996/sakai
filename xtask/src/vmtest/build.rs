@@ -13,6 +13,8 @@ const BUILT_INS: &[&str] = &[
   "CONFIG_VIRTIO_BLK=y",
   "CONFIG_VIRTIO_CONSOLE=y",
   "CONFIG_VIRTIO_FS=y",
+  "CONFIG_VIRTIO_MMIO=y",
+  "CONFIG_VIRTIO_MMIO_CMDLINE_DEVICES=y",
   "CONFIG_VIRTIO_NET=y",
   "CONFIG_VIRTIO_PCI=y",
   "CONFIG_VIRTIO_VSOCKETS=y",
@@ -116,6 +118,8 @@ impl Kernel {
       "VIRTIO_BLK",
       "VIRTIO_CONSOLE",
       "VIRTIO_FS",
+      "VIRTIO_MMIO",
+      "VIRTIO_MMIO_CMDLINE_DEVICES",
       "VIRTIO_NET",
       "VIRTIO_PCI",
       "VIRTIO_VSOCKETS",
@@ -171,6 +175,9 @@ impl Kernel {
     if self.name == "5.15" {
       // Old objtool treats GCC's newer use-after-free diagnostic as fatal.
       compile.arg("WERROR=0");
+      // GCC's current C23 default makes bool and false reserved keywords,
+      // which Linux 5.15 still defines itself in its real-mode sources.
+      compile.arg("KCFLAGS=-std=gnu89");
     }
     Self::run(compile.arg("bzImage").current_dir(&source_dir))?;
     fs::create_dir_all(cache)?;
