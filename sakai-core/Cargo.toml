@@ -7,7 +7,7 @@ edition = "2024"
 workspace = true
 
 [dependencies]
-nutype = "0.7.0"
+nutype = "0.8.0"
 strum = { version = "0.28.0", features = ["derive"] }
 thiserror = "2.0.20"
 uom = { version = "0.38.0", default-features = false, features = ["f64", "u64", "si"] }
