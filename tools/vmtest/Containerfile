@@ -1,0 +1,12 @@
+FROM rust:1.98.1-bookworm@sha256:828077e0f5ed0401fbd9cb5b4d5dedca23bd13c7fe032f3e8b7313e7acd2a57f
+
+RUN apt-get update \
+  && apt-get install --no-install-recommends -y ca-certificates curl qemu-guest-agent qemu-system-x86 \
+  && rm -rf /var/lib/apt/lists/*
+
+ARG VMTEST_SHA256=63270a3f763f97f268e0ee8d3591f79b6ff17ece7b6dff8f9440207bb04b64f3
+RUN curl --fail --location --silent --show-error \
+    https://github.com/danobi/vmtest/releases/download/v0.18.0/vmtest-x86_64 \
+    --output /usr/local/bin/vmtest-upstream \
+  && echo "${VMTEST_SHA256}  /usr/local/bin/vmtest-upstream" | sha256sum --check \
+  && chmod +x /usr/local/bin/vmtest-upstream

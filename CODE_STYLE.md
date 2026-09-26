@@ -23,6 +23,10 @@
 - The ideal number of shell script lines is zero. Write Rust code instead of Bash scripts whenever possible.
 - Bash is OK for a one-off job, but should never considered to be something committed to the repository.
 
+# Commit
+
+Follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
+
 ## Note
 
 If you find contradictions, these are the priority (lower ones should follow the above):

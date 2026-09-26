@@ -7,3 +7,6 @@ inputs:
     inputs:
       nixpkgs:
         follows: nixpkgs
+  vmtest:
+    url: file+https://github.com/danobi/vmtest/releases/download/v0.18.0/vmtest-x86_64
+    flake: false

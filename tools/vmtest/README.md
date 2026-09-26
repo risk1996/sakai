@@ -1,51 +1,40 @@
 # Linux kernel tests
 
-The harness runs Sakai's live cgroup tests in
-[`BoxLite`](https://github.com/boxlite-ai/boxlite) microVMs. BoxLite consumes
-the pinned multi-architecture Rust OCI image directly, so no Docker daemon,
-container build, or guest shell script is involved.
-
-Run the quick matrix:
-
-```console
-devenv shell -- vmtest
-```
-
-Run every kernel compatible with the host architecture:
+`vmtest` runs the `linux_live` executable against pinned upstream kernel
+fixtures. On x86-64 Linux it runs directly with KVM. On macOS, the same
+Linux runner runs inside an amd64 container, using QEMU emulation. The guest
+shares the runner's root read-only and mounts a fresh writable cgroup v2
+hierarchy.
 
 ```console
-devenv shell -- vmtest --profile full
-```
-
-Run only BoxLite's native kernel. On Apple Silicon this is an ARM64 VM and has
-no Rosetta dependency:
-
-```console
-devenv shell -- vmtest --profile native
-```
-
-Select one or more named fixtures directly:
-
-```console
+devenv shell -- vmtest                         # 5.15 and 6.18
 devenv shell -- vmtest --kernel 6.18
+devenv shell -- vmtest --profile full          # all five fixtures
+devenv shell -- vmtest --test-binary PATH      # reuse a host-built executable
 ```
 
-The `vmtest` command forwards its arguments to `cargo xtask vmtest`; run
-`cargo xtask vmtest --help` for the complete interface.
+On macOS, start Apple Container, Podman, or Docker first. The wrapper uses the
+first running engine in that order; set `SAKAI_CONTAINER_ENGINE` to choose one
+explicitly. `--test-binary` is Linux-only because a macOS executable cannot
+run in the guest. The base image digest and `vmtest` binary are pinned in
+`tools/vmtest/Containerfile`, and Cargo downloads and build outputs stay under
+`tests/.cache/sakai-vmtest`.
 
-The native BoxLite Rust crate is pinned in `xtask/Cargo.toml`, with its
-transitive dependencies recorded in `Cargo.lock`. The kernel matrix and its
-checksums live in `xtask/src/vmtest/kernel.rs`. Downloaded kernels, BoxLite
-state, and guest Cargo artifacts are retained under `tests/.cache/sakai-vmtest`.
+The kernel URLs and SHA-256 digests are in `xtask/src/vmtest/kernel.rs`.
+Fixtures and the staged executable are stored under
+`tests/.cache/sakai-vmtest`. The executable metadata records the current
+commit and its digest for diagnosis. The pinned upstream `vmtest` v0.18.0
+binary and QEMU come from the locked devenv on Linux and from the pinned
+container image on macOS.
 
-The native entry deliberately uses BoxLite's bundled kernel. The x86-64
-entries cover the supported kernel series with custom kernels. The Rust live
-test creates and cleans up its own cgroup, while `procfs` discovers the active
-cgroup2 mount rather than assuming `/sys/fs/cgroup`.
+GitHub Actions builds the test executable and wrapper once, uploads them as a
+short-lived artifact, and runs a separate job for each kernel. The manual
+workflow has a `vmtest_debug` option to retain the full console on failure.
+The transition design is in `design/kernel-e2e-vmtest-transition.md`.
 
 ## TODO
 
-- Add pinned ARM64 custom-kernel fixtures when a maintained source publishes
-  kernels with the virtio configuration required by BoxLite.
-- Add Fedora and Alpine guest smoke tests when Sakai begins testing distro
-  init, delegation, and namespace behavior in addition to the kernel ABI.
+- Add a checksum-pinned ARM64 `vmtest` executable and bootable ARM64 kernel
+  fixtures so Apple Silicon can run a native, Rosetta-free kernel matrix.
+- Add Fedora and Alpine guest smoke tests if distro-specific mount and
+  delegation behavior becomes part of the support contract.

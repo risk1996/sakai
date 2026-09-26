@@ -2,7 +2,6 @@
   "words": [
     "archlinux",
     "assertables",
-    "boxlite",
     "clippy",
     "cpus",
     "cpuset",
@@ -27,6 +26,8 @@
     "rdma",
     "rootfs",
     "rustix",
+    "rustls",
+    "serde",
     "thiserror",
     "uclamp",
     "usec",

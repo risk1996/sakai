@@ -37,7 +37,8 @@
       "inputs": {
         "devenv": "devenv",
         "nixpkgs": "nixpkgs",
-        "rust-overlay": "rust-overlay"
+        "rust-overlay": "rust-overlay",
+        "vmtest": "vmtest"
       }
     },
     "rust-overlay": {
@@ -58,6 +59,18 @@
         "owner": "oxalica",
         "repo": "rust-overlay",
         "type": "github"
+      }
+    },
+    "vmtest": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-WC4/xae+pgEoHtmC6SIhBkKjSYZFn+z7FyXPg5clfuo=",
+        "type": "file",
+        "url": "https://github.com/danobi/vmtest/releases/download/v0.18.0/vmtest-x86_64"
+      },
+      "original": {
+        "type": "file",
+        "url": "https://github.com/danobi/vmtest/releases/download/v0.18.0/vmtest-x86_64"
       }
     }
   },

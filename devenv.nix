@@ -28,10 +28,12 @@
     pkgs.curl
     pkgs.pkg-config
     pkgs.protobuf
+  ] ++ lib.optionals (pkgs.stdenv.hostPlatform.isLinux && pkgs.stdenv.hostPlatform.isx86_64) [
+    pkgs.qemu
+    (pkgs.runCommand "vmtest" { } ''
+      install -Dm755 ${inputs.vmtest.outPath} $out/bin/vmtest-upstream
+    '')
   ];
-
-  env.SAKAI_VMTEST_ROOTFS =
-    "docker.io/library/rust:${config.languages.rust.toolchainPackage.version}-bookworm";
 
   scripts.vmtest.exec = ''cargo xtask vmtest "$@"'';
 
