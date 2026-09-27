@@ -1,18 +1,17 @@
 # Sakai
 
-A read-only cgroup v2 library. CPU parsers work on macOS and Linux; kernel
-reads require Linux. The library never enables controllers, changes limits,
-or writes pressure triggers.
+A _read-only_ Rust cgroup v2 library. While kernel reads require Linux, the
+parsers are OS-independent. Python bindings are work in progress.
 
 ```rust,no_run
 use sakai_core::{Cgroup, Error, v2::cpu::ReadCpu};
 
 fn main() -> Result<(), Error> {
-    let cgroup = Cgroup::from_current_process()?;
-    let stat = cgroup.stat()?;
-    let quota = cgroup.max()?;
-    println!("usage: {:?}, quota: {:?}", stat.time().usage(), quota);
-    Ok(())
+  let cgroup = Cgroup::from_current_process()?;
+  let stat = cgroup.stat()?;
+  let quota = cgroup.max()?;
+  println!("usage: {:?}, quota: {:?}", stat.time().usage(), quota);
+  Ok(())
 }
 ```
 

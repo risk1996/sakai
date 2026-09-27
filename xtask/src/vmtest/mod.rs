@@ -1,5 +1,3 @@
-mod kernel;
-
 use std::{
   env, fs,
   io::{BufRead, BufReader},
@@ -12,6 +10,8 @@ use anyhow::{Context, Result, bail, ensure};
 use clap::{Args, ValueEnum};
 use kernel::{KERNELS, Kernel};
 use serde::Deserialize;
+
+mod kernel;
 
 #[derive(Deserialize)]
 #[serde(tag = "reason", rename_all = "kebab-case")]

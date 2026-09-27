@@ -2,16 +2,15 @@
 //!
 //! ```no_run
 //! # #[cfg(target_os = "linux")]
-//! # fn example() -> Result<(), sakai_core::Error> {
 //! use sakai_core::{Cgroup, v2::cpu::ReadCpu};
+//! # #[cfg(target_os = "linux")]
+//! # fn example() -> Result<(), sakai_core::Error> {
 //! let cgroup = Cgroup::from_current_process()?;
 //! let usage = cgroup.stat()?.time().usage();
 //! let quota = cgroup.max()?;
 //! # Ok(())
 //! # }
 //! ```
-pub mod cgroup;
-
 pub use cgroup::{
   common::{
     error::Error,
@@ -23,3 +22,5 @@ pub use cgroup::{
 pub use v2::cpu::{CpuWeight, Nice, Weight};
 #[cfg(target_os = "linux")]
 pub use v2::{Cgroup, OpenCgroup};
+
+pub mod cgroup;

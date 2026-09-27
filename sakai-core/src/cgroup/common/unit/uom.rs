@@ -54,12 +54,16 @@ pub type Count = uom::si::Quantity<
   BaseUnits,
   u64,
 >;
+const _: () = {
+  assert!(size_of::<Count>() == size_of::<u64>());
+  assert!(align_of::<Count>() == align_of::<u64>());
+};
 
 /// An integer event rate stored in events per nanosecond.
 pub type EventRate = uom::si::frequency::Frequency<BaseUnits, u64>;
 const _: () = {
-  assert!(size_of::<Count>() == size_of::<u64>());
-  assert!(align_of::<Count>() == align_of::<u64>());
+  assert!(size_of::<EventRate>() == size_of::<u64>());
+  assert!(align_of::<EventRate>() == align_of::<u64>());
 };
 
 /// A nonzero [`Time`].
@@ -79,9 +83,11 @@ pub type Ratio = uom::si::f64::Ratio;
 
 #[cfg(test)]
 mod tests {
+  use assertables::{assert_in_delta, assert_ok};
   use uom::si::time::{microsecond, millisecond, nanosecond, second};
 
   use super::*;
+  use crate::cgroup::common::parser::{ParseCgroup, ParsePercent};
 
   #[test]
   fn count_has_dimensionally_typed_rates() {
@@ -95,9 +101,6 @@ mod tests {
 
   #[test]
   fn fractional_ratios_preserve_kernel_percentages() {
-    use assertables::{assert_in_delta, assert_ok};
-
-    use crate::cgroup::common::parser::{ParseCgroup, ParsePercent};
     for (input, expected) in
       [("12.34", 0.1234), ("0.01", 0.0001), ("100.00", 1.0)]
     {

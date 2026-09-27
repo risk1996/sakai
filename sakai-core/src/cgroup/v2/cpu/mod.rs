@@ -1,13 +1,5 @@
 //! CPU controller interface files.
 
-mod idle;
-mod max;
-mod max_burst;
-mod stat;
-mod uclamp;
-mod weight;
-mod weight_nice;
-
 pub use idle::*;
 pub use max::*;
 pub use max_burst::*;
@@ -21,6 +13,14 @@ use crate::cgroup::common::{
   error::Error,
   unit::{MaxOr, Ratio, Time},
 };
+
+mod idle;
+mod max;
+mod max_burst;
+mod stat;
+mod uclamp;
+mod weight;
+mod weight_nice;
 
 /// Reads fresh CPU snapshots. Missing optional interfaces return
 /// [`Error::FileMissing`], including on old kernels and controller-less mounts.
