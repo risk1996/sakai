@@ -12,6 +12,7 @@ use rustix::{
   fs::{self, Dir, FileType, Mode, OFlags, ResolveFlags},
 };
 
+use super::path::{CgroupPath, CgroupPathError};
 use crate::cgroup::common::error::Error;
 
 const DIRECTORY_FLAGS: OFlags = OFlags::RDONLY
@@ -51,47 +52,34 @@ impl Cgroup {
           )
         })?;
     let process = Process::new(pid).map_err(io::Error::other)?;
-    let membership = process
-      .cgroups()
-      .map_err(io::Error::other)?
-      .0
-      .into_iter()
-      .find(|entry| entry.hierarchy == 0 && entry.controllers.is_empty())
-      .ok_or(Error::NotCgroupV2)?;
-    let path = Self::membership_path(&membership.pathname)?;
-    let mounts = Process::myself()
-      .map_err(io::Error::other)?
-      .mountinfo()
-      .map_err(io::Error::other)?;
-    let mut candidates = mounts
-      .0
-      .into_iter()
-      .filter(|mount| mount.fs_type == "cgroup2")
-      .filter_map(|mount| {
-        path.strip_prefix(&mount.root).ok().map(|relative| {
-          (
-            Path::new(&mount.root).components().count(),
-            mount.mount_point.join(relative),
-          )
-        })
-      })
-      .collect::<Vec<_>>();
-    candidates.sort_by_key(|(depth, _)| std::cmp::Reverse(*depth));
+    let caller = Process::myself().map_err(io::Error::other)?;
+    let candidates = CgroupPath::candidates(&process, &caller).map_err(
+      |error| match error {
+        | CgroupPathError::Procfs(source) => {
+          Error::Io(io::Error::other(source))
+        },
+        | CgroupPathError::DeletedCgroup { path } => {
+          Error::DeletedCgroup { path }
+        },
+        | CgroupPathError::UnifiedHierarchyNotFound
+        | CgroupPathError::UnifiedMountNotFound => Error::NotCgroupV2,
+      },
+    )?;
+    Self::open_candidates(candidates, Self::from_path)
+  }
+
+  fn open_candidates<T>(
+    candidates: impl IntoIterator<Item = CgroupPath>,
+    mut open: impl FnMut(&Path) -> Result<T, Error>,
+  ) -> Result<T, Error> {
     let mut last_error = Error::NotCgroupV2;
-    for (_, candidate) in candidates {
-      match Self::from_path(&candidate) {
-        | Ok(cgroup) => return Ok(cgroup),
+    for candidate in candidates {
+      match open(candidate.as_ref()) {
+        | Ok(value) => return Ok(value),
         | Err(error) => last_error = error,
       }
     }
     Err(last_error)
-  }
-
-  fn membership_path(path: &str) -> Result<&Path, Error> {
-    match path.strip_suffix(" (deleted)") {
-      | Some(path) => Err(Error::DeletedCgroup { path: path.into() }),
-      | None => Ok(Path::new(path)),
-    }
   }
 
   /// Opens a directory and verifies cgroup2 filesystem magic.
@@ -278,12 +266,23 @@ mod tests {
   }
 
   #[test]
-  fn recognizes_namespace_root_and_deleted_membership() {
-    for path in ["/", "/user.slice/app.scope", "/space in name"] {
-      assert_eq!(assert_ok!(Cgroup::membership_path(path)), Path::new(path));
-    }
-    assert!(
-      matches!(Cgroup::membership_path("/gone (deleted)"), Err(Error::DeletedCgroup { path }) if path == Path::new("/gone"))
-    );
+  fn tries_next_matching_mount_after_open_failure() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+      .join("src/cgroup/v2/fixtures/multiple_mounts/1");
+    let process = assert_ok!(Process::new_with_root(root));
+    let candidates = assert_ok!(CgroupPath::candidates(&process, &process));
+    let mut attempted = Vec::new();
+    let selected = assert_ok!(Cgroup::open_candidates(candidates, |path| {
+      attempted.push(path.to_owned());
+      match attempted.len() {
+        | 1 => Err(Error::NotCgroupV2),
+        | _ => Ok(path.to_owned()),
+      }
+    }));
+    assert_eq!(selected, Path::new("/run/parent/pod-1/process.scope"));
+    assert_eq!(attempted, [
+      PathBuf::from("/run/delegated/process.scope"),
+      PathBuf::from("/run/parent/pod-1/process.scope"),
+    ]);
   }
 }

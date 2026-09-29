@@ -2,7 +2,9 @@ use std::{collections::BTreeMap, str::FromStr};
 
 use crate::cgroup::common::{
   error::ParseError,
-  parser::{ParseCgroup, ParseMicroseconds, ParsePercent, ParseValueError},
+  parser::{
+    KeyedFields, ParseCgroup, ParseMicroseconds, ParsePercent, ParseValueError,
+  },
   unit::{Ratio, Time},
 };
 
@@ -140,8 +142,7 @@ pub enum PressureField {
 }
 
 struct PressureFields<'a> {
-  raw: &'a str,
-  values: BTreeMap<PressureField, &'a str>,
+  values: KeyedFields<'a>,
 }
 
 impl<'a> PressureFields<'a> {
@@ -162,9 +163,9 @@ impl<'a> PressureFields<'a> {
       .split_ascii_whitespace()
       .skip(1)
       .filter_map(|token| match token.split_once('=') {
-        | Some((key, value)) => PressureField::from_str(key)
-          .ok()
-          .map(|field| Ok((field, value))),
+        | Some((key, value)) => {
+          PressureField::from_str(key).ok().map(|_| Ok((key, value)))
+        },
         | None => Some(Err(ParseError::invalid(
           raw,
           "value",
@@ -172,9 +173,11 @@ impl<'a> PressureFields<'a> {
           ParseValueError::OutOfRange,
         ))),
       })
-      .collect::<Result<_, _>>()?;
+      .collect::<Result<Vec<_>, _>>()?;
 
-    Ok(Some((kind, Self { raw, values })))
+    Ok(Some((kind, Self {
+      values: KeyedFields::new(raw, values),
+    })))
   }
 
   fn required<Unit, T>(
@@ -183,13 +186,7 @@ impl<'a> PressureFields<'a> {
   ) -> Result<T, ParseError<'static, T::Error>>
   where
     T: ParseCgroup<Unit>, {
-    let name = field.into();
-    let value = self
-      .values
-      .get(&field)
-      .ok_or_else(|| ParseError::missing(self.raw, name))?;
-
-    T::parse_field(self.raw, name, value)
+    self.values.required::<Unit, T>(field.into())
   }
 }
 
@@ -289,6 +286,22 @@ mod tests {
         expected: Err(
           "cgroup content \"some avg10=100.01 avg60=0.00 avg300=0.00 \
            total=0\\n\" has an invalid field \"avg10\" value \"100.01\"",
+        ),
+      },
+      TestCase {
+        input: "some avg10=0.00 avg60=0.00 avg300=0.00 \
+                total=18446744073709552\n",
+        expected: Err(
+          "cgroup content \"some avg10=0.00 avg60=0.00 avg300=0.00 \
+           total=18446744073709552\\n\" has an invalid field \"total\" value \
+           \"18446744073709552\"",
+        ),
+      },
+      TestCase {
+        input: "some avg10=0.00 avg60=0.00 avg300=0.00 total=1 malformed\n",
+        expected: Err(
+          "cgroup content \"some avg10=0.00 avg60=0.00 avg300=0.00 total=1 \
+           malformed\\n\" has an invalid field \"value\" value \"malformed\"",
         ),
       },
     ];

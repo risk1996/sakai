@@ -1,4 +1,5 @@
 use std::{
+  collections::BTreeMap,
   num::{ParseFloatError, ParseIntError},
   str::SplitAsciiWhitespace,
 };
@@ -10,6 +11,54 @@ use crate::cgroup::common::{
   error::ParseError,
   unit::{Count, MaxOr, NonZeroTime, Ratio, Time},
 };
+
+/// Borrowed keyed values with the complete source file for field errors.
+pub(crate) struct KeyedFields<'a> {
+  raw: &'a str,
+  values: BTreeMap<&'a str, &'a str>,
+}
+
+impl<'a> KeyedFields<'a> {
+  pub(crate) fn new(
+    raw: &'a str,
+    fields: impl IntoIterator<Item = (&'a str, &'a str)>,
+  ) -> Self {
+    Self {
+      raw,
+      values: fields.into_iter().collect(),
+    }
+  }
+
+  pub(crate) fn contains(&self, field: &'static str) -> bool {
+    self.values.contains_key(field)
+  }
+
+  pub(crate) fn required<Unit, T>(
+    &self,
+    field: &'static str,
+  ) -> Result<T, ParseError<'static, T::Error>>
+  where
+    T: ParseCgroup<Unit>, {
+    let value = self
+      .values
+      .get(field)
+      .ok_or_else(|| ParseError::missing(self.raw, field))?;
+    T::parse_field(self.raw, field, value)
+  }
+
+  pub(crate) fn optional<Unit, T>(
+    &self,
+    field: &'static str,
+  ) -> Result<Option<T>, ParseError<'static, T::Error>>
+  where
+    T: ParseCgroup<Unit>, {
+    self
+      .values
+      .get(field)
+      .map(|value| T::parse_field(self.raw, field, value))
+      .transpose()
+  }
+}
 
 /// A numeric field is malformed or outside the target type's supported range.
 #[derive(Debug, thiserror::Error)]

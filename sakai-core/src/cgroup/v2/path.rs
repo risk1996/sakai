@@ -17,32 +17,49 @@ impl CgroupPath {
   }
 
   fn of_process(process: &Process) -> Result<Self, CgroupPathError> {
-    let cgroup = process
+    Self::candidates(process, process)?
+      .into_iter()
+      .next()
+      .ok_or(CgroupPathError::UnifiedMountNotFound)
+  }
+
+  /// Resolves a target membership against mounts visible to the caller.
+  pub(super) fn candidates(
+    target: &Process,
+    caller: &Process,
+  ) -> Result<Vec<Self>, CgroupPathError> {
+    let membership = target
       .cgroups()?
       .0
       .into_iter()
-      .find(|cgroup| cgroup.hierarchy == 0 && cgroup.controllers.is_empty())
+      .find(|entry| entry.hierarchy == 0 && entry.controllers.is_empty())
       .ok_or(CgroupPathError::UnifiedHierarchyNotFound)?;
-    let cgroup = Path::new(&cgroup.pathname);
-    let (mount, relative) = process
+    let cgroup = match membership.pathname.strip_suffix(" (deleted)") {
+      | Some(path) => {
+        return Err(CgroupPathError::DeletedCgroup { path: path.into() });
+      },
+      | None => Path::new(&membership.pathname),
+    };
+    let mut candidates = caller
       .mountinfo()?
       .0
       .into_iter()
       .filter(|mount| mount.fs_type == "cgroup2")
       .filter_map(|mount| {
-        cgroup
-          .strip_prefix(Path::new(&mount.root))
-          .ok()
-          .map(|relative| (mount, relative))
+        let root = Path::new(&mount.root);
+        let relative = cgroup.strip_prefix(root).ok()?;
+        Some((root.components().count(), Self {
+          path: mount.mount_point.join(relative),
+          mount_point: mount.mount_point,
+          read_only: mount.mount_options.contains_key("ro"),
+        }))
       })
-      .max_by_key(|(mount, _)| Path::new(&mount.root).components().count())
-      .ok_or(CgroupPathError::UnifiedMountNotFound)?;
-
-    Ok(Self {
-      path: mount.mount_point.join(relative),
-      mount_point: mount.mount_point,
-      read_only: mount.mount_options.contains_key("ro"),
-    })
+      .collect::<Vec<_>>();
+    candidates.sort_by_key(|(depth, _)| std::cmp::Reverse(*depth));
+    match candidates.is_empty() {
+      | true => Err(CgroupPathError::UnifiedMountNotFound),
+      | false => Ok(candidates.into_iter().map(|(_, path)| path).collect()),
+    }
   }
 
   /// Returns the cgroup2 mount point that exposes this cgroup.
@@ -74,6 +91,9 @@ pub enum CgroupPathError {
   /// No cgroup2 mount exposes the process's hierarchy path.
   #[error("no cgroup2 mount exposes the process's cgroup")]
   UnifiedMountNotFound,
+  /// Procfs reports a cgroup that has already been removed.
+  #[error("cgroup has been deleted: {path}")]
+  DeletedCgroup { path: PathBuf },
 }
 
 #[cfg(test)]
@@ -95,6 +115,16 @@ mod tests {
         mount_point: PathBuf::from("/run/delegated"),
         read_only: false,
       }),
+      ("namespace_root", CgroupPath {
+        path: PathBuf::from("/sys/fs/cgroup"),
+        mount_point: PathBuf::from("/sys/fs/cgroup"),
+        read_only: true,
+      }),
+      ("multiple_mounts", CgroupPath {
+        path: PathBuf::from("/run/delegated/process.scope"),
+        mount_point: PathBuf::from("/run/delegated"),
+        read_only: false,
+      }),
     ] {
       let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("src/cgroup/v2/fixtures")
@@ -108,5 +138,51 @@ mod tests {
         "fixture: {fixture}"
       );
     }
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+      .join("src/cgroup/v2/fixtures/deleted/1");
+    let process = assert_ok!(Process::new_with_root(root));
+    assert!(matches!(
+      CgroupPath::of_process(&process),
+      Err(CgroupPathError::DeletedCgroup { path }) if path == Path::new("/gone")
+    ));
+  }
+
+  #[test]
+  fn orders_matching_mounts_for_fallback() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+      .join("src/cgroup/v2/fixtures/multiple_mounts/1");
+    let process = assert_ok!(Process::new_with_root(root));
+    let candidates = assert_ok!(CgroupPath::candidates(&process, &process));
+    assert_eq!(candidates, [
+      CgroupPath {
+        path: "/run/delegated/process.scope".into(),
+        mount_point: "/run/delegated".into(),
+        read_only: false,
+      },
+      CgroupPath {
+        path: "/run/parent/pod-1/process.scope".into(),
+        mount_point: "/run/parent".into(),
+        read_only: true,
+      },
+      CgroupPath {
+        path: "/sys/fs/cgroup/kubepods.slice/pod-1/process.scope".into(),
+        mount_point: "/sys/fs/cgroup".into(),
+        read_only: true,
+      },
+    ]);
+  }
+
+  #[test]
+  fn resolves_target_membership_in_callers_mount_namespace() {
+    let fixtures =
+      Path::new(env!("CARGO_MANIFEST_DIR")).join("src/cgroup/v2/fixtures");
+    let target =
+      assert_ok!(Process::new_with_root(fixtures.join("bind_mount/1")));
+    let caller = assert_ok!(Process::new_with_root(fixtures.join("unified/1")));
+    let candidates = assert_ok!(CgroupPath::candidates(&target, &caller));
+    assert_eq!(
+      candidates[0].as_ref(),
+      Path::new("/sys/fs/cgroup/kubepods.slice/pod-1/process.scope")
+    );
   }
 }
