@@ -1,15 +1,12 @@
-use std::{
-  collections::BTreeMap,
-  num::{ParseFloatError, ParseIntError},
-  str::SplitAsciiWhitespace,
-};
+use std::{collections::BTreeMap, str::SplitAsciiWhitespace};
 
 use nutype::nutype;
 use uom::si::{ratio::percent, time::nanosecond};
 
-use crate::cgroup::common::{
-  error::ParseError,
-  unit::{Count, MaxOr, NonZeroTime, Ratio, Time},
+use crate::{
+  error::{ParseError, ParseValueError},
+  limit::MaxOr,
+  unit::{Count, NonZeroTime, Ratio, Time},
 };
 
 /// Borrowed keyed values with the complete source file for field errors.
@@ -36,7 +33,7 @@ impl<'a> KeyedFields<'a> {
   pub(crate) fn required<Unit, T>(
     &self,
     field: &'static str,
-  ) -> Result<T, ParseError<'static, T::Error>>
+  ) -> Result<T, ParseError<T::Error>>
   where
     T: ParseCgroup<Unit>, {
     let value = self
@@ -49,7 +46,7 @@ impl<'a> KeyedFields<'a> {
   pub(crate) fn optional<Unit, T>(
     &self,
     field: &'static str,
-  ) -> Result<Option<T>, ParseError<'static, T::Error>>
+  ) -> Result<Option<T>, ParseError<T::Error>>
   where
     T: ParseCgroup<Unit>, {
     self
@@ -60,41 +57,27 @@ impl<'a> KeyedFields<'a> {
   }
 }
 
-/// A numeric field is malformed or outside the target type's supported range.
-#[derive(Debug, thiserror::Error)]
-pub enum ParseValueError {
-  /// The field is not a valid integer in the input storage type.
-  #[error(transparent)]
-  Integer(#[from] ParseIntError),
-  /// The field is not a valid floating-point number.
-  #[error(transparent)]
-  Float(#[from] ParseFloatError),
-  /// The value exceeds a supported range, including after unit conversion.
-  #[error("value is outside the supported range")]
-  OutOfRange,
-}
-
 /// Parser for fields from one cgroup interface file.
-pub struct Parser<'a> {
+pub(crate) struct Parser<'a> {
   raw: &'a str,
   fields: SplitAsciiWhitespace<'a>,
 }
 
 impl<'a> Parser<'a> {
   /// Parses a value, rejecting any fields left after the closure succeeds.
-  pub fn parse<T, E>(
+  pub(crate) fn parse<T, E>(
     raw: &'a str,
-    f: impl FnOnce(&mut Self) -> Result<T, ParseError<'static, E>>,
-  ) -> Result<T, ParseError<'static, E>> {
+    f: impl FnOnce(&mut Self) -> Result<T, ParseError<E>>,
+  ) -> Result<T, ParseError<E>> {
     Self::parse_line(raw, raw, f)
   }
 
   /// Parses one line while recording the complete file in parse errors.
-  pub fn parse_line<T, E>(
+  pub(crate) fn parse_line<T, E>(
     raw: &'a str,
     line: &'a str,
-    f: impl FnOnce(&mut Self) -> Result<T, ParseError<'static, E>>,
-  ) -> Result<T, ParseError<'static, E>> {
+    f: impl FnOnce(&mut Self) -> Result<T, ParseError<E>>,
+  ) -> Result<T, ParseError<E>> {
     let mut parser = Self::new(raw, line);
     let value = f(&mut parser)?;
     parser.finish()?;
@@ -111,10 +94,10 @@ impl<'a> Parser<'a> {
   }
 
   /// Returns the next field without interpreting its value.
-  pub fn next_raw_field<E>(
+  pub(crate) fn next_raw_field<E>(
     &mut self,
     field: &'static str,
-  ) -> Result<&'a str, ParseError<'static, E>> {
+  ) -> Result<&'a str, ParseError<E>> {
     self
       .fields
       .next()
@@ -122,10 +105,10 @@ impl<'a> Parser<'a> {
   }
 
   /// Parses the next field as `T` using the `Unit` marker.
-  pub fn next_field<Unit, T>(
+  pub(crate) fn next_field<Unit, T>(
     &mut self,
     field: &'static str,
-  ) -> Result<T, ParseError<'static, T::Error>>
+  ) -> Result<T, ParseError<T::Error>>
   where
     T: ParseCgroup<Unit>, {
     let value = self.next_raw_field(field)?;
@@ -134,7 +117,7 @@ impl<'a> Parser<'a> {
   }
 
   /// Returns an error if an excess field remains.
-  fn finish<E>(&mut self) -> Result<(), ParseError<'static, E>> {
+  fn finish<E>(&mut self) -> Result<(), ParseError<E>> {
     match self.fields.next() {
       | Some(..) => Err(ParseError::excess(self.raw)),
       | None => Ok(()),
@@ -143,7 +126,7 @@ impl<'a> Parser<'a> {
 }
 
 /// Parses a cgroup field using a type-level encoding marker.
-pub trait ParseCgroup<Unit>: Sized {
+pub(crate) trait ParseCgroup<Unit>: Sized {
   /// The underlying error produced when parsing this value.
   type Error;
 
@@ -155,7 +138,7 @@ pub trait ParseCgroup<Unit>: Sized {
     raw: &str,
     field: &'static str,
     value: &str,
-  ) -> Result<Self, ParseError<'static, Self::Error>> {
+  ) -> Result<Self, ParseError<Self::Error>> {
     Self::parse_cgroup(value)
       .map_err(|source| ParseError::invalid(raw, field, value, source))
   }
@@ -163,7 +146,7 @@ pub trait ParseCgroup<Unit>: Sized {
 
 /// A zero-sized marker for cgroup booleans encoded as `0` or `1`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ParseBoolean;
+pub(crate) struct ParseBoolean;
 
 impl ParseCgroup<ParseBoolean> for bool {
   type Error = ParseValueError;
@@ -179,7 +162,7 @@ impl ParseCgroup<ParseBoolean> for bool {
 
 /// A zero-sized marker for cgroup event counts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ParseCount;
+pub(crate) struct ParseCount;
 
 impl ParseCgroup<ParseCount> for Count {
   type Error = ParseValueError;
@@ -194,7 +177,7 @@ impl ParseCgroup<ParseCount> for Count {
 
 /// A zero-sized marker for cgroup percentages encoded as decimal percents.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ParsePercent;
+pub(crate) struct ParsePercent;
 
 #[nutype(
   validate(finite, greater_or_equal = 0.0, less_or_equal = 100.0),
@@ -215,7 +198,7 @@ impl ParseCgroup<ParsePercent> for Ratio {
 
 /// A zero-sized marker for cgroup values encoded in microseconds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ParseMicroseconds;
+pub(crate) struct ParseMicroseconds;
 
 impl ParseCgroup<ParseMicroseconds> for Time {
   type Error = ParseValueError;
@@ -231,7 +214,7 @@ impl ParseCgroup<ParseMicroseconds> for Time {
 
 /// A zero-sized marker for nonzero cgroup values encoded in microseconds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ParseNonZeroMicroseconds;
+pub(crate) struct ParseNonZeroMicroseconds;
 
 impl ParseCgroup<ParseNonZeroMicroseconds> for NonZeroTime {
   type Error = ParseValueError;
@@ -275,9 +258,9 @@ mod tests {
           value,
           source: ParseValueError::OutOfRange,
         } => {
-          assert_eq!(raw, input);
+          assert_eq!(raw.as_ref(), input);
           assert_eq!(field, "duration");
-          assert_eq!(value, input);
+          assert_eq!(value.as_ref(), input);
         },
         | other => {
           panic!("expected conversion overflow for {input:?}, got {other:?}")

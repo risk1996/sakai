@@ -1,11 +1,8 @@
 use std::str::FromStr;
 
-use crate::cgroup::common::{
-  error::ParseError,
-  parser::{
-    KeyedFields, ParseCgroup, ParseCount, ParseMicroseconds, ParseValueError,
-    Parser,
-  },
+use crate::{
+  error::{ParseError, ParseValueError},
+  parse::{KeyedFields, ParseCgroup, ParseCount, ParseMicroseconds, Parser},
   unit::{Count, Time},
 };
 
@@ -51,7 +48,7 @@ impl CpuStatLocal {
 }
 
 impl FromStr for CpuStatLocal {
-  type Err = ParseError<'static, ParseValueError>;
+  type Err = ParseError<ParseValueError>;
 
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
     let fields = CpuStatFields::parse(contents)?;
@@ -92,7 +89,7 @@ impl CpuTimeStat {
 
   fn from_fields(
     fields: &CpuStatFields<'_>,
-  ) -> Result<Self, ParseError<'static, ParseValueError>> {
+  ) -> Result<Self, ParseError<ParseValueError>> {
     Ok(Self {
       usage: fields
         .required::<ParseMicroseconds, _>(CpuStatField::UsageUsec)?,
@@ -140,7 +137,7 @@ impl CpuBandwidthStat {
 
   fn from_fields(
     fields: &CpuStatFields<'_>,
-  ) -> Result<Self, ParseError<'static, ParseValueError>> {
+  ) -> Result<Self, ParseError<ParseValueError>> {
     let burst = if fields.has_bandwidth_burst() {
       Some(CpuBurstStat::from_fields(fields)?)
     } else {
@@ -180,7 +177,7 @@ impl CpuBurstStat {
 
   fn from_fields(
     fields: &CpuStatFields<'_>,
-  ) -> Result<Self, ParseError<'static, ParseValueError>> {
+  ) -> Result<Self, ParseError<ParseValueError>> {
     Ok(Self {
       nr_bursts: fields.required::<ParseCount, _>(CpuStatField::NrBursts)?,
       burst: fields
@@ -190,7 +187,7 @@ impl CpuBurstStat {
 }
 
 impl FromStr for CpuStat {
-  type Err = ParseError<'static, ParseValueError>;
+  type Err = ParseError<ParseValueError>;
 
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
     let fields = CpuStatFields::parse(contents)?;
@@ -207,7 +204,7 @@ impl FromStr for CpuStat {
 }
 
 impl FromStr for CpuTimeStat {
-  type Err = ParseError<'static, ParseValueError>;
+  type Err = ParseError<ParseValueError>;
 
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
     Self::from_fields(&CpuStatFields::parse(contents)?)
@@ -215,7 +212,7 @@ impl FromStr for CpuTimeStat {
 }
 
 impl FromStr for CpuBandwidthStat {
-  type Err = ParseError<'static, ParseValueError>;
+  type Err = ParseError<ParseValueError>;
 
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
     Self::from_fields(&CpuStatFields::parse(contents)?)
@@ -223,7 +220,7 @@ impl FromStr for CpuBandwidthStat {
 }
 
 impl FromStr for CpuBurstStat {
-  type Err = ParseError<'static, ParseValueError>;
+  type Err = ParseError<ParseValueError>;
 
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
     Self::from_fields(&CpuStatFields::parse(contents)?)
@@ -276,7 +273,7 @@ struct CpuStatFields<'a> {
 }
 
 impl<'a> CpuStatFields<'a> {
-  fn parse(raw: &'a str) -> Result<Self, ParseError<'static, ParseValueError>> {
+  fn parse(raw: &'a str) -> Result<Self, ParseError<ParseValueError>> {
     let values = raw
       .lines()
       .filter(|line| !line.trim().is_empty())
@@ -317,7 +314,7 @@ impl<'a> CpuStatFields<'a> {
   fn required<Unit, T>(
     &self,
     field: CpuStatField,
-  ) -> Result<T, ParseError<'static, T::Error>>
+  ) -> Result<T, ParseError<T::Error>>
   where
     T: ParseCgroup<Unit>, {
     self.values.required::<Unit, T>(field.into())

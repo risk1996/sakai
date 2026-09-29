@@ -67,7 +67,7 @@ mod tests {
     ));
 
     for interface in
-      ["", ".", "..", "../common/mod.rs", "/etc/passwd", "cpu/stat"]
+      ["", ".", "..", "../parse/mod.rs", "/etc/passwd", "cpu/stat"]
     {
       let error = assert_err!(read_file(&directory, interface));
 

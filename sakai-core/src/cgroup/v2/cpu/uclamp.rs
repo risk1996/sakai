@@ -1,9 +1,10 @@
 use std::str::FromStr;
 
-use crate::cgroup::common::{
-  error::ParseError,
-  parser::{ParsePercent, ParseValueError, Parser},
-  unit::{MaxOr, Ratio},
+use crate::{
+  error::{ParseError, ParseValueError},
+  limit::MaxOr,
+  parse::{ParsePercent, Parser},
+  unit::Ratio,
 };
 
 /// The minimum CPU utilization requested by a cgroup's `cpu.uclamp.min` file.
@@ -26,7 +27,7 @@ impl CpuUclampMin {
 }
 
 impl FromStr for CpuUclampMin {
-  type Err = ParseError<'static, ParseValueError>;
+  type Err = ParseError<ParseValueError>;
 
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
     Parser::parse(contents, |parser| {
@@ -58,7 +59,7 @@ impl CpuUclampMax {
 }
 
 impl FromStr for CpuUclampMax {
-  type Err = ParseError<'static, ParseValueError>;
+  type Err = ParseError<ParseValueError>;
 
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
     Parser::parse(contents, |parser| {

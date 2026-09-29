@@ -2,10 +2,11 @@ use std::str::FromStr;
 
 use uom::si::{ratio::ratio, time::microsecond};
 
-use crate::cgroup::common::{
-  error::ParseError,
-  parser::{ParseNonZeroMicroseconds, ParseValueError, Parser},
-  unit::{MaxOr, NonZeroTime, Ratio},
+use crate::{
+  error::{ParseError, ParseValueError},
+  limit::MaxOr,
+  parse::{ParseNonZeroMicroseconds, Parser},
+  unit::{NonZeroTime, Ratio},
 };
 
 /// The CPU bandwidth limit configured by a cgroup's `cpu.max` file.
@@ -55,7 +56,7 @@ impl CpuMax {
 }
 
 impl FromStr for CpuMax {
-  type Err = ParseError<'static, ParseValueError>;
+  type Err = ParseError<ParseValueError>;
 
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
     Parser::parse(contents, |parser| {
@@ -73,7 +74,7 @@ mod tests {
   use uom::si::{ratio::ratio, time::microsecond};
 
   use super::*;
-  use crate::cgroup::common::unit::Time;
+  use crate::unit::Time;
 
   #[test]
   fn parses_cpu_max() {

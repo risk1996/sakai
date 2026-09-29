@@ -11,16 +11,18 @@
 //! # Ok(())
 //! # }
 //! ```
-pub use cgroup::{
-  common::{
-    error::Error,
-    pressure::{Pressure, PressureLine},
-    unit::{Count, EventRate, MaxOr, NonZeroTime, Ratio, Time},
-  },
-  v2,
-};
+pub use cgroup::v2;
+pub use error::Error;
+pub use limit::MaxOr;
+pub use pressure::{Pressure, PressureLine};
+pub use unit::{Count, EventRate, NonZeroTime, Ratio, Time};
 #[cfg(target_os = "linux")]
 pub use v2::Cgroup;
 pub use v2::cpu::{CpuWeight, Nice, Weight};
 
 pub mod cgroup;
+pub mod error;
+pub mod limit;
+mod parse;
+pub mod pressure;
+pub mod unit;

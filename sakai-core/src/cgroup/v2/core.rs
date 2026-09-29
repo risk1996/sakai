@@ -1,6 +1,15 @@
 //! Core interfaces that explain controller availability and threaded topology.
 
-use crate::cgroup::common::error::Error;
+use crate::error::Error;
+
+#[cfg(target_os = "linux")]
+#[derive(Debug, thiserror::Error)]
+#[error("cgroup content {raw:?} has an invalid cgroup type")]
+struct CgroupTypeParseError {
+  raw: String,
+  #[source]
+  source: strum::ParseError,
+}
 
 /// A cgroup's topology state, as read from `cgroup.type` on non-root cgroups.
 ///
@@ -62,9 +71,12 @@ pub trait ReadCore {
 impl ReadCore for super::Cgroup {
   fn r#type(&self) -> Result<CgroupType, Error> {
     let contents = self.read("cgroup.type")?;
-    contents.trim().parse().map_err(|error| Error::Parse {
-      file: "cgroup.type",
-      detail: format!("{contents:?}: {error}"),
+    contents.trim().parse().map_err(|source| Error::Parse {
+      path: self.path().join("cgroup.type"),
+      source: Box::new(CgroupTypeParseError {
+        raw: contents,
+        source,
+      }),
     })
   }
 

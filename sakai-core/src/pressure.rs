@@ -1,10 +1,8 @@
 use std::{collections::BTreeMap, str::FromStr};
 
-use crate::cgroup::common::{
-  error::ParseError,
-  parser::{
-    KeyedFields, ParseCgroup, ParseMicroseconds, ParsePercent, ParseValueError,
-  },
+use crate::{
+  error::{ParseError, ParseValueError},
+  parse::{KeyedFields, ParseCgroup, ParseMicroseconds, ParsePercent},
   unit::{Ratio, Time},
 };
 
@@ -76,7 +74,7 @@ impl PressureLine {
 
   fn from_fields(
     fields: &PressureFields<'_>,
-  ) -> Result<Self, ParseError<'static, ParseValueError>> {
+  ) -> Result<Self, ParseError<ParseValueError>> {
     Ok(Self {
       avg10: fields.required::<ParsePercent, _>(PressureField::Avg10)?,
       avg60: fields.required::<ParsePercent, _>(PressureField::Avg60)?,
@@ -87,7 +85,7 @@ impl PressureLine {
 }
 
 impl FromStr for Pressure {
-  type Err = ParseError<'static, ParseValueError>;
+  type Err = ParseError<ParseValueError>;
 
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
     let lines = contents
@@ -134,7 +132,7 @@ enum PressureKind {
   strum::IntoStaticStr,
 )]
 #[strum(serialize_all = "lowercase")]
-pub enum PressureField {
+enum PressureField {
   Avg10,
   Avg60,
   Avg300,
@@ -149,8 +147,7 @@ impl<'a> PressureFields<'a> {
   fn parse(
     raw: &'a str,
     line: &'a str,
-  ) -> Result<Option<(PressureKind, Self)>, ParseError<'static, ParseValueError>>
-  {
+  ) -> Result<Option<(PressureKind, Self)>, ParseError<ParseValueError>> {
     let kind = line
       .split_ascii_whitespace()
       .next()
@@ -183,7 +180,7 @@ impl<'a> PressureFields<'a> {
   fn required<Unit, T>(
     &self,
     field: PressureField,
-  ) -> Result<T, ParseError<'static, T::Error>>
+  ) -> Result<T, ParseError<T::Error>>
   where
     T: ParseCgroup<Unit>, {
     self.values.required::<Unit, T>(field.into())

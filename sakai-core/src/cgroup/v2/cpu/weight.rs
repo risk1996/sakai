@@ -2,9 +2,9 @@ use std::str::FromStr;
 
 use nutype::nutype;
 
-use crate::cgroup::common::{
-  error::ParseError,
-  parser::{ParseCgroup, ParseValueError, Parser},
+use crate::{
+  error::{ParseError, ParseValueError},
+  parse::{ParseCgroup, Parser},
 };
 
 /// A CPU scheduling weight in the kernel-supported range.
@@ -28,7 +28,7 @@ pub enum CpuWeight {
 }
 
 impl FromStr for CpuWeight {
-  type Err = ParseError<'static, ParseValueError>;
+  type Err = ParseError<ParseValueError>;
 
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
     Parser::parse(contents, |parser| {

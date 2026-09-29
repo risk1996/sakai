@@ -87,7 +87,7 @@ mod tests {
   use uom::si::time::{microsecond, millisecond, nanosecond, second};
 
   use super::*;
-  use crate::cgroup::common::parser::{ParseCgroup, ParsePercent};
+  use crate::parse::{ParseCgroup, ParsePercent};
 
   #[test]
   fn count_has_dimensionally_typed_rates() {

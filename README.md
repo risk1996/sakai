@@ -33,6 +33,11 @@ percentages. Integer quantity arithmetic truncates; use fractional operands
 when calculating rates. `CpuMax::cpu_count()` is only this cgroup's quota/period
 ratio: it does not resolve affinity, ancestor quotas, or scheduling policy.
 
+Shared values are available as `sakai_core::{Time, Count, EventRate, Ratio,
+NonZeroTime, MaxOr, Pressure, PressureLine}`. Parse failures use
+`sakai_core::error::{ParseError, ParseValueError, FieldKind}`. Linux read errors
+include the full interface path and retain the parser error as their source.
+
 Run `devenv test` for formatting, Clippy, parser tests, and doctests.
 On Linux this also runs an unprivileged read of the current cgroup.
 `devenv shell -- rtk cargo xtask vmtest` runs the isolated Linux VM suite;
