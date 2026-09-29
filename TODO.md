@@ -40,8 +40,8 @@ is expected to exist. Missing optional files must return `FileMissing`.
       time; never write to the file on the read path.
 - [x] `memory.peak` — peak usage in bytes; document that reset semantics are
       per file descriptor on kernels that support writes.
-- [ ] `memory.low` — best-effort memory protection in bytes.
-- [ ] `memory.min` — hard memory protection in bytes.
+- [x] `memory.low` — best-effort memory protection in bytes.
+- [x] `memory.min` — hard memory protection in bytes.
 - [ ] `memory.oom.group` — boolean group OOM policy.
 - [ ] `memory.events.local` — local, non-hierarchical memory event counters.
 - [ ] `memory.swap.current` — current swap usage in bytes.
@@ -54,8 +54,8 @@ is expected to exist. Missing optional files must return `FileMissing`.
 - [ ] `memory.zswap.max` — zswap limit as `MaxOr<Bytes>`.
 - [ ] `memory.zswap.writeback` — boolean zswap writeback policy.
 
-The root cgroup lacks `memory.current` and the memory limit files. Treat that
-as `FileMissing`, not a parse failure or panic.
+The root cgroup lacks `memory.current` and the memory limit and protection
+files. Treat that as `FileMissing`, not a parse failure or panic.
 
 ## P2 — Process and cgroup state
 

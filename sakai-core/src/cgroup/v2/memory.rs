@@ -62,6 +62,16 @@ impl Memory<'_> {
   pub fn high(&self) -> Result<MemoryHigh, Error> {
     self.cgroup.parse("memory.high")
   }
+
+  /// Configuration snapshot of this cgroup's best-effort memory protection.
+  pub fn low(&self) -> Result<MemoryLow, Error> {
+    self.cgroup.parse("memory.low")
+  }
+
+  /// Configuration snapshot of this cgroup's hard memory protection.
+  pub fn min(&self) -> Result<MemoryMin, Error> {
+    self.cgroup.parse("memory.min")
+  }
 }
 
 /// Hierarchical memory usage reported by `memory.current`.
@@ -181,6 +191,69 @@ impl FromStr for MemoryHigh {
     Parser::parse(contents, |parser| {
       Ok(Self {
         value: parser.next_field::<ParseBytes, _>("high")?,
+      })
+    })
+  }
+}
+
+/// The best-effort memory protection configured by `memory.low`.
+///
+/// Reclaim avoids memory below the effective low boundary while unprotected
+/// memory is available. Ancestor settings can reduce the effective protection.
+/// This is a point-in-time configuration reading in bytes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct MemoryLow {
+  value: Bytes,
+}
+
+impl MemoryLow {
+  /// Returns this cgroup's configured best-effort protection in bytes.
+  #[must_use]
+  pub const fn value(self) -> Bytes {
+    self.value
+  }
+}
+
+impl FromStr for MemoryLow {
+  type Err = ParseError<ParseValueError>;
+
+  /// Parses one decimal byte count.
+  fn from_str(contents: &str) -> Result<Self, Self::Err> {
+    Parser::parse(contents, |parser| {
+      Ok(Self {
+        value: parser.next_field::<ParseBytes, _>("low")?,
+      })
+    })
+  }
+}
+
+/// The hard memory protection configured by `memory.min`.
+///
+/// Memory below the effective min boundary cannot be reclaimed. If no
+/// unprotected reclaimable memory remains, an OOM kill can follow. Ancestor
+/// settings can reduce the effective protection. This is a point-in-time
+/// configuration reading in bytes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct MemoryMin {
+  value: Bytes,
+}
+
+impl MemoryMin {
+  /// Returns this cgroup's configured hard protection in bytes.
+  #[must_use]
+  pub const fn value(self) -> Bytes {
+    self.value
+  }
+}
+
+impl FromStr for MemoryMin {
+  type Err = ParseError<ParseValueError>;
+
+  /// Parses one decimal byte count.
+  fn from_str(contents: &str) -> Result<Self, Self::Err> {
+    Parser::parse(contents, |parser| {
+      Ok(Self {
+        value: parser.next_field::<ParseBytes, _>("min")?,
       })
     })
   }
@@ -350,6 +423,69 @@ mod tests {
       ("-1", Err("invalid")),
       ("18446744073709551616", Err("invalid")),
       ("unlimited", Err("invalid")),
+    ];
+
+    for (input, expected) in cases {
+      for (field, parse) in parsers {
+        let actual = parse(input);
+        match expected {
+          | Ok(expected) => assert_eq!(
+            assert_ok!(actual),
+            expected,
+            "field: {field}, input: {input:?}"
+          ),
+          | Err(kind) => {
+            let error = assert_err!(actual);
+            assert!(
+              error.to_string().contains(kind),
+              "field: {field}, input: {input:?}: {error}"
+            );
+            match error {
+              | ParseError::Field { field: actual, .. } if kind == "missing" =>
+              {
+                assert_eq!(actual, field)
+              },
+              | ParseError::Field {
+                field: "additional",
+                ..
+              } if kind == "excess" => {},
+              | ParseError::Invalid { field: actual, .. }
+                if kind == "invalid" =>
+              {
+                assert_eq!(actual, field)
+              },
+              | other => {
+                panic!("unexpected error for {field}, {input:?}: {other}")
+              },
+            }
+          },
+        }
+      }
+    }
+  }
+
+  #[test]
+  fn parses_memory_protections() {
+    type ParseProtection =
+      fn(&str) -> Result<Bytes, ParseError<ParseValueError>>;
+
+    let parsers: [(&str, ParseProtection); 2] = [
+      ("low", |input| {
+        input.parse::<MemoryLow>().map(MemoryLow::value)
+      }),
+      ("min", |input| {
+        input.parse::<MemoryMin>().map(MemoryMin::value)
+      }),
+    ];
+    let cases = [
+      ("0\n", Ok(Bytes::new::<byte>(0))),
+      ("1048576\n", Ok(Bytes::new::<mebibyte>(1))),
+      ("18446744073709551615", Ok(Bytes::new::<byte>(u64::MAX))),
+      ("", Err("missing")),
+      ("1 2", Err("excess")),
+      ("max", Err("invalid")),
+      ("-1", Err("invalid")),
+      ("18446744073709551616", Err("invalid")),
     ];
 
     for (input, expected) in cases {
