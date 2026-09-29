@@ -8,10 +8,10 @@ use sakai_core::{
   error::{ParseError, ParseValueError},
   v2::{
     CgroupPath,
-    core::ReadCore,
+    core::CgroupType,
     cpu::{
       CpuIdle, CpuMax, CpuMaxBurst, CpuStat, CpuStatLocal, CpuUclampMax,
-      CpuUclampMin, CpuWeight, Nice, ReadCpu,
+      CpuUclampMin, CpuWeight, Nice,
     },
   },
 };
@@ -23,20 +23,24 @@ fn reads_current_cpu_without_privileges() {
     | Err(Error::NotCgroupV2) => return,
     | Err(error) => panic!("cgroup discovery failed: {error}"),
   };
-  assert_ok!(cgroup.stat());
-  assert_ok!(cgroup.controllers());
-  assert_ok!(cgroup.subtree_control());
+  assert_ok!(cgroup.cpu().stat());
+  assert_ok!(cgroup.core().controllers());
+  assert_ok!(cgroup.core().subtree_control());
+  let burst: Result<CpuMaxBurst, Error> = cgroup.cpu().max_burst();
+  let floor: Result<CpuUclampMin, Error> = cgroup.cpu().uclamp_min();
+  let ceiling: Result<CpuUclampMax, Error> = cgroup.cpu().uclamp_max();
+  let idle: Result<CpuIdle, Error> = cgroup.cpu().idle();
   for result in [
-    cgroup.stat_local().map(|_| ()),
-    cgroup.weight().map(|_| ()),
-    cgroup.weight_nice().map(|_| ()),
-    cgroup.max().map(|_| ()),
-    cgroup.max_burst().map(|_| ()),
-    cgroup.pressure().map(|_| ()),
-    cgroup.uclamp_min().map(|_| ()),
-    cgroup.uclamp_max().map(|_| ()),
-    cgroup.idle().map(|_| ()),
-    cgroup.r#type().map(|_| ()),
+    cgroup.cpu().stat_local().map(|_| ()),
+    cgroup.cpu().weight().map(|_| ()),
+    cgroup.cpu().weight_nice().map(|_| ()),
+    cgroup.cpu().max().map(|_| ()),
+    burst.map(|_| ()),
+    cgroup.cpu().pressure().map(|_| ()),
+    floor.map(|_| ()),
+    ceiling.map(|_| ()),
+    idle.map(|_| ()),
+    cgroup.core().kind().map(|_| ()),
   ] {
     match result {
       | Ok(()) | Err(Error::FileMissing { .. }) => {},
@@ -137,17 +141,25 @@ impl CgroupFixture {
     Ok(fixture)
   }
 
-  fn check<T: FromStr + Debug>(&self, file: &str, optional: bool)
-  where
+  fn check<T: FromStr + Debug>(
+    &self,
+    file: &str,
+    optional: bool,
+    read: Result<T, Error>,
+  ) where
     T::Err: Debug, {
     let path = self.path.join(file);
     let contents = match fs::read_to_string(&path) {
       | Err(error) if optional && error.kind() == io::ErrorKind::NotFound => {
+        assert!(
+          matches!(read, Err(Error::FileMissing { path: missing }) if missing == path)
+        );
         return;
       },
       | result => assert_ok!(result, "path: {path:?}"),
     };
     assert_ok!(contents.parse::<T>(), "path: {path:?}");
+    assert_ok!(read, "path: {path:?}");
   }
 }
 
@@ -174,9 +186,9 @@ fn parses_live_delegated_cpu_interfaces() {
       .iter()
       .any(|entry| entry.path() == child_path)
   );
-  assert_ok!(child.stat());
+  assert_ok!(child.cpu().stat());
   assert_ok!(fs::remove_dir(&child_path));
-  let finite = assert_ok!(reader.max());
+  let finite = assert_ok!(reader.cpu().max());
   assert_eq!(finite, assert_ok!("25000 100000".parse::<CpuMax>()));
   assert_eq!(
     assert_ok!(fs::read_to_string(fixture.path.join("cpu.max"))).trim(),
@@ -184,22 +196,38 @@ fn parses_live_delegated_cpu_interfaces() {
   );
   assert_ok!(fs::write(fixture.path.join("cpu.max"), "max 100000"));
   assert_eq!(
-    assert_ok!(reader.max()),
+    assert_ok!(reader.cpu().max()),
     assert_ok!("max 100000".parse::<CpuMax>())
   );
-  assert_ok!(reader.stat());
-  match reader.stat_local() {
+  assert_ok!(reader.cpu().stat());
+  match reader.cpu().stat_local() {
     | Ok(_) | Err(Error::FileMissing { .. }) => {},
     | Err(error) => panic!("local CPU read failed: {error}"),
   }
 
-  fixture.check::<CpuIdle>("cpu.idle", true);
-  fixture.check::<CpuMax>("cpu.max", false);
-  fixture.check::<CpuMaxBurst>("cpu.max.burst", true);
-  fixture.check::<Pressure>("cpu.pressure", false);
-  fixture.check::<CpuStat>("cpu.stat", false);
-  fixture.check::<CpuUclampMax>("cpu.uclamp.max", true);
-  fixture.check::<CpuUclampMin>("cpu.uclamp.min", true);
-  fixture.check::<CpuWeight>("cpu.weight", false);
-  fixture.check::<Nice>("cpu.weight.nice", false);
+  fixture.check::<CpuIdle>("cpu.idle", true, reader.cpu().idle());
+  fixture.check::<CpuMax>("cpu.max", false, reader.cpu().max());
+  fixture.check::<CpuMaxBurst>("cpu.max.burst", true, reader.cpu().max_burst());
+  fixture.check::<Pressure>("cpu.pressure", false, reader.cpu().pressure());
+  fixture.check::<CpuStat>("cpu.stat", false, reader.cpu().stat());
+  fixture.check::<CpuStatLocal>(
+    "cpu.stat.local",
+    true,
+    reader.cpu().stat_local(),
+  );
+  fixture.check::<CpuUclampMax>(
+    "cpu.uclamp.max",
+    true,
+    reader.cpu().uclamp_max(),
+  );
+  fixture.check::<CpuUclampMin>(
+    "cpu.uclamp.min",
+    true,
+    reader.cpu().uclamp_min(),
+  );
+  fixture.check::<CpuWeight>("cpu.weight", false, reader.cpu().weight());
+  fixture.check::<Nice>("cpu.weight.nice", false, reader.cpu().weight_nice());
+  assert_eq!(assert_ok!(reader.core().kind()), CgroupType::Domain);
+  assert_ok!(reader.core().controllers());
+  assert_ok!(reader.core().subtree_control());
 }

@@ -2,10 +2,8 @@
 
 Sakai is working toward a publishable Rust crate for read-only cgroup v2
 metrics. The remaining interface work and its priority order live in
-[`TODO.md`](../TODO.md). The planned public API changes are described in the
-[`prepublish_refactor_1.md`](prepublish_refactor_1.md),
-[`prepublish_refactor_2.md`](prepublish_refactor_2.md), and
-[`prepublish_refactor_3.md`](prepublish_refactor_3.md) notes.
+[`TODO.md`](../TODO.md). Linux handles expose borrowed CPU and core views;
+parsers and snapshot values remain available on other platforms.
 
 ## Rust crate publication
 

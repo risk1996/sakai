@@ -12,7 +12,11 @@ use rustix::{
   fs::{self, Dir, FileType, Mode, OFlags, ResolveFlags},
 };
 
-use super::path::{CgroupPath, CgroupPathError};
+use super::{
+  core::Core,
+  cpu::Cpu,
+  path::{CgroupPath, CgroupPathError},
+};
 use crate::error::Error;
 
 const DIRECTORY_FLAGS: OFlags = OFlags::RDONLY
@@ -202,6 +206,16 @@ impl Cgroup {
     &self.path
   }
 
+  /// Borrows this handle to read CPU controller interfaces.
+  pub fn cpu(&self) -> Cpu<'_> {
+    Cpu { cgroup: self }
+  }
+
+  /// Borrows this handle to read core cgroup interfaces.
+  pub fn core(&self) -> Core<'_> {
+    Core { cgroup: self }
+  }
+
   pub(crate) fn read(&self, file: &'static str) -> Result<String, Error> {
     super::io::read_file(&self.directory, file)
       .map_err(|error| Error::read(self.path.join(file), error))
@@ -232,10 +246,7 @@ mod tests {
   use super::*;
   use crate::{
     error::{ParseError, ParseValueError},
-    v2::{
-      core::ReadCore,
-      cpu::{CpuIdle, ReadCpu},
-    },
+    v2::cpu::CpuIdle,
   };
 
   #[test]
@@ -278,7 +289,7 @@ mod tests {
       directory: assert_ok!(fs::open(&path, DIRECTORY_FLAGS, Mode::empty())),
       path: path.clone(),
     };
-    let error = assert_err!(cgroup.r#type());
+    let error = assert_err!(cgroup.core().kind());
     let Error::Parse { path: actual, .. } = &error else {
       panic!("expected parse failure, got {error:?}");
     };
@@ -301,7 +312,10 @@ mod tests {
       path: path.clone(),
     };
     assert!(
-      matches!(cgroup.stat_local(), Err(Error::FileMissing { path: missing }) if missing == path.join("cpu.stat.local"))
+      matches!(cgroup.cpu().stat_local(), Err(Error::FileMissing { path: missing }) if missing == path.join("cpu.stat.local"))
+    );
+    assert!(
+      matches!(cgroup.core().kind(), Err(Error::FileMissing { path: missing }) if missing == path.join("cgroup.type"))
     );
     for name in ["", ".", "..", "../cpu", "/cpu", "cpu/stat"] {
       assert!(

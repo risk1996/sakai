@@ -1,5 +1,8 @@
 //! Core interfaces that explain controller availability and threaded topology.
 
+#[cfg(target_os = "linux")]
+use super::Cgroup;
+#[cfg(target_os = "linux")]
 use crate::error::Error;
 
 #[cfg(target_os = "linux")]
@@ -57,22 +60,22 @@ pub enum CgroupController {
   Other(String),
 }
 
-/// Fresh configuration snapshots; separate calls are not atomic together.
-pub trait ReadCore {
-  /// Configuration snapshot; the hierarchy root may lack this file.
-  fn r#type(&self) -> Result<CgroupType, Error>;
-  /// Configuration snapshot of controllers available to enable for children.
-  fn controllers(&self) -> Result<Vec<CgroupController>, Error>;
-  /// Configuration snapshot of controllers enabled for children.
-  fn subtree_control(&self) -> Result<Vec<CgroupController>, Error>;
+/// A borrowed view of one open cgroup's core interfaces.
+///
+/// Each method reads a fresh snapshot; separate reads are not atomic together.
+#[cfg(target_os = "linux")]
+#[derive(Debug, Clone, Copy)]
+pub struct Core<'a> {
+  pub(crate) cgroup: &'a Cgroup,
 }
 
 #[cfg(target_os = "linux")]
-impl ReadCore for super::Cgroup {
-  fn r#type(&self) -> Result<CgroupType, Error> {
-    let contents = self.read("cgroup.type")?;
+impl Core<'_> {
+  /// Configuration snapshot; the hierarchy root may lack this file.
+  pub fn kind(&self) -> Result<CgroupType, Error> {
+    let contents = self.cgroup.read("cgroup.type")?;
     contents.trim().parse().map_err(|source| Error::Parse {
-      path: self.path().join("cgroup.type"),
+      path: self.cgroup.path().join("cgroup.type"),
       source: Box::new(CgroupTypeParseError {
         raw: contents,
         source,
@@ -80,9 +83,11 @@ impl ReadCore for super::Cgroup {
     })
   }
 
-  fn controllers(&self) -> Result<Vec<CgroupController>, Error> {
+  /// Configuration snapshot of controllers available to enable for children.
+  pub fn controllers(&self) -> Result<Vec<CgroupController>, Error> {
     Ok(
       self
+        .cgroup
         .read("cgroup.controllers")?
         .split_ascii_whitespace()
         .map(CgroupController::from)
@@ -90,9 +95,11 @@ impl ReadCore for super::Cgroup {
     )
   }
 
-  fn subtree_control(&self) -> Result<Vec<CgroupController>, Error> {
+  /// Configuration snapshot of controllers enabled for children.
+  pub fn subtree_control(&self) -> Result<Vec<CgroupController>, Error> {
     Ok(
       self
+        .cgroup
         .read("cgroup.subtree_control")?
         .split_ascii_whitespace()
         .map(CgroupController::from)
