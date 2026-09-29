@@ -182,6 +182,7 @@ pub(crate) struct ParseBytes;
 impl ParseCgroup<ParseBytes> for Bytes {
   type Error = ParseValueError;
 
+  /// Parses a decimal byte count without unit conversion.
   fn parse_cgroup(value: &str) -> Result<Self, Self::Error> {
     Ok(Self::new::<byte>(value.parse()?))
   }

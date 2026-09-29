@@ -63,6 +63,7 @@ impl MemoryCurrent {
 impl FromStr for MemoryCurrent {
   type Err = ParseError<ParseValueError>;
 
+  /// Parses one decimal byte count, rejecting missing or excess fields.
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
     Parser::parse(contents, |parser| {
       Ok(Self {
@@ -92,6 +93,7 @@ impl MemoryMax {
 impl FromStr for MemoryMax {
   type Err = ParseError<ParseValueError>;
 
+  /// Parses one decimal byte limit or the literal `max`.
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
     Parser::parse(contents, |parser| {
       Ok(Self {
@@ -122,6 +124,7 @@ impl MemoryHigh {
 impl FromStr for MemoryHigh {
   type Err = ParseError<ParseValueError>;
 
+  /// Parses one decimal byte limit or the literal `max`.
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
     Parser::parse(contents, |parser| {
       Ok(Self {
