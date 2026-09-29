@@ -2,6 +2,7 @@
 
 use std::str::FromStr;
 
+pub use events::*;
 pub use stat::*;
 
 #[cfg(target_os = "linux")]
@@ -13,10 +14,11 @@ use crate::pressure::Pressure;
 use crate::{
   error::{ParseError, ParseValueError},
   limit::MaxOr,
-  parse::{ParseBytes, Parser},
+  parse::{ParseBoolean, ParseBytes, Parser},
   unit::Bytes,
 };
 
+mod events;
 mod stat;
 
 /// A borrowed view of one open cgroup's memory interfaces.
@@ -48,6 +50,16 @@ impl Memory<'_> {
     self.cgroup.parse("memory.stat")
   }
 
+  /// Live memory event counters for this cgroup and its descendants.
+  pub fn events(&self) -> Result<MemoryEvents, Error> {
+    self.cgroup.parse("memory.events")
+  }
+
+  /// Live memory event counters originating in this cgroup only.
+  pub fn events_local(&self) -> Result<MemoryEventsLocal, Error> {
+    self.cgroup.parse("memory.events.local")
+  }
+
   /// Live PSI averages and totals. Never registers a pressure trigger.
   pub fn pressure(&self) -> Result<Pressure, Error> {
     self.cgroup.parse("memory.pressure")
@@ -71,6 +83,40 @@ impl Memory<'_> {
   /// Configuration snapshot of this cgroup's hard memory protection.
   pub fn min(&self) -> Result<MemoryMin, Error> {
     self.cgroup.parse("memory.min")
+  }
+
+  /// Configuration snapshot of group OOM kill behavior.
+  pub fn oom_group(&self) -> Result<MemoryOomGroup, Error> {
+    self.cgroup.parse("memory.oom.group")
+  }
+}
+
+/// Whether this cgroup is treated as an indivisible workload by the OOM killer.
+///
+/// This is a point-in-time configuration reading. When enabled, a cgroup OOM
+/// kills its tasks and descendant tasks together, except OOM-protected tasks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct MemoryOomGroup {
+  value: bool,
+}
+
+impl MemoryOomGroup {
+  /// Returns whether group OOM killing is enabled.
+  #[must_use]
+  pub const fn value(self) -> bool {
+    self.value
+  }
+}
+
+impl FromStr for MemoryOomGroup {
+  type Err = ParseError<ParseValueError>;
+
+  fn from_str(contents: &str) -> Result<Self, Self::Err> {
+    Parser::parse(contents, |parser| {
+      Ok(Self {
+        value: parser.next_field::<ParseBoolean, _>("oom.group")?,
+      })
+    })
   }
 }
 
@@ -523,6 +569,31 @@ mod tests {
             }
           },
         }
+      }
+    }
+  }
+
+  #[test]
+  fn parses_memory_oom_group() {
+    for (input, expected) in [
+      ("0\n", Ok(MemoryOomGroup { value: false })),
+      ("1", Ok(MemoryOomGroup { value: true })),
+      ("", Err("missing field \"oom.group\"")),
+      ("1 0", Err("excess field \"additional\"")),
+      ("2", Err("invalid field \"oom.group\"")),
+      ("-1", Err("invalid field \"oom.group\"")),
+      ("true", Err("invalid field \"oom.group\"")),
+    ] {
+      match expected {
+        | Ok(expected) => {
+          assert_eq!(assert_ok!(input.parse::<MemoryOomGroup>()), expected)
+        },
+        | Err(message) => assert!(
+          assert_err!(input.parse::<MemoryOomGroup>())
+            .to_string()
+            .contains(message),
+          "input: {input:?}"
+        ),
       }
     }
   }

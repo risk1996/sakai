@@ -14,8 +14,8 @@ use sakai_core::{
       CpuUclampMin, CpuWeight, Nice,
     },
     memory::{
-      MemoryCurrent, MemoryHigh, MemoryLow, MemoryMax, MemoryMin, MemoryPeak,
-      MemoryStat,
+      MemoryCurrent, MemoryEvents, MemoryEventsLocal, MemoryHigh, MemoryLow,
+      MemoryMax, MemoryMin, MemoryOomGroup, MemoryPeak, MemoryStat,
     },
   },
 };
@@ -53,6 +53,9 @@ fn reads_current_cgroup_without_privileges() {
     cgroup.memory().min().map(|_| ()),
     cgroup.memory().peak().map(|_| ()),
     cgroup.memory().stat().map(|_| ()),
+    cgroup.memory().events().map(|_| ()),
+    cgroup.memory().events_local().map(|_| ()),
+    cgroup.memory().oom_group().map(|_| ()),
     cgroup.memory().pressure().map(|_| ()),
   ] {
     match result {
@@ -265,6 +268,21 @@ fn parses_live_delegated_controller_interfaces() {
   fixture.check::<MemoryMin>("memory.min", false, reader.memory().min());
   fixture.check::<MemoryPeak>("memory.peak", true, reader.memory().peak());
   fixture.check::<MemoryStat>("memory.stat", false, reader.memory().stat());
+  fixture.check::<MemoryEvents>(
+    "memory.events",
+    false,
+    reader.memory().events(),
+  );
+  fixture.check::<MemoryEventsLocal>(
+    "memory.events.local",
+    true,
+    reader.memory().events_local(),
+  );
+  fixture.check::<MemoryOomGroup>(
+    "memory.oom.group",
+    false,
+    reader.memory().oom_group(),
+  );
   fixture.check::<Pressure>(
     "memory.pressure",
     true,
@@ -284,6 +302,7 @@ fn parses_live_delegated_controller_interfaces() {
   let high_path = fixture.path.join("memory.high");
   let low_path = fixture.path.join("memory.low");
   let min_path = fixture.path.join("memory.min");
+  let oom_group_path = fixture.path.join("memory.oom.group");
   assert_eq!(assert_ok!(reader.memory().max()).value(), MaxOr::Max);
   assert_eq!(assert_ok!(reader.memory().high()).value(), MaxOr::Max);
   assert_eq!(
@@ -294,6 +313,11 @@ fn parses_live_delegated_controller_interfaces() {
     assert_ok!(reader.memory().min()).value(),
     Bytes::new::<byte>(0)
   );
+  assert!(!assert_ok!(reader.memory().oom_group()).value());
+  assert_ok!(fs::write(&oom_group_path, "1"));
+  assert!(assert_ok!(reader.memory().oom_group()).value());
+  assert_ok!(fs::write(&oom_group_path, "0"));
+  assert!(!assert_ok!(reader.memory().oom_group()).value());
   assert_ok!(fs::write(&max_path, "67108864"));
   assert_ok!(fs::write(&high_path, "33554432"));
   assert_ok!(fs::write(&low_path, "16777216"));
@@ -342,6 +366,12 @@ fn root_memory_stat_is_readable_and_settings_are_missing() {
     (root.memory().low().map(|_| ()), "memory.low"),
     (root.memory().min().map(|_| ()), "memory.min"),
     (root.memory().peak().map(|_| ()), "memory.peak"),
+    (root.memory().events().map(|_| ()), "memory.events"),
+    (
+      root.memory().events_local().map(|_| ()),
+      "memory.events.local",
+    ),
+    (root.memory().oom_group().map(|_| ()), "memory.oom.group"),
   ] {
     assert!(
       matches!(result, Err(Error::FileMissing { path }) if path == root_path.join(name))
