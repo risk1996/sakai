@@ -2,12 +2,12 @@
 //!
 //! ```no_run
 //! # #[cfg(target_os = "linux")]
-//! use sakai_core::{Cgroup, v2::cpu::ReadCpu};
+//! use sakai_core::Cgroup;
 //! # #[cfg(target_os = "linux")]
 //! # fn example() -> Result<(), sakai_core::Error> {
 //! let cgroup = Cgroup::from_current_process()?;
-//! let usage = cgroup.stat()?.time().usage();
-//! let quota = cgroup.max()?;
+//! let usage = cgroup.cpu().stat()?.time().usage();
+//! let quota = cgroup.cpu().max()?;
 //! # Ok(())
 //! # }
 //! ```

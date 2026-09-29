@@ -4,12 +4,12 @@ A _read-only_ Rust cgroup v2 library. While kernel reads require Linux, the
 parsers are OS-independent. Python bindings are work in progress.
 
 ```rust,no_run
-use sakai_core::{Cgroup, Error, v2::cpu::ReadCpu};
+use sakai_core::{Cgroup, Error};
 
 fn main() -> Result<(), Error> {
   let cgroup = Cgroup::from_current_process()?;
-  let stat = cgroup.stat()?;
-  let quota = cgroup.max()?;
+  let stat = cgroup.cpu().stat()?;
+  let quota = cgroup.cpu().max()?;
   println!("usage: {:?}, quota: {:?}", stat.time().usage(), quota);
   Ok(())
 }
