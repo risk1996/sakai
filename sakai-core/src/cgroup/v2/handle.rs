@@ -284,11 +284,11 @@ mod tests {
     };
     assert_eq!(actual, &path.join("cgroup.type"));
     assert!(error.to_string().contains("\"unknown\\n\""));
-    assert!(
-      error
-        .source()
-        .is_some_and(|source| source.source().is_some())
-    );
+    let reason = error
+      .source()
+      .and_then(std::error::Error::source)
+      .expect("strum parse reason");
+    assert!(error.to_string().contains(&reason.to_string()));
   }
 
   #[test]

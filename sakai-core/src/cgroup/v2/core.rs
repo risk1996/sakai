@@ -4,7 +4,7 @@ use crate::error::Error;
 
 #[cfg(target_os = "linux")]
 #[derive(Debug, thiserror::Error)]
-#[error("cgroup content {raw:?} has an invalid cgroup type")]
+#[error("cgroup content {raw:?} has an invalid cgroup type: {source}")]
 struct CgroupTypeParseError {
   raw: String,
   #[source]
