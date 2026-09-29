@@ -4,11 +4,11 @@ use std::{fmt::Debug, fs, io, path::PathBuf, process::Command, str::FromStr};
 
 use assertables::assert_ok;
 use sakai_core::{
-  Cgroup, Error, Pressure,
+  Bytes, Cgroup, Error, MaxOr, Pressure,
   error::{ParseError, ParseValueError},
   v2::{
     CgroupPath,
-    core::CgroupType,
+    core::{CgroupController, CgroupType},
     cpu::{
       CpuIdle, CpuMax, CpuMaxBurst, CpuStat, CpuStatLocal, CpuUclampMax,
       CpuUclampMin, CpuWeight, Nice,
@@ -16,6 +16,7 @@ use sakai_core::{
     memory::{MemoryCurrent, MemoryHigh, MemoryMax},
   },
 };
+use uom::si::information::byte;
 
 #[test]
 fn reads_current_cgroup_without_privileges() {
@@ -115,6 +116,7 @@ struct CgroupFixture {
 }
 
 impl CgroupFixture {
+  /// Creates a child in vmtest's fresh, disposable cgroup2 hierarchy.
   fn create() -> io::Result<Self> {
     let cgroup = CgroupPath::current().map_err(io::Error::other)?;
     match cgroup.is_read_only() {
@@ -152,6 +154,7 @@ impl CgroupFixture {
     Ok(fixture)
   }
 
+  /// Checks that a raw interface file and its typed reader agree on presence.
   fn check<T: FromStr + Debug>(
     &self,
     file: &str,
@@ -180,6 +183,7 @@ impl Drop for CgroupFixture {
   }
 }
 
+/// Reads real delegated files, including the memory values configured below.
 #[test]
 fn parses_live_delegated_controller_interfaces() {
   match std::env::var_os("SAKAI_VMTEST") {
@@ -238,13 +242,46 @@ fn parses_live_delegated_controller_interfaces() {
   );
   fixture.check::<CpuWeight>("cpu.weight", false, reader.cpu().weight());
   fixture.check::<Nice>("cpu.weight.nice", false, reader.cpu().weight_nice());
+  assert!(
+    assert_ok!(reader.core().controllers()).contains(&CgroupController::Memory),
+    "vmtest kernel must provide the memory controller"
+  );
   fixture.check::<MemoryCurrent>(
     "memory.current",
-    true,
+    false,
     reader.memory().current(),
   );
-  fixture.check::<MemoryMax>("memory.max", true, reader.memory().max());
-  fixture.check::<MemoryHigh>("memory.high", true, reader.memory().high());
+  fixture.check::<MemoryMax>("memory.max", false, reader.memory().max());
+  fixture.check::<MemoryHigh>("memory.high", false, reader.memory().high());
+
+  // No process joins the fixture, so its usage is stable across these reads.
+  let current_contents =
+    assert_ok!(fs::read_to_string(fixture.path.join("memory.current")));
+  let current_bytes = assert_ok!(current_contents.trim().parse::<u64>());
+  assert_eq!(
+    assert_ok!(reader.memory().current()).value().get::<byte>(),
+    current_bytes
+  );
+
+  let max_path = fixture.path.join("memory.max");
+  let high_path = fixture.path.join("memory.high");
+  assert_eq!(assert_ok!(reader.memory().max()).value(), MaxOr::Max);
+  assert_eq!(assert_ok!(reader.memory().high()).value(), MaxOr::Max);
+  assert_ok!(fs::write(&max_path, "67108864"));
+  assert_ok!(fs::write(&high_path, "33554432"));
+  assert_eq!(assert_ok!(fs::read_to_string(&max_path)).trim(), "67108864");
+  assert_eq!(
+    assert_ok!(fs::read_to_string(&high_path)).trim(),
+    "33554432"
+  );
+  assert_eq!(
+    assert_ok!(reader.memory().max()).value(),
+    MaxOr::Value(Bytes::new::<byte>(67_108_864))
+  );
+  assert_eq!(
+    assert_ok!(reader.memory().high()).value(),
+    MaxOr::Value(Bytes::new::<byte>(33_554_432))
+  );
   assert_eq!(assert_ok!(reader.core().kind()), CgroupType::Domain);
   assert_ok!(reader.core().controllers());
   assert_ok!(reader.core().subtree_control());
