@@ -6,7 +6,7 @@ use uom::si::{information::byte, ratio::percent, time::nanosecond};
 use crate::{
   error::{ParseError, ParseValueError},
   limit::MaxOr,
-  unit::{Bytes, Count, NonZeroTime, Ratio, Time},
+  unit::{Bytes, Count, NonZeroTime, Pages, Ratio, Time},
 };
 
 /// Borrowed keyed values with the complete source file for field errors.
@@ -165,6 +165,21 @@ impl ParseCgroup<ParseBoolean> for bool {
 pub(crate) struct ParseCount;
 
 impl ParseCgroup<ParseCount> for Count {
+  type Error = ParseValueError;
+
+  fn parse_cgroup(value: &str) -> Result<Self, Self::Error> {
+    Ok(Self {
+      value: value.parse()?,
+      ..Default::default()
+    })
+  }
+}
+
+/// A zero-sized marker for cgroup page quantities.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct ParsePages;
+
+impl ParseCgroup<ParsePages> for Pages {
   type Error = ParseValueError;
 
   fn parse_cgroup(value: &str) -> Result<Self, Self::Error> {

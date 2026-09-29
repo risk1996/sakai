@@ -2,16 +2,22 @@
 
 use std::str::FromStr;
 
+pub use stat::*;
+
 #[cfg(target_os = "linux")]
 use super::Cgroup;
 #[cfg(target_os = "linux")]
 use crate::error::Error;
+#[cfg(target_os = "linux")]
+use crate::pressure::Pressure;
 use crate::{
   error::{ParseError, ParseValueError},
   limit::MaxOr,
   parse::{ParseBytes, Parser},
   unit::Bytes,
 };
+
+mod stat;
 
 /// A borrowed view of one open cgroup's memory interfaces.
 ///
@@ -30,6 +36,21 @@ impl Memory<'_> {
   /// Live memory usage of this cgroup and its descendants, in bytes.
   pub fn current(&self) -> Result<MemoryCurrent, Error> {
     self.cgroup.parse("memory.current")
+  }
+
+  /// Live peak usage, in bytes, since cgroup creation for this fresh descriptor.
+  pub fn peak(&self) -> Result<MemoryPeak, Error> {
+    self.cgroup.parse("memory.peak")
+  }
+
+  /// Live breakdown of memory usage, page quantities, and event counts.
+  pub fn stat(&self) -> Result<MemoryStat, Error> {
+    self.cgroup.parse("memory.stat")
+  }
+
+  /// Live PSI averages and totals. Never registers a pressure trigger.
+  pub fn pressure(&self) -> Result<Pressure, Error> {
+    self.cgroup.parse("memory.pressure")
   }
 
   /// Configuration snapshot of this cgroup's hard memory limit in bytes.
@@ -68,6 +89,37 @@ impl FromStr for MemoryCurrent {
     Parser::parse(contents, |parser| {
       Ok(Self {
         value: parser.next_field::<ParseBytes, _>("current")?,
+      })
+    })
+  }
+}
+
+/// Peak hierarchical memory usage reported by `memory.peak`.
+///
+/// The kernel can reset the peak by writing to an open file descriptor. This
+/// reader opens a fresh read-only descriptor for each call, so it never resets
+/// the value and observes the peak since cgroup creation. Older kernels may
+/// lack this file; the reader then returns [`Error::FileMissing`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct MemoryPeak {
+  value: Bytes,
+}
+
+impl MemoryPeak {
+  /// Returns the peak hierarchical usage in bytes.
+  #[must_use]
+  pub const fn value(self) -> Bytes {
+    self.value
+  }
+}
+
+impl FromStr for MemoryPeak {
+  type Err = ParseError<ParseValueError>;
+
+  fn from_str(contents: &str) -> Result<Self, Self::Err> {
+    Parser::parse(contents, |parser| {
+      Ok(Self {
+        value: parser.next_field::<ParseBytes, _>("peak")?,
       })
     })
   }
@@ -137,9 +189,15 @@ impl FromStr for MemoryHigh {
 #[cfg(test)]
 mod tests {
   use assertables::{assert_err, assert_ok};
-  use uom::si::information::{byte, mebibyte};
+  use indoc::indoc;
+  use uom::si::{
+    information::{byte, mebibyte},
+    ratio::percent,
+    time::microsecond,
+  };
 
   use super::*;
+  use crate::pressure::Pressure;
 
   #[test]
   fn parses_memory_current() {
@@ -200,6 +258,70 @@ mod tests {
         ),
       }
     }
+  }
+
+  #[test]
+  fn parses_memory_peak() {
+    for (input, expected) in [
+      (
+        "0\n",
+        Ok(MemoryPeak {
+          value: Bytes::new::<byte>(0),
+        }),
+      ),
+      (
+        "1048576\n",
+        Ok(MemoryPeak {
+          value: Bytes::new::<mebibyte>(1),
+        }),
+      ),
+      (
+        "18446744073709551615",
+        Ok(MemoryPeak {
+          value: Bytes::new::<byte>(u64::MAX),
+        }),
+      ),
+      ("", Err("missing field \"peak\"")),
+      ("1 2", Err("excess field \"additional\"")),
+      ("max", Err("invalid field \"peak\"")),
+      ("-1", Err("invalid field \"peak\"")),
+      ("18446744073709551616", Err("invalid field \"peak\"")),
+    ] {
+      match expected {
+        | Ok(expected) => {
+          assert_eq!(assert_ok!(input.parse::<MemoryPeak>()), expected)
+        },
+        | Err(message) => assert!(
+          assert_err!(input.parse::<MemoryPeak>())
+            .to_string()
+            .contains(message),
+          "input: {input:?}"
+        ),
+      }
+    }
+  }
+
+  #[test]
+  fn parses_memory_pressure_with_shared_psi_type() {
+    let pressure = assert_ok!(
+      indoc! {"
+      some avg10=2.50 avg60=1.25 avg300=0.50 total=12345
+      full avg10=0.25 avg60=0.10 avg300=0.00 total=678
+    "}
+      .parse::<Pressure>()
+    );
+    assert_eq!(
+      pressure.some().avg10(),
+      crate::unit::Ratio::new::<percent>(2.50)
+    );
+    assert_eq!(
+      pressure.some().total(),
+      crate::unit::Time::new::<microsecond>(12_345)
+    );
+    assert_eq!(
+      pressure.full().map(|full| full.total()),
+      Some(crate::unit::Time::new::<microsecond>(678))
+    );
   }
 
   #[test]

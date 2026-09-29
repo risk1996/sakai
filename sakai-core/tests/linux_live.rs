@@ -13,7 +13,7 @@ use sakai_core::{
       CpuIdle, CpuMax, CpuMaxBurst, CpuStat, CpuStatLocal, CpuUclampMax,
       CpuUclampMin, CpuWeight, Nice,
     },
-    memory::{MemoryCurrent, MemoryHigh, MemoryMax},
+    memory::{MemoryCurrent, MemoryHigh, MemoryMax, MemoryPeak, MemoryStat},
   },
 };
 use uom::si::information::byte;
@@ -46,6 +46,9 @@ fn reads_current_cgroup_without_privileges() {
     cgroup.memory().current().map(|_| ()),
     cgroup.memory().max().map(|_| ()),
     cgroup.memory().high().map(|_| ()),
+    cgroup.memory().peak().map(|_| ()),
+    cgroup.memory().stat().map(|_| ()),
+    cgroup.memory().pressure().map(|_| ()),
   ] {
     match result {
       | Ok(()) | Err(Error::FileMissing { .. }) => {},
@@ -253,6 +256,13 @@ fn parses_live_delegated_controller_interfaces() {
   );
   fixture.check::<MemoryMax>("memory.max", false, reader.memory().max());
   fixture.check::<MemoryHigh>("memory.high", false, reader.memory().high());
+  fixture.check::<MemoryPeak>("memory.peak", true, reader.memory().peak());
+  fixture.check::<MemoryStat>("memory.stat", false, reader.memory().stat());
+  fixture.check::<Pressure>(
+    "memory.pressure",
+    true,
+    reader.memory().pressure(),
+  );
 
   // No process joins the fixture, so its usage is stable across these reads.
   let current_contents =
@@ -305,4 +315,12 @@ fn root_memory_interfaces_are_missing() {
   assert!(
     matches!(root.memory().high(), Err(Error::FileMissing { path }) if path == root_path.join("memory.high"))
   );
+  for (result, name) in [
+    (root.memory().peak().map(|_| ()), "memory.peak"),
+    (root.memory().stat().map(|_| ()), "memory.stat"),
+  ] {
+    assert!(
+      matches!(result, Err(Error::FileMissing { path }) if path == root_path.join(name))
+    );
+  }
 }

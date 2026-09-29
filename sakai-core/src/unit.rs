@@ -42,28 +42,39 @@ const _: () = {
 /// Separates event counts from other dimensionless quantities.
 pub trait CountKind: uom::Kind {}
 
+type Dimensionless<Kind> = uom::si::ISQ<
+  uom::typenum::Z0,
+  uom::typenum::Z0,
+  uom::typenum::Z0,
+  uom::typenum::Z0,
+  uom::typenum::Z0,
+  uom::typenum::Z0,
+  uom::typenum::Z0,
+  Kind,
+>;
+
 /// An event count, with a distinct dimensionless kind and integer storage.
 ///
 /// Construct with `Count { value: 42, ..Default::default() }`.
 /// `Count / Time` yields [`EventRate`]. Integer arithmetic truncates: convert
 /// operands to fractional storage before computing sub-unit rates.
-pub type Count = uom::si::Quantity<
-  uom::si::ISQ<
-    uom::typenum::Z0,
-    uom::typenum::Z0,
-    uom::typenum::Z0,
-    uom::typenum::Z0,
-    uom::typenum::Z0,
-    uom::typenum::Z0,
-    uom::typenum::Z0,
-    dyn CountKind,
-  >,
-  BaseUnits,
-  u64,
->;
+pub type Count =
+  uom::si::Quantity<Dimensionless<dyn CountKind>, BaseUnits, u64>;
 const _: () = {
   assert!(size_of::<Count>() == size_of::<u64>());
   assert!(align_of::<Count>() == align_of::<u64>());
+};
+
+/// Separates page quantities from event counts and byte amounts.
+pub trait PageKind: uom::Kind {}
+
+/// A number of memory pages, independent of the system's page size.
+///
+/// Construct with `Pages { value: 42, ..Default::default() }`.
+pub type Pages = uom::si::Quantity<Dimensionless<dyn PageKind>, BaseUnits, u64>;
+const _: () = {
+  assert!(size_of::<Pages>() == size_of::<u64>());
+  assert!(align_of::<Pages>() == align_of::<u64>());
 };
 
 /// An integer event rate stored in events per nanosecond.
