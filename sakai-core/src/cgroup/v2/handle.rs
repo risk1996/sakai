@@ -323,6 +323,8 @@ mod tests {
       (cgroup.memory().current().map(|_| ()), "memory.current"),
       (cgroup.memory().max().map(|_| ()), "memory.max"),
       (cgroup.memory().high().map(|_| ()), "memory.high"),
+      (cgroup.memory().low().map(|_| ()), "memory.low"),
+      (cgroup.memory().min().map(|_| ()), "memory.min"),
       (cgroup.memory().peak().map(|_| ()), "memory.peak"),
       (cgroup.memory().stat().map(|_| ()), "memory.stat"),
       (cgroup.memory().pressure().map(|_| ()), "memory.pressure"),

@@ -13,7 +13,10 @@ use sakai_core::{
       CpuIdle, CpuMax, CpuMaxBurst, CpuStat, CpuStatLocal, CpuUclampMax,
       CpuUclampMin, CpuWeight, Nice,
     },
-    memory::{MemoryCurrent, MemoryHigh, MemoryMax, MemoryPeak, MemoryStat},
+    memory::{
+      MemoryCurrent, MemoryHigh, MemoryLow, MemoryMax, MemoryMin, MemoryPeak,
+      MemoryStat,
+    },
   },
 };
 use uom::si::information::byte;
@@ -46,6 +49,8 @@ fn reads_current_cgroup_without_privileges() {
     cgroup.memory().current().map(|_| ()),
     cgroup.memory().max().map(|_| ()),
     cgroup.memory().high().map(|_| ()),
+    cgroup.memory().low().map(|_| ()),
+    cgroup.memory().min().map(|_| ()),
     cgroup.memory().peak().map(|_| ()),
     cgroup.memory().stat().map(|_| ()),
     cgroup.memory().pressure().map(|_| ()),
@@ -256,6 +261,8 @@ fn parses_live_delegated_controller_interfaces() {
   );
   fixture.check::<MemoryMax>("memory.max", false, reader.memory().max());
   fixture.check::<MemoryHigh>("memory.high", false, reader.memory().high());
+  fixture.check::<MemoryLow>("memory.low", false, reader.memory().low());
+  fixture.check::<MemoryMin>("memory.min", false, reader.memory().min());
   fixture.check::<MemoryPeak>("memory.peak", true, reader.memory().peak());
   fixture.check::<MemoryStat>("memory.stat", false, reader.memory().stat());
   fixture.check::<Pressure>(
@@ -275,15 +282,29 @@ fn parses_live_delegated_controller_interfaces() {
 
   let max_path = fixture.path.join("memory.max");
   let high_path = fixture.path.join("memory.high");
+  let low_path = fixture.path.join("memory.low");
+  let min_path = fixture.path.join("memory.min");
   assert_eq!(assert_ok!(reader.memory().max()).value(), MaxOr::Max);
   assert_eq!(assert_ok!(reader.memory().high()).value(), MaxOr::Max);
+  assert_eq!(
+    assert_ok!(reader.memory().low()).value(),
+    Bytes::new::<byte>(0)
+  );
+  assert_eq!(
+    assert_ok!(reader.memory().min()).value(),
+    Bytes::new::<byte>(0)
+  );
   assert_ok!(fs::write(&max_path, "67108864"));
   assert_ok!(fs::write(&high_path, "33554432"));
+  assert_ok!(fs::write(&low_path, "16777216"));
+  assert_ok!(fs::write(&min_path, "8388608"));
   assert_eq!(assert_ok!(fs::read_to_string(&max_path)).trim(), "67108864");
   assert_eq!(
     assert_ok!(fs::read_to_string(&high_path)).trim(),
     "33554432"
   );
+  assert_eq!(assert_ok!(fs::read_to_string(&low_path)).trim(), "16777216");
+  assert_eq!(assert_ok!(fs::read_to_string(&min_path)).trim(), "8388608");
   assert_eq!(
     assert_ok!(reader.memory().max()).value(),
     MaxOr::Value(Bytes::new::<byte>(67_108_864))
@@ -292,13 +313,21 @@ fn parses_live_delegated_controller_interfaces() {
     assert_ok!(reader.memory().high()).value(),
     MaxOr::Value(Bytes::new::<byte>(33_554_432))
   );
+  assert_eq!(
+    assert_ok!(reader.memory().low()).value(),
+    Bytes::new::<byte>(16_777_216)
+  );
+  assert_eq!(
+    assert_ok!(reader.memory().min()).value(),
+    Bytes::new::<byte>(8_388_608)
+  );
   assert_eq!(assert_ok!(reader.core().kind()), CgroupType::Domain);
   assert_ok!(reader.core().controllers());
   assert_ok!(reader.core().subtree_control());
 }
 
 #[test]
-fn root_memory_stat_is_readable_and_limits_are_missing() {
+fn root_memory_stat_is_readable_and_settings_are_missing() {
   match std::env::var_os("SAKAI_VMTEST") {
     | None => return,
     | Some(_) => {},
@@ -310,6 +339,8 @@ fn root_memory_stat_is_readable_and_limits_are_missing() {
     (root.memory().current().map(|_| ()), "memory.current"),
     (root.memory().max().map(|_| ()), "memory.max"),
     (root.memory().high().map(|_| ()), "memory.high"),
+    (root.memory().low().map(|_| ()), "memory.low"),
+    (root.memory().min().map(|_| ()), "memory.min"),
     (root.memory().peak().map(|_| ()), "memory.peak"),
   ] {
     assert!(
