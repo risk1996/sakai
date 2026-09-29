@@ -317,21 +317,20 @@ mod tests {
       directory: assert_ok!(fs::open(&path, DIRECTORY_FLAGS, Mode::empty())),
       path: path.clone(),
     };
-    assert!(
-      matches!(cgroup.cpu().stat_local(), Err(Error::FileMissing { path: missing }) if missing == path.join("cpu.stat.local"))
-    );
-    assert!(
-      matches!(cgroup.core().kind(), Err(Error::FileMissing { path: missing }) if missing == path.join("cgroup.type"))
-    );
-    assert!(
-      matches!(cgroup.memory().current(), Err(Error::FileMissing { path: missing }) if missing == path.join("memory.current"))
-    );
-    assert!(
-      matches!(cgroup.memory().max(), Err(Error::FileMissing { path: missing }) if missing == path.join("memory.max"))
-    );
-    assert!(
-      matches!(cgroup.memory().high(), Err(Error::FileMissing { path: missing }) if missing == path.join("memory.high"))
-    );
+    for (result, name) in [
+      (cgroup.cpu().stat_local().map(|_| ()), "cpu.stat.local"),
+      (cgroup.core().kind().map(|_| ()), "cgroup.type"),
+      (cgroup.memory().current().map(|_| ()), "memory.current"),
+      (cgroup.memory().max().map(|_| ()), "memory.max"),
+      (cgroup.memory().high().map(|_| ()), "memory.high"),
+      (cgroup.memory().peak().map(|_| ()), "memory.peak"),
+      (cgroup.memory().stat().map(|_| ()), "memory.stat"),
+      (cgroup.memory().pressure().map(|_| ()), "memory.pressure"),
+    ] {
+      assert!(
+        matches!(result, Err(Error::FileMissing { path: missing }) if missing == path.join(name))
+      );
+    }
     for name in ["", ".", "..", "../cpu", "/cpu", "cpu/stat"] {
       assert!(
         matches!(cgroup.child(OsStr::new(name)), Err(Error::Io(error)) if error.kind() == io::ErrorKind::InvalidInput)

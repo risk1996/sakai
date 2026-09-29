@@ -6,9 +6,7 @@ items before starting memory; work below memory stays out of the v0 scope.
 An interface item is complete when it has a typed public reader, key-based
 parsing where applicable, fixtures for supported and missing/older-kernel
 forms, documented volatility and units, and a Linux live test where the file
-is expected to exist. Missing optional files must return `FileMissing`, and
-unknown keyed fields must be preserved when the public type provides an
-`extra` map.
+is expected to exist. Missing optional files must return `FileMissing`.
 
 ## P0 — CPU (complete first)
 
@@ -21,7 +19,7 @@ unknown keyed fields must be preserved when the public type provides an
       never write to the file on the read path.
 - [x] `cpu.weight` — map `0` to `CpuWeight::Idle` and `1..=10000` to
       `CpuWeight::Shares(Weight)`.
-- [ ] `cpu.stat.local` — local throttled time, including its older-kernel
+- [x] `cpu.stat.local` — local throttled time, including its older-kernel
       `FileMissing` behavior.
 - [x] `cpu.uclamp.max` — `max` or a ratio expressed in hundredths of a percent.
 - [x] `cpu.uclamp.min` — ratio expressed in hundredths of a percent.
@@ -36,11 +34,11 @@ unknown keyed fields must be preserved when the public type provides an
 - [x] `memory.high` — throttling limit as `MaxOr<Bytes>`.
 - [ ] `memory.events` — hierarchical low/high/max/OOM counters, preserving
       version-dependent optional keys.
-- [ ] `memory.stat` — split byte, page, and count fields into distinct typed
-      groups and retain unknown keys in `extra`.
-- [ ] `memory.pressure` — shared PSI `some`/`full` averages and total stall
+- [x] `memory.stat` — split byte, page, and count fields into distinct typed
+      groups and ignore unknown keys.
+- [x] `memory.pressure` — shared PSI `some`/`full` averages and total stall
       time; never write to the file on the read path.
-- [ ] `memory.peak` — peak usage in bytes; document that reset semantics are
+- [x] `memory.peak` — peak usage in bytes; document that reset semantics are
       per file descriptor on kernels that support writes.
 - [ ] `memory.low` — best-effort memory protection in bytes.
 - [ ] `memory.min` — hard memory protection in bytes.
@@ -108,6 +106,7 @@ as `FileMissing`, not a parse failure or panic.
 
 ## Others
 
+- [ ] Duplicate and extra (future) fields (explicitly out-of-scope for now)
 - [ ] cgroup v1
 - [ ] cgroup v2 write
 - [ ] Benchmark
