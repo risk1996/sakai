@@ -153,7 +153,7 @@ Do **not** re-export rustix types from `lib.rs`.
 
 ### 3.4 Kernel compatibility (runtime, not cfg)
 
-Do not `#ifdef` kernel versions. **Missing file → `Error::FileMissing`.** Unknown keys in flat-keyed files → `extra: BTreeMap<String, u64>`.
+Do not `#ifdef` kernel versions. **Missing file → `Error::FileMissing`.** Unknown CPU stat counters are ignored; other flat-keyed files may retain unknown keys in `extra: BTreeMap<String, u64>`.
 
 | Kernel | What exists (cpu/memory relevant)                        |
 | ------ | -------------------------------------------------------- |
@@ -301,12 +301,12 @@ pub struct ProcCgroupLine {
 ```rust
 pub struct Cgroup { /* OwnedFd dir, PathBuf for Display only */ }
 
-pub trait OpenCgroup: Sized {
-    fn from_current_process() -> Result<Self>;
-    fn from_pid(pid: u32) -> Result<Self>;
-    fn from_path(path: &Path) -> Result<Self>;
-    fn child(&self, name: &OsStr) -> Result<Self>;
-    fn children(&self) -> Result<Vec<Self>>;
+impl Cgroup {
+    pub fn from_current_process() -> Result<Self>;
+    pub fn from_pid(pid: u32) -> Result<Self>;
+    pub fn from_path(path: &Path) -> Result<Self>;
+    pub fn child(&self, name: &OsStr) -> Result<Self>;
+    pub fn children(&self) -> Result<Vec<Self>>;
 }
 ```
 
@@ -316,11 +316,12 @@ Reads go through `openat` on the dirfd (TOCTOU). Child names can collide with in
 
 ```rust
 pub enum CgroupType { Domain, DomainThreaded, DomainInvalid, Threaded }
+pub enum CgroupController { Cpu, Cpuset, Io, /* ... */, Other(String) }
 
 pub trait ReadCore {
-    fn ty(&self) -> Result<CgroupType>;           // cgroup.type (non-root)
-    fn controllers(&self) -> Result<Vec<String>>; // cgroup.controllers
-    fn subtree_control(&self) -> Result<Vec<String>>;
+    fn r#type(&self) -> Result<CgroupType>;                    // cgroup.type (non-root)
+    fn controllers(&self) -> Result<Vec<CgroupController>>;    // cgroup.controllers
+    fn subtree_control(&self) -> Result<Vec<CgroupController>>;
 }
 ```
 
@@ -452,7 +453,7 @@ Writable-file write syntax is **not** the inverse of read (defer).
 
 ## 6. OSS caveats (implement against these)
 
-1. Parse **keys**, never column index; keep `extra` maps.
+1. Parse **keys**, never column index; ignore unknown CPU stat counters and keep `extra` maps where the interface requires them.
 2. Missing file = controller off / root / hybrid — `FileMissing`, not panic.
 3. One file read is not atomic with the next; no fake transactions.
 4. `memory.stat` mixing bytes/pages/events is the easiest way to ship wrong metrics. Keep them on **different `uom` Kinds**; never add `Pages` to `Bytes`.

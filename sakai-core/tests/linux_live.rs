@@ -35,7 +35,7 @@ fn reads_current_cpu_without_privileges() {
     cgroup.uclamp_min().map(|_| ()),
     cgroup.uclamp_max().map(|_| ()),
     cgroup.idle().map(|_| ()),
-    cgroup.ty().map(|_| ()),
+    cgroup.r#type().map(|_| ()),
   ] {
     match result {
       | Ok(()) | Err(Error::FileMissing { .. }) => {},

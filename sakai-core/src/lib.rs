@@ -19,8 +19,8 @@ pub use cgroup::{
   },
   v2,
 };
-pub use v2::cpu::{CpuWeight, Nice, Weight};
 #[cfg(target_os = "linux")]
-pub use v2::{Cgroup, OpenCgroup};
+pub use v2::Cgroup;
+pub use v2::cpu::{CpuWeight, Nice, Weight};
 
 pub mod cgroup;

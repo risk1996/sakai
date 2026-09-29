@@ -32,15 +32,6 @@ pub struct Cgroup {
   path: PathBuf,
 }
 
-/// Opens existing cgroups without changing the hierarchy.
-pub trait OpenCgroup: Sized {
-  fn from_current_process() -> Result<Self, Error>;
-  fn from_pid(pid: u32) -> Result<Self, Error>;
-  fn from_path(path: &Path) -> Result<Self, Error>;
-  fn child(&self, name: &OsStr) -> Result<Self, Error>;
-  fn children(&self) -> Result<Vec<Self>, Error>;
-}
-
 impl Cgroup {
   /// Discovers this process's cgroup through its visible cgroup2 mounts.
   pub fn from_current_process() -> Result<Self, Error> {
@@ -241,28 +232,6 @@ impl Cgroup {
         file,
         detail: error.to_string(),
       })
-  }
-}
-
-impl OpenCgroup for Cgroup {
-  fn from_current_process() -> Result<Self, Error> {
-    Self::from_current_process()
-  }
-
-  fn from_pid(pid: u32) -> Result<Self, Error> {
-    Self::from_pid(pid)
-  }
-
-  fn from_path(path: &Path) -> Result<Self, Error> {
-    Self::from_path(path)
-  }
-
-  fn child(&self, name: &OsStr) -> Result<Self, Error> {
-    self.child(name)
-  }
-
-  fn children(&self) -> Result<Vec<Self>, Error> {
-    self.children()
   }
 }
 

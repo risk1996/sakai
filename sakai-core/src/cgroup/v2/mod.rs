@@ -1,5 +1,5 @@
 #[cfg(target_os = "linux")]
-pub use handle::{Cgroup, OpenCgroup};
+pub use handle::Cgroup;
 #[cfg(target_os = "linux")]
 pub use path::{CgroupPath, CgroupPathError};
 

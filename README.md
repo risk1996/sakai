@@ -25,7 +25,7 @@ files unavailable on older kernels. Other errors retain their cause.
 Every call reads fresh contents. Multiple reads are not an atomic snapshot.
 `cpu.stat` usage includes descendants; its bandwidth counters describe its own
 limit. `cpu.stat.local` describes local runqueue throttling, including ancestor
-limits. Unknown counters remain accessible through `extra()` in kernel units.
+limits. Unknown CPU stat counters are ignored.
 
 Times use `u64` nanoseconds with checked conversion from kernel microseconds.
 Counts have a separate `uom` kind. Ratios use `f64` to preserve fractional
