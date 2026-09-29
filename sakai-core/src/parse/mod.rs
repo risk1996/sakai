@@ -1,12 +1,12 @@
 use std::{collections::BTreeMap, str::SplitAsciiWhitespace};
 
 use nutype::nutype;
-use uom::si::{ratio::percent, time::nanosecond};
+use uom::si::{information::byte, ratio::percent, time::nanosecond};
 
 use crate::{
   error::{ParseError, ParseValueError},
   limit::MaxOr,
-  unit::{Count, NonZeroTime, Ratio, Time},
+  unit::{Bytes, Count, NonZeroTime, Ratio, Time},
 };
 
 /// Borrowed keyed values with the complete source file for field errors.
@@ -172,6 +172,18 @@ impl ParseCgroup<ParseCount> for Count {
       value: value.parse()?,
       ..Default::default()
     })
+  }
+}
+
+/// A zero-sized marker for cgroup memory amounts encoded in bytes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct ParseBytes;
+
+impl ParseCgroup<ParseBytes> for Bytes {
+  type Error = ParseValueError;
+
+  fn parse_cgroup(value: &str) -> Result<Self, Self::Error> {
+    Ok(Self::new::<byte>(value.parse()?))
   }
 }
 

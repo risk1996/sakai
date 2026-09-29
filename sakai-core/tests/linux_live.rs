@@ -13,11 +13,12 @@ use sakai_core::{
       CpuIdle, CpuMax, CpuMaxBurst, CpuStat, CpuStatLocal, CpuUclampMax,
       CpuUclampMin, CpuWeight, Nice,
     },
+    memory::{MemoryCurrent, MemoryHigh, MemoryMax},
   },
 };
 
 #[test]
-fn reads_current_cpu_without_privileges() {
+fn reads_current_cgroup_without_privileges() {
   let cgroup = match Cgroup::from_current_process() {
     | Ok(cgroup) => cgroup,
     | Err(Error::NotCgroupV2) => return,
@@ -41,10 +42,13 @@ fn reads_current_cpu_without_privileges() {
     ceiling.map(|_| ()),
     idle.map(|_| ()),
     cgroup.core().kind().map(|_| ()),
+    cgroup.memory().current().map(|_| ()),
+    cgroup.memory().max().map(|_| ()),
+    cgroup.memory().high().map(|_| ()),
   ] {
     match result {
       | Ok(()) | Err(Error::FileMissing { .. }) => {},
-      | Err(error) => panic!("CPU read failed: {error}"),
+      | Err(error) => panic!("cgroup read failed: {error}"),
     }
   }
   assert_ok!(Cgroup::from_pid(std::process::id()));
@@ -133,7 +137,14 @@ impl CgroupFixture {
     let parent = cgroup.as_ref();
     let path = parent.join(format!("sakai-vmtest-{}", std::process::id()));
 
+    let has_memory_controller =
+      fs::read_to_string(parent.join("cgroup.controllers"))?
+        .split_ascii_whitespace()
+        .any(|controller| controller == "memory");
     fs::write(parent.join("cgroup.subtree_control"), "+cpu")?;
+    if has_memory_controller {
+      fs::write(parent.join("cgroup.subtree_control"), "+memory")?;
+    }
     fs::create_dir(&path)?;
     let fixture = Self { path };
     fs::write(fixture.path.join("cpu.max"), "25000 100000")?;
@@ -170,7 +181,7 @@ impl Drop for CgroupFixture {
 }
 
 #[test]
-fn parses_live_delegated_cpu_interfaces() {
+fn parses_live_delegated_controller_interfaces() {
   match std::env::var_os("SAKAI_VMTEST") {
     | None => return,
     | Some(_) => {},
@@ -227,7 +238,34 @@ fn parses_live_delegated_cpu_interfaces() {
   );
   fixture.check::<CpuWeight>("cpu.weight", false, reader.cpu().weight());
   fixture.check::<Nice>("cpu.weight.nice", false, reader.cpu().weight_nice());
+  fixture.check::<MemoryCurrent>(
+    "memory.current",
+    true,
+    reader.memory().current(),
+  );
+  fixture.check::<MemoryMax>("memory.max", true, reader.memory().max());
+  fixture.check::<MemoryHigh>("memory.high", true, reader.memory().high());
   assert_eq!(assert_ok!(reader.core().kind()), CgroupType::Domain);
   assert_ok!(reader.core().controllers());
   assert_ok!(reader.core().subtree_control());
+}
+
+#[test]
+fn root_memory_interfaces_are_missing() {
+  match std::env::var_os("SAKAI_VMTEST") {
+    | None => return,
+    | Some(_) => {},
+  }
+
+  let root_path = PathBuf::from("/sys/fs/cgroup");
+  let root = assert_ok!(Cgroup::from_path(&root_path));
+  assert!(
+    matches!(root.memory().current(), Err(Error::FileMissing { path }) if path == root_path.join("memory.current"))
+  );
+  assert!(
+    matches!(root.memory().max(), Err(Error::FileMissing { path }) if path == root_path.join("memory.max"))
+  );
+  assert!(
+    matches!(root.memory().high(), Err(Error::FileMissing { path }) if path == root_path.join("memory.high"))
+  );
 }

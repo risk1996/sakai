@@ -31,9 +31,9 @@ unknown keyed fields must be preserved when the public type provides an
 
 ## P1 — Memory (start only after P0)
 
-- [ ] `memory.current` — current hierarchical memory usage in bytes.
-- [ ] `memory.max` — hard limit as `MaxOr<Bytes>`.
-- [ ] `memory.high` — throttling limit as `MaxOr<Bytes>`.
+- [x] `memory.current` — current hierarchical memory usage in bytes.
+- [x] `memory.max` — hard limit as `MaxOr<Bytes>`.
+- [x] `memory.high` — throttling limit as `MaxOr<Bytes>`.
 - [ ] `memory.events` — hierarchical low/high/max/OOM counters, preserving
       version-dependent optional keys.
 - [ ] `memory.stat` — split byte, page, and count fields into distinct typed
