@@ -125,14 +125,14 @@ rust-version = "1.85"     # match chosen MSRV
 license = "MIT OR Apache-2.0"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-rustix = { version = "1", default-features = false, features = ["fs", "process"] }
+rustix = { version = "1", default-features = false, features = ["fs", "std", "process"] }
 # later: "event" for poll, inotify feature when events land
 
 [dependencies]
 thiserror = "2"
 nutype = "0.6"            # pin a current 0.6.x; validate() on documented ranges
-uom = { version = "0.37", default-features = false, features = ["u64", "si"] }
-# Quantity storage is u64 (kernel integers). Do not enable f32/f64 features.
+uom = { version = "0.37", default-features = false, features = ["u64", "f64", "si"] }
+# Counters and durations use u64; fractional ratios use f64 (see §3.5).
 ```
 
 **Do not** add a Cargo feature that swaps `uom` off — the public Rust types _are_ `uom` quantities (behind aliases). Optional `serde` later can sit on those types.
@@ -143,7 +143,7 @@ Later rustix features: inotify/poll when `cgroup.events` watchers land — not i
 
 Use:
 
-- `rustix::fs::{openat, openat2, fstatfs, CGROUP2_SUPER_MAGIC, CGROUP_SUPER_MAGIC, TMPFS_MAGIC, OFlags, Mode, ResolveFlags, CWD}`
+- `rustix::fs::{openat, openat2, fstatfs, OFlags, Mode, ResolveFlags, CWD}`. Keep the cgroup2 magic `0x63677270` as a private Linux UAPI constant: rustix 1.1 does not export `CGROUP2_SUPER_MAGIC`. Enable `std` for `Dir` allocation and I/O error conversion.
 - `openat2` with `OFlags::RDONLY | CLOEXEC | NOFOLLOW | DIRECTORY` and `ResolveFlags::BENEATH | NO_SYMLINKS` (and `NO_XDEV` if it does not break bind-mounted cgroup roots — verify on Docker).
 - Fallback: if `openat2` returns `NOSYS` (kernel &lt; 5.6), `openat` + `O_NOFOLLOW`.
 - `rustix::process::{Pid as SysPid, getpid}` — wrap as `cgroup2::Pid(u32)` or `from_raw` internally.
@@ -153,7 +153,7 @@ Do **not** re-export rustix types from `lib.rs`.
 
 ### 3.4 Kernel compatibility (runtime, not cfg)
 
-Do not `#ifdef` kernel versions. **Missing file → `Error::FileMissing`.** Unknown keys in flat-keyed files → `extra: BTreeMap<String, u64>`.
+Do not `#ifdef` kernel versions. **Missing file → `Error::FileMissing`.** Unknown CPU stat counters are ignored; other flat-keyed files may retain unknown keys in `extra: BTreeMap<String, u64>`.
 
 | Kernel | What exists (cpu/memory relevant)                        |
 | ------ | -------------------------------------------------------- |
@@ -174,17 +174,17 @@ Do not `#ifdef` kernel versions. **Missing file → `Error::FileMissing`.** Unkn
 
 ### 3.5 Units: `uom` + `nutype`
 
-Kernel text is still parsed as integers. The crate then **constructs** `uom` quantities and **validates** closed ranges with `nutype`. Out-of-range values are **parse failures** (`Error::Parse`), and the error must keep the **raw line**.
+Kernel counters and durations are parsed as integers; percentages are decimal numbers. The crate then **constructs** `uom` quantities and **validates** closed ranges with `nutype`. Out-of-range values are **parse failures** (`Error::Parse`), and the error must keep the **raw line**.
 
 #### `uom` — dimensions, not pretty-print
 
-Use `uom` with **`u64` storage** (`default-features = false`, `features = ["u64", "si"]`).[^uom] Alias every public quantity:
+Use `uom` with **`u64` storage for counters and durations**, and **`f64` for ratios** (`default-features = false`, `features = ["u64", "f64", "si"]`).[^uom] Alias every public quantity. This corrects the original integer-ratio design: `uom` normalizes dimensionless ratios to whole units, so standard `si::u64::Ratio` cannot store fractional percentages even when constructed using `part_per_ten_thousand`. Floating-point ratios preserve the kernel's percentage precision, subject to ordinary binary floating-point rounding.
 
 | Domain                | uom quantity                                         | Canonical unit when parsing kernel text | Notes                                                                                                                                           |
 | --------------------- | ---------------------------------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | Time                  | `si::time::Time<BaseUnits, u64>` as `Time`     | **microsecond**                         | Kernel default is µs; nanosecond storage also preserves finer I/O times. `MaxOr<Time>` for the `max` token.                     |
 | Memory amounts        | `si::u64::Information` as `Bytes`                    | **byte**                                | `memory.current`, `anon`, …                                                                                                                     |
-| Percents              | `si::u64::Ratio` as `Ratio`                          | **`part_per_ten_thousand`**             | Kernel `1234` = 12.34%. **Never** `.get::<percent>()` on `u64` — that truncates 12.34 → 12.                                                     |
+| Percents              | `si::f64::Ratio` as `Ratio`                          | **`percent`**                          | Kernel text `12.34` = 12.34%, or a ratio of 0.1234. Reject non-finite values and percentages outside 0–100. |
 | Event / period counts | custom **`Count`** (own `Kind`, dimensionless)       | 1                                       | `nr_periods`, `pgfault`, `oom`. **Not** `Ratio` and **not** `Information`.                                                                      |
 | Pages                 | custom **`Pages`** (own `Kind`) or a non-uom newtype | 1 page                                  | **Not** `Information`. Convert to `Bytes` only with an explicit `page_size: Information`.                                                       |
 | Rates                 | `Count / Time`                                       | —                                       | Dimension T⁻¹. Prefer a distinct **`EventRate` Kind** if mixing with SI `Frequency` (Hz) would confuse rustdoc; otherwise `si::u64::Frequency`. |
@@ -245,7 +245,7 @@ pub enum Error {
 
 pub type Time = si::time::Time<BaseUnits, u64>;
 pub type Bytes = si::u64::Information;
-pub type Ratio = si::u64::Ratio;
+pub type Ratio = si::f64::Ratio;
 pub struct Pages(/* custom Kind or newtype */);
 pub struct Count(/* custom Kind */);
 pub enum MaxOr<T> { Max, Value(T) }
@@ -301,12 +301,12 @@ pub struct ProcCgroupLine {
 ```rust
 pub struct Cgroup { /* OwnedFd dir, PathBuf for Display only */ }
 
-pub trait OpenCgroup: Sized {
-    fn from_current_process() -> Result<Self>;
-    fn from_pid(pid: u32) -> Result<Self>;
-    fn from_path(path: &Path) -> Result<Self>;
-    fn child(&self, name: &OsStr) -> Result<Self>;
-    fn children(&self) -> Result<Vec<Self>>;
+impl Cgroup {
+    pub fn from_current_process() -> Result<Self>;
+    pub fn from_pid(pid: u32) -> Result<Self>;
+    pub fn from_path(path: &Path) -> Result<Self>;
+    pub fn child(&self, name: &OsStr) -> Result<Self>;
+    pub fn children(&self) -> Result<Vec<Self>>;
 }
 ```
 
@@ -316,11 +316,12 @@ Reads go through `openat` on the dirfd (TOCTOU). Child names can collide with in
 
 ```rust
 pub enum CgroupType { Domain, DomainThreaded, DomainInvalid, Threaded }
+pub enum CgroupController { Cpu, Cpuset, Io, /* ... */, Other(String) }
 
 pub trait ReadCore {
-    fn ty(&self) -> Result<CgroupType>;           // cgroup.type (non-root)
-    fn controllers(&self) -> Result<Vec<String>>; // cgroup.controllers
-    fn subtree_control(&self) -> Result<Vec<String>>;
+    fn r#type(&self) -> Result<CgroupType>;                    // cgroup.type (non-root)
+    fn controllers(&self) -> Result<Vec<CgroupController>>;    // cgroup.controllers
+    fn subtree_control(&self) -> Result<Vec<CgroupController>>;
 }
 ```
 
@@ -337,10 +338,10 @@ pub struct PressureLine {
     pub avg300: Ratio,
     pub total: Time,
 }
-pub struct Pressure { pub some: PressureLine, pub full: PressureLine }
+pub struct Pressure { pub some: PressureLine, pub full: Option<PressureLine> }
 ```
 
-Used by `cpu.pressure` and `memory.pressure`. **Do not write** these files on the read path (a write registers a `poll` trigger on that FD).[^psi]
+Used by `cpu.pressure` and `memory.pressure`. Older CPU PSI output omits `full`; preserve this as `None`. **Do not write** these files on the read path (a write registers a `poll` trigger on that FD).[^psi]
 
 ### 4.6 CPU
 
@@ -452,7 +453,7 @@ Writable-file write syntax is **not** the inverse of read (defer).
 
 ## 6. OSS caveats (implement against these)
 
-1. Parse **keys**, never column index; keep `extra` maps.
+1. Parse **keys**, never column index; ignore unknown CPU stat counters and keep `extra` maps where the interface requires them.
 2. Missing file = controller off / root / hybrid — `FileMissing`, not panic.
 3. One file read is not atomic with the next; no fake transactions.
 4. `memory.stat` mixing bytes/pages/events is the easiest way to ship wrong metrics. Keep them on **different `uom` Kinds**; never add `Pages` to `Bytes`.
@@ -468,7 +469,7 @@ Writable-file write syntax is **not** the inverse of read (defer).
 14. Do not copy kernel RST into the crate (GPL docs); reimplement from described formats.
 15. Test unified **and** (later) hybrid; more than one kernel series.
 16. `cpu.weight` of `0` is **idle**, not an invalid share. `CpuWeight::Idle` vs `Shares(Weight)`.
-17. PSI/uclamp percents are **hundredths of a percent**. Construct `Ratio` from `part_per_ten_thousand`, not `percent`.
+17. PSI/uclamp files contain **decimal percentages**, e.g. `12.34`. Construct an `f64` `Ratio` using `percent`; do not use a whole-unit integer ratio that truncates the fraction.
 
 ---
 
@@ -573,7 +574,7 @@ Create the tree in §3.1 with empty `lib.rs` (`//!` crate docs stating read-only
 ### Milestone B — parse layer (no syscalls)
 
 **PR B1 — `Error` + units**  
-`error.rs`, `unit.rs`: `uom` aliases (`Time`, `Bytes`, `Ratio`), custom `Count`/`Pages` Kinds, `MaxOr`, `nutype` `Weight`/`Nice`, `CpuWeight`. Parse kernel µs into `Time`; parse `1234` into `Ratio` via `part_per_ten_thousand`. Tests: `max` token; 1_000_000 µs → 1 s; 12.34% does **not** truncate to 12; `Nice` rejects 20; `Weight` rejects 0 (idle is the enum, not the nutype). **Done when:** those tests pass on Darwin.
+`error.rs`, `unit.rs`: `uom` aliases (`Time`, `Bytes`, `Ratio`), custom `Count`/`Pages` Kinds, `MaxOr`, `nutype` `Weight`/`Nice`, `CpuWeight`. Parse kernel µs into `Time`; parse `12.34` into an `f64` `Ratio` via `percent`. Tests: `max` token; 1_000_000 µs → 1 s; 12.34% does **not** truncate to 12; `Nice` rejects 20; `Weight` rejects 0 (idle is the enum, not the nutype). **Done when:** those tests pass on Darwin.
 
 **PR B2 — Single-value and two-value parsers**  
 `parse.rs`: `parse_single`, `parse_max_or`, `parse_cpu_max` (`$MAX $PERIOD`). Fixtures: `max\n`, `1048576\n`, `max 100000\n`, `50000 100000\n`. **Done when:** golden tests in `tests/parse_cpu.rs` (even before cpu module).
@@ -582,7 +583,7 @@ Create the tree in §3.1 with empty `lib.rs` (`//!` crate docs stating read-only
 `parse_flat_keyed` → `BTreeMap<String, String>` or `u64` with a typed second pass. Fixture: `cpu.stat` with three keys; fixture with a **key inserted in the middle**. **Done when:** lookup by key ignores order.
 
 **PR B4 — Nested keyed (PSI)**  
-`pressure.rs` + parser for `some avg10=… total=…`. `avg*` → `Ratio` (`part_per_ten_thousand`); `total` → `Time` (µs). Fixtures from real `cpu.pressure`. **Done when:** `avg10`/`total` round-trip from fixture text without truncating 12.34% to 12.
+`pressure.rs` + parser for `some avg10=… total=…`. `avg*` → `Ratio` (`f64`, `percent`); `total` → `Time` (µs). Fixtures from real `cpu.pressure`. **Done when:** `avg10`/`total` round-trip from fixture text without truncating 12.34% to 12.
 
 **PR B5 — `/proc` and mountinfo text**  
 `proc.rs`: parse `0::/foo`, v1 lines, `(deleted)`. `mount.rs`: parse `cgroup2` lines from mountinfo (no `statfs` yet). Fixtures for unified and hybrid. **Done when:** table-driven tests cover deleted + hybrid `unified` path.

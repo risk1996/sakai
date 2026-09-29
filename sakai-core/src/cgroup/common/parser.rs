@@ -136,7 +136,10 @@ impl ParseCgroup<ParseCount> for Count {
   type Error = ParseValueError;
 
   fn parse_cgroup(value: &str) -> Result<Self, Self::Error> {
-    Ok(Self::new(value.parse()?))
+    Ok(Self {
+      value: value.parse()?,
+      ..Default::default()
+    })
   }
 }
 

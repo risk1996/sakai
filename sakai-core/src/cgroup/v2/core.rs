@@ -1,0 +1,139 @@
+//! Core interfaces that explain controller availability and threaded topology.
+
+use crate::cgroup::common::error::Error;
+
+/// A cgroup's topology state, as read from `cgroup.type` on non-root cgroups.
+///
+/// Domain cgroups contain whole processes. A threaded domain is the resource
+/// domain at the root of a threaded subtree; threaded cgroups beneath it can
+/// contain individual threads. A newly created domain beneath a threaded
+/// cgroup is invalid until converted to threaded. These four values are
+/// defined for `cgroup.type` in the Linux kernel's
+/// `Documentation/admin-guide/cgroup-v2.rst` (Core Interface Files).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::EnumString)]
+pub enum CgroupType {
+  /// A normal, valid domain cgroup.
+  #[strum(serialize = "domain")]
+  Domain,
+  /// The resource domain at the root of a threaded subtree.
+  #[strum(serialize = "domain threaded")]
+  DomainThreaded,
+  /// A domain with invalid threaded topology; it cannot be populated.
+  #[strum(serialize = "domain invalid")]
+  DomainInvalid,
+  /// A member of a threaded subtree.
+  #[strum(serialize = "threaded")]
+  Threaded,
+}
+
+/// A controller name reported by `cgroup.controllers` or
+/// `cgroup.subtree_control`.
+///
+/// The kernel may add controllers; [`Other`](Self::Other) retains names this
+/// version of the library does not recognize.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, strum::EnumString)]
+#[strum(serialize_all = "snake_case")]
+pub enum CgroupController {
+  Cpu,
+  Cpuset,
+  Io,
+  Memory,
+  Hugetlb,
+  Pids,
+  Rdma,
+  Misc,
+  Dmem,
+  PerfEvent,
+  #[strum(default)]
+  Other(String),
+}
+
+/// Fresh configuration snapshots; separate calls are not atomic together.
+pub trait ReadCore {
+  /// Configuration snapshot; the hierarchy root may lack this file.
+  fn r#type(&self) -> Result<CgroupType, Error>;
+  /// Configuration snapshot of controllers available to enable for children.
+  fn controllers(&self) -> Result<Vec<CgroupController>, Error>;
+  /// Configuration snapshot of controllers enabled for children.
+  fn subtree_control(&self) -> Result<Vec<CgroupController>, Error>;
+}
+
+#[cfg(target_os = "linux")]
+impl ReadCore for super::Cgroup {
+  fn r#type(&self) -> Result<CgroupType, Error> {
+    let contents = self.read("cgroup.type")?;
+    contents.trim().parse().map_err(|error| Error::Parse {
+      file: "cgroup.type",
+      detail: format!("{contents:?}: {error}"),
+    })
+  }
+
+  fn controllers(&self) -> Result<Vec<CgroupController>, Error> {
+    Ok(
+      self
+        .read("cgroup.controllers")?
+        .split_ascii_whitespace()
+        .map(CgroupController::from)
+        .collect(),
+    )
+  }
+
+  fn subtree_control(&self) -> Result<Vec<CgroupController>, Error> {
+    Ok(
+      self
+        .read("cgroup.subtree_control")?
+        .split_ascii_whitespace()
+        .map(CgroupController::from)
+        .collect(),
+    )
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use assertables::{assert_err, assert_ok};
+
+  use super::*;
+
+  #[test]
+  fn parses_topology() {
+    for (input, expected) in [
+      ("domain\n", CgroupType::Domain),
+      ("domain threaded\n", CgroupType::DomainThreaded),
+      ("domain invalid\n", CgroupType::DomainInvalid),
+      ("threaded\n", CgroupType::Threaded),
+    ] {
+      assert_eq!(assert_ok!(input.trim().parse::<CgroupType>()), expected);
+    }
+    assert_err!("unknown".parse::<CgroupType>());
+  }
+
+  #[test]
+  fn parses_controllers() {
+    let controllers = "cpu cpuset io memory hugetlb pids rdma misc dmem \
+                       perf_event future_controller"
+      .split_ascii_whitespace()
+      .map(CgroupController::from)
+      .collect::<Vec<_>>();
+    assert_eq!(controllers, vec![
+      CgroupController::Cpu,
+      CgroupController::Cpuset,
+      CgroupController::Io,
+      CgroupController::Memory,
+      CgroupController::Hugetlb,
+      CgroupController::Pids,
+      CgroupController::Rdma,
+      CgroupController::Misc,
+      CgroupController::Dmem,
+      CgroupController::PerfEvent,
+      CgroupController::Other("future_controller".into()),
+    ]);
+    assert_eq!(
+      "\n"
+        .split_ascii_whitespace()
+        .map(CgroupController::from)
+        .collect::<Vec<_>>(),
+      vec![]
+    );
+  }
+}

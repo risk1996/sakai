@@ -1,8 +1,8 @@
-mod vmtest;
-
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use vmtest::Vmtest;
+
+mod vmtest;
 
 #[derive(Debug, Parser)]
 struct Xtask {

@@ -21,6 +21,7 @@
     "openat",
     "pids",
     "pkgs",
+    "println",
     "procs",
     "reqwest",
     "rdma",
