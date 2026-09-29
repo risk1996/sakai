@@ -4,18 +4,16 @@ use std::{fmt::Debug, fs, io, path::PathBuf, process::Command, str::FromStr};
 
 use assertables::assert_ok;
 use sakai_core::{
-  Cgroup, Error,
-  cgroup::{
-    common::{error::ParseError, parser::ParseValueError},
-    v2::{
-      CgroupPath,
-      cpu::{
-        CpuIdle, CpuMax, CpuMaxBurst, CpuStat, CpuStatLocal, CpuUclampMax,
-        CpuUclampMin, CpuWeight, Nice, Pressure,
-      },
+  Cgroup, Error, Pressure,
+  error::{ParseError, ParseValueError},
+  v2::{
+    CgroupPath,
+    core::ReadCore,
+    cpu::{
+      CpuIdle, CpuMax, CpuMaxBurst, CpuStat, CpuStatLocal, CpuUclampMax,
+      CpuUclampMin, CpuWeight, Nice, ReadCpu,
     },
   },
-  v2::{core::ReadCore, cpu::ReadCpu},
 };
 
 #[test]
@@ -59,7 +57,7 @@ fn rejects_non_cgroup_filesystems() {
 
 #[test]
 fn parses_available_root_cpu_interfaces() {
-  type Parse = fn(&str) -> Result<(), ParseError<'static, ParseValueError>>;
+  type Parse = fn(&str) -> Result<(), ParseError<ParseValueError>>;
 
   let parsers: [(&str, Parse); 10] = [
     ("cpu.idle", |contents| {

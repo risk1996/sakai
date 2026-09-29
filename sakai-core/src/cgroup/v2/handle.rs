@@ -13,7 +13,7 @@ use rustix::{
 };
 
 use super::path::{CgroupPath, CgroupPathError};
-use crate::cgroup::common::error::Error;
+use crate::error::Error;
 
 const DIRECTORY_FLAGS: OFlags = OFlags::RDONLY
   .union(OFlags::CLOEXEC)
@@ -212,23 +212,84 @@ impl Cgroup {
     file: &'static str,
   ) -> Result<T, Error>
   where
-    T::Err: std::fmt::Display, {
+    T::Err: std::error::Error + Send + Sync + 'static, {
     self
       .read(file)?
       .parse()
       .map_err(|error: T::Err| Error::Parse {
-        file,
-        detail: error.to_string(),
+        path: self.path.join(file),
+        source: Box::new(error),
       })
   }
 }
 
 #[cfg(test)]
 mod tests {
+  use std::error::Error as _;
+
   use assertables::{assert_err, assert_ok};
 
   use super::*;
-  use crate::v2::cpu::ReadCpu;
+  use crate::{
+    error::{ParseError, ParseValueError},
+    v2::{
+      core::ReadCore,
+      cpu::{CpuIdle, ReadCpu},
+    },
+  };
+
+  #[test]
+  fn parse_failure_keeps_path_and_typed_source() {
+    let path =
+      PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/src/cgroup/v2"));
+    let cgroup = Cgroup {
+      directory: assert_ok!(fs::open(&path, DIRECTORY_FLAGS, Mode::empty())),
+      path: path.clone(),
+    };
+    let error = assert_err!(cgroup.parse::<CpuIdle>("mod.rs"));
+    let Error::Parse {
+      path: actual,
+      source,
+    } = &error
+    else {
+      panic!("expected parse failure, got {error:?}");
+    };
+    assert_eq!(actual, &path.join("mod.rs"));
+    let parsed = source
+      .downcast_ref::<ParseError<ParseValueError>>()
+      .expect("original parse error");
+    assert_eq!(
+      error.source().map(ToString::to_string),
+      Some(parsed.to_string())
+    );
+    assert!(matches!(parsed, ParseError::Invalid { field: "idle", .. }));
+    assert!(parsed.source().is_some());
+    assert!(error.to_string().contains("failed to parse"));
+    assert!(error.to_string().contains("cgroup content"));
+  }
+
+  #[test]
+  fn cgroup_type_failure_keeps_raw_input_and_strum_source() {
+    let path = PathBuf::from(concat!(
+      env!("CARGO_MANIFEST_DIR"),
+      "/src/cgroup/v2/fixtures/invalid_type"
+    ));
+    let cgroup = Cgroup {
+      directory: assert_ok!(fs::open(&path, DIRECTORY_FLAGS, Mode::empty())),
+      path: path.clone(),
+    };
+    let error = assert_err!(cgroup.r#type());
+    let Error::Parse { path: actual, .. } = &error else {
+      panic!("expected parse failure, got {error:?}");
+    };
+    assert_eq!(actual, &path.join("cgroup.type"));
+    assert!(error.to_string().contains("\"unknown\\n\""));
+    let reason = error
+      .source()
+      .and_then(std::error::Error::source)
+      .expect("strum parse reason");
+    assert!(error.to_string().contains(&reason.to_string()));
+  }
 
   #[test]
   fn missing_interfaces_keep_their_path() {

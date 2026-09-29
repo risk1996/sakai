@@ -8,10 +8,11 @@ pub use uclamp::*;
 pub use weight::*;
 pub use weight_nice::*;
 
-pub use crate::cgroup::common::pressure::{Pressure, PressureLine};
-use crate::cgroup::common::{
+use crate::{
   error::Error,
-  unit::{MaxOr, Ratio, Time},
+  limit::MaxOr,
+  pressure::Pressure,
+  unit::{Ratio, Time},
 };
 
 mod idle;

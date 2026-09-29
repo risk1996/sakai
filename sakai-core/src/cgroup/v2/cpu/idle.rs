@@ -1,8 +1,8 @@
 use std::str::FromStr;
 
-use crate::cgroup::common::{
-  error::ParseError,
-  parser::{ParseBoolean, ParseValueError, Parser},
+use crate::{
+  error::{ParseError, ParseValueError},
+  parse::{ParseBoolean, Parser},
 };
 
 /// The idle scheduling state configured by a cgroup's `cpu.idle` file.
@@ -24,7 +24,7 @@ impl CpuIdle {
 }
 
 impl FromStr for CpuIdle {
-  type Err = ParseError<'static, ParseValueError>;
+  type Err = ParseError<ParseValueError>;
 
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
     Parser::parse(contents, |parser| {

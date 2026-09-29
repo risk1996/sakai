@@ -2,9 +2,9 @@ use std::str::FromStr;
 
 use nutype::nutype;
 
-use crate::cgroup::common::{
-  error::ParseError,
-  parser::{ParseCgroup, ParseValueError, Parser},
+use crate::{
+  error::{ParseError, ParseValueError},
+  parse::{ParseCgroup, Parser},
 };
 
 /// A CPU scheduling nice value in the kernel-supported range.
@@ -20,7 +20,7 @@ use crate::cgroup::common::{
 pub struct Nice(i8);
 
 impl FromStr for Nice {
-  type Err = ParseError<'static, ParseValueError>;
+  type Err = ParseError<ParseValueError>;
 
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
     Parser::parse(contents, |parser| parser.next_field::<ParseNice, _>("nice"))
