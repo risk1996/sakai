@@ -5,11 +5,14 @@ use std::{fmt::Debug, fs, io, path::PathBuf, process::Command, str::FromStr};
 use assertables::assert_ok;
 use sakai_core::{
   Cgroup, Error,
-  cgroup::v2::{
-    CgroupPath,
-    cpu::{
-      CpuIdle, CpuMax, CpuMaxBurst, CpuStat, CpuUclampMax, CpuUclampMin,
-      CpuWeight, Nice, Pressure,
+  cgroup::{
+    common::{error::ParseError, parser::ParseValueError},
+    v2::{
+      CgroupPath,
+      cpu::{
+        CpuIdle, CpuMax, CpuMaxBurst, CpuStat, CpuStatLocal, CpuUclampMax,
+        CpuUclampMin, CpuWeight, Nice, Pressure,
+      },
     },
   },
   v2::{core::ReadCore, cpu::ReadCpu},
@@ -52,6 +55,52 @@ fn rejects_non_cgroup_filesystems() {
     Cgroup::from_path(std::path::Path::new("/")),
     Err(Error::NotCgroupV2)
   ));
+}
+
+#[test]
+fn parses_available_root_cpu_interfaces() {
+  type Parse = fn(&str) -> Result<(), ParseError<'static, ParseValueError>>;
+
+  let parsers: [(&str, Parse); 10] = [
+    ("cpu.idle", |contents| {
+      contents.parse::<CpuIdle>().map(|_| ())
+    }),
+    ("cpu.max", |contents| contents.parse::<CpuMax>().map(|_| ())),
+    ("cpu.max.burst", |contents| {
+      contents.parse::<CpuMaxBurst>().map(|_| ())
+    }),
+    ("cpu.pressure", |contents| {
+      contents.parse::<Pressure>().map(|_| ())
+    }),
+    ("cpu.stat", |contents| {
+      contents.parse::<CpuStat>().map(|_| ())
+    }),
+    ("cpu.stat.local", |contents| {
+      contents.parse::<CpuStatLocal>().map(|_| ())
+    }),
+    ("cpu.uclamp.max", |contents| {
+      contents.parse::<CpuUclampMax>().map(|_| ())
+    }),
+    ("cpu.uclamp.min", |contents| {
+      contents.parse::<CpuUclampMin>().map(|_| ())
+    }),
+    ("cpu.weight", |contents| {
+      contents.parse::<CpuWeight>().map(|_| ())
+    }),
+    ("cpu.weight.nice", |contents| {
+      contents.parse::<Nice>().map(|_| ())
+    }),
+  ];
+
+  for (file, parse) in parsers {
+    let path = PathBuf::from("/sys/fs/cgroup").join(file);
+    let contents = match fs::read_to_string(&path) {
+      | Ok(contents) => contents,
+      | Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
+      | Err(error) => panic!("failed to read {path:?}: {error}"),
+    };
+    assert_ok!(parse(&contents), "path: {path:?}");
+  }
 }
 
 #[derive(Debug)]

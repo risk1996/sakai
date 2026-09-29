@@ -35,13 +35,14 @@ impl CpuMax {
   ///
   /// An unlimited quota is returned as [`MaxOr::Max`].
   /// This does not account for ancestor limits, affinity, or scheduling policy.
+  /// Large quotas may lose precision when converted to a floating-point ratio.
   #[must_use]
   pub fn cpu_count(self) -> MaxOr<Ratio> {
     match self.quota {
       | MaxOr::Max => MaxOr::Max,
       #[expect(
         clippy::cast_precision_loss,
-        reason = "valid kernel cpu.max values fit exactly in f64"
+        reason = "the public ratio uses f64; large quotas may lose precision"
       )]
       | MaxOr::Value(quota) => {
         let quota = quota.get::<microsecond>() as f64;

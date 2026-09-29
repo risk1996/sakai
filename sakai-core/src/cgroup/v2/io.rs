@@ -1,5 +1,6 @@
 use std::{
-  io,
+  fs::File,
+  io::{self, Read},
   path::{Component, Path},
 };
 
@@ -7,8 +8,6 @@ use rustix::{
   fd::AsFd,
   fs::{Mode, OFlags, openat},
 };
-
-const READ_BUFFER_SIZE: usize = 8 * 1024;
 
 /// Reads a cgroup v2 interface file relative to an open cgroup directory.
 pub(crate) fn read_file(
@@ -33,25 +32,10 @@ pub(crate) fn read_file(
     OFlags::RDONLY | OFlags::CLOEXEC | OFlags::NOFOLLOW,
     Mode::empty(),
   )
-  .map_err(io_error)?;
-  let mut contents = Vec::new();
-
-  loop {
-    let mut buffer = [0_u8; READ_BUFFER_SIZE];
-    match rustix::io::read(&descriptor, &mut buffer) {
-      | Ok(0) => break,
-      | Ok(count) => contents.extend(buffer.iter().take(count).copied()),
-      | Err(rustix::io::Errno::INTR) => {},
-      | Err(error) => return Err(io_error(error)),
-    }
-  }
-
-  String::from_utf8(contents)
-    .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
-}
-
-fn io_error(error: rustix::io::Errno) -> io::Error {
-  io::Error::from_raw_os_error(error.raw_os_error())
+  .map_err(io::Error::from)?;
+  let mut contents = String::new();
+  File::from(descriptor).read_to_string(&mut contents)?;
+  Ok(contents)
 }
 
 #[cfg(test)]
@@ -82,10 +66,23 @@ mod tests {
       Mode::empty(),
     ));
 
-    for interface in ["", ".", "..", "../common/mod.rs", "/etc/passwd"] {
+    for interface in
+      ["", ".", "..", "../common/mod.rs", "/etc/passwd", "cpu/stat"]
+    {
       let error = assert_err!(read_file(&directory, interface));
 
       assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
     }
+  }
+
+  #[test]
+  fn does_not_follow_interface_symlinks() {
+    let proc = assert_ok!(rustix::fs::open(
+      "/proc",
+      OFlags::RDONLY | OFlags::CLOEXEC | OFlags::DIRECTORY,
+      Mode::empty(),
+    ));
+
+    assert_err!(read_file(proc, "self"));
   }
 }

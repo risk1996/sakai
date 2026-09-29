@@ -197,31 +197,4 @@ mod tests {
       }
     }
   }
-
-  #[cfg(target_os = "linux")]
-  #[test]
-  fn parses_live_root_cpu_uclamp_when_available() {
-    type Parser = fn(&str) -> Result<(), ParseError<'static, ParseValueError>>;
-
-    let parsers: [(&str, Parser); 2] = [
-      ("/sys/fs/cgroup/cpu.uclamp.min", |contents: &str| {
-        contents.parse::<CpuUclampMin>().map(|_| ())
-      }),
-      ("/sys/fs/cgroup/cpu.uclamp.max", |contents: &str| {
-        contents.parse::<CpuUclampMax>().map(|_| ())
-      }),
-    ];
-
-    for (path, parse) in parsers {
-      let contents = match std::fs::read_to_string(path) {
-        | Ok(contents) => contents,
-        | Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-          continue;
-        },
-        | Err(error) => panic!("failed to read {path}: {error}"),
-      };
-
-      assert_ok!(parse(&contents));
-    }
-  }
 }

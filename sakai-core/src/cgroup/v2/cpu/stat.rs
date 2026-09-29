@@ -582,18 +582,33 @@ mod tests {
       nr_bursts 3
       burst_usec 456
     "};
-    let time = assert_ok!(input.parse::<CpuTimeStat>());
-    let bandwidth = assert_ok!(input.parse::<CpuBandwidthStat>());
-    let burst = assert_ok!(input.parse::<CpuBurstStat>());
+    let time = CpuTimeStat {
+      usage: Time::new::<microsecond>(54_321),
+      user: Time::new::<microsecond>(32_100),
+      system: Time::new::<microsecond>(22_221),
+    };
+    let burst = CpuBurstStat {
+      nr_bursts: Count {
+        value: 3,
+        ..Default::default()
+      },
+      burst: Time::new::<microsecond>(456),
+    };
+    let bandwidth = CpuBandwidthStat {
+      nr_periods: Count {
+        value: 100,
+        ..Default::default()
+      },
+      nr_throttled: Count {
+        value: 7,
+        ..Default::default()
+      },
+      throttled: Time::new::<microsecond>(1_234),
+      burst: Some(burst),
+    };
 
-    assert_eq!(time.usage().get::<microsecond>(), 54_321);
-    assert_eq!(time.user().get::<microsecond>(), 32_100);
-    assert_eq!(time.system().get::<microsecond>(), 22_221);
-    assert_eq!(bandwidth.nr_periods().value, 100);
-    assert_eq!(bandwidth.nr_throttled().value, 7);
-    assert_eq!(bandwidth.throttled().get::<microsecond>(), 1_234);
-    assert_eq!(bandwidth.burst(), Some(burst));
-    assert_eq!(burst.nr_bursts().value, 3);
-    assert_eq!(burst.burst().get::<microsecond>(), 456);
+    assert_eq!(assert_ok!(input.parse::<CpuTimeStat>()), time);
+    assert_eq!(assert_ok!(input.parse::<CpuBandwidthStat>()), bandwidth);
+    assert_eq!(assert_ok!(input.parse::<CpuBurstStat>()), burst);
   }
 }
