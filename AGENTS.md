@@ -2,6 +2,10 @@
 
 Working with Rust, see @CODE_STYLE.md
 
+## Decision tracking
+
+When asked to create ADR, follow https://adr.github.io/madr/.
+
 ## Tool invocation
 
 - Project tools: `devenv shell -- rtk <command>`.

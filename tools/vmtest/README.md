@@ -30,7 +30,7 @@ container image on macOS.
 GitHub Actions builds the test executable and wrapper once, uploads them as a
 short-lived artifact, and runs a separate job for each kernel. The manual
 workflow has a `vmtest_debug` option to retain the full console on failure.
-The transition design is in `design/kernel-e2e-vmtest-transition.md`.
+See the [decision record](../../adr/e2e_live_linux_test.md) for the rationale.
 
 ## TODO
 
