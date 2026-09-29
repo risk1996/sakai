@@ -5,6 +5,7 @@ pub use path::{CgroupPath, CgroupPathError};
 
 pub mod core;
 pub mod cpu;
+pub mod memory;
 
 #[cfg(target_os = "linux")]
 mod handle;

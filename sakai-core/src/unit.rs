@@ -32,6 +32,13 @@ const _: () = {
   assert!(align_of::<Time>() == align_of::<u64>());
 };
 
+/// An amount of memory or other information stored as `u64` bytes.
+pub type Bytes = uom::si::information::Information<BaseUnits, u64>;
+const _: () = {
+  assert!(size_of::<Bytes>() == size_of::<u64>());
+  assert!(align_of::<Bytes>() == align_of::<u64>());
+};
+
 /// Separates event counts from other dimensionless quantities.
 pub trait CountKind: uom::Kind {}
 

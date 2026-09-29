@@ -15,6 +15,7 @@ use rustix::{
 use super::{
   core::Core,
   cpu::Cpu,
+  memory::Memory,
   path::{CgroupPath, CgroupPathError},
 };
 use crate::error::Error;
@@ -211,6 +212,11 @@ impl Cgroup {
     Cpu { cgroup: self }
   }
 
+  /// Borrows this handle to read memory controller interfaces.
+  pub fn memory(&self) -> Memory<'_> {
+    Memory { cgroup: self }
+  }
+
   /// Borrows this handle to read core cgroup interfaces.
   pub fn core(&self) -> Core<'_> {
     Core { cgroup: self }
@@ -316,6 +322,15 @@ mod tests {
     );
     assert!(
       matches!(cgroup.core().kind(), Err(Error::FileMissing { path: missing }) if missing == path.join("cgroup.type"))
+    );
+    assert!(
+      matches!(cgroup.memory().current(), Err(Error::FileMissing { path: missing }) if missing == path.join("memory.current"))
+    );
+    assert!(
+      matches!(cgroup.memory().max(), Err(Error::FileMissing { path: missing }) if missing == path.join("memory.max"))
+    );
+    assert!(
+      matches!(cgroup.memory().high(), Err(Error::FileMissing { path: missing }) if missing == path.join("memory.high"))
     );
     for name in ["", ".", "..", "../cpu", "/cpu", "cpu/stat"] {
       assert!(
