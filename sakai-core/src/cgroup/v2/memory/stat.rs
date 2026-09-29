@@ -117,6 +117,8 @@ pub enum MemoryStatByteField {
   Vmalloc,
   Shmem,
   Zswap,
+  /// Bytes occupied by incompressible pages held in zswap.
+  ZswapIncomp,
   Zswapped,
   FileMapped,
   FileDirty,
@@ -151,12 +153,6 @@ pub enum MemoryStatByteField {
 )]
 #[strum(serialize_all = "snake_case")]
 pub enum MemoryStatPageField {
-  WorkingsetRefaultAnon,
-  WorkingsetRefaultFile,
-  WorkingsetActivateAnon,
-  WorkingsetActivateFile,
-  WorkingsetRestoreAnon,
-  WorkingsetRestoreFile,
   Pswpin,
   Pswpout,
   Pgscan,
@@ -179,7 +175,6 @@ pub enum MemoryStatPageField {
   Zswpin,
   Zswpout,
   Zswpwb,
-  ZswapIncomp,
   NumaPagesMigrated,
   NumaPteUpdates,
   PgdemoteKswapd,
@@ -203,6 +198,12 @@ pub enum MemoryStatPageField {
 )]
 #[strum(serialize_all = "snake_case")]
 pub enum MemoryStatCountField {
+  WorkingsetRefaultAnon,
+  WorkingsetRefaultFile,
+  WorkingsetActivateAnon,
+  WorkingsetActivateFile,
+  WorkingsetRestoreAnon,
+  WorkingsetRestoreFile,
   WorkingsetNodereclaim,
   Pgfault,
   Pgmajfault,
@@ -232,8 +233,14 @@ mod tests {
           pgfault 3
           anon 8192
           workingset_refault_file 5
+          workingset_refault_anon 6
+          workingset_activate_anon 7
+          workingset_activate_file 8
+          workingset_restore_anon 9
+          workingset_restore_file 10
           kernel 1024
-          zswap_incomp 2
+          zswap_incomp 4096
+          pswpin 2
           thp_fault_alloc 1
         "},
         MemoryStat {
@@ -241,22 +248,43 @@ mod tests {
             (MemoryStatByteField::Anon, Bytes::new::<byte>(8192)),
             (MemoryStatByteField::File, Bytes::new::<byte>(4096)),
             (MemoryStatByteField::Kernel, Bytes::new::<byte>(1024)),
+            (MemoryStatByteField::ZswapIncomp, Bytes::new::<byte>(4096)),
           ]),
           pages: BTreeMap::from([
             (MemoryStatPageField::PgscanDirect, Pages {
               value: 7,
               ..Default::default()
             }),
-            (MemoryStatPageField::WorkingsetRefaultFile, Pages {
-              value: 5,
-              ..Default::default()
-            }),
-            (MemoryStatPageField::ZswapIncomp, Pages {
+            (MemoryStatPageField::Pswpin, Pages {
               value: 2,
               ..Default::default()
             }),
           ]),
           counts: BTreeMap::from([
+            (MemoryStatCountField::WorkingsetRefaultFile, Count {
+              value: 5,
+              ..Default::default()
+            }),
+            (MemoryStatCountField::WorkingsetRefaultAnon, Count {
+              value: 6,
+              ..Default::default()
+            }),
+            (MemoryStatCountField::WorkingsetActivateAnon, Count {
+              value: 7,
+              ..Default::default()
+            }),
+            (MemoryStatCountField::WorkingsetActivateFile, Count {
+              value: 8,
+              ..Default::default()
+            }),
+            (MemoryStatCountField::WorkingsetRestoreAnon, Count {
+              value: 9,
+              ..Default::default()
+            }),
+            (MemoryStatCountField::WorkingsetRestoreFile, Count {
+              value: 10,
+              ..Default::default()
+            }),
             (MemoryStatCountField::Pgfault, Count {
               value: 3,
               ..Default::default()

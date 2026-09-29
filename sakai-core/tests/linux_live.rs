@@ -298,7 +298,7 @@ fn parses_live_delegated_controller_interfaces() {
 }
 
 #[test]
-fn root_memory_interfaces_are_missing() {
+fn root_memory_stat_is_readable_and_limits_are_missing() {
   match std::env::var_os("SAKAI_VMTEST") {
     | None => return,
     | Some(_) => {},
@@ -306,21 +306,15 @@ fn root_memory_interfaces_are_missing() {
 
   let root_path = PathBuf::from("/sys/fs/cgroup");
   let root = assert_ok!(Cgroup::from_path(&root_path));
-  assert!(
-    matches!(root.memory().current(), Err(Error::FileMissing { path }) if path == root_path.join("memory.current"))
-  );
-  assert!(
-    matches!(root.memory().max(), Err(Error::FileMissing { path }) if path == root_path.join("memory.max"))
-  );
-  assert!(
-    matches!(root.memory().high(), Err(Error::FileMissing { path }) if path == root_path.join("memory.high"))
-  );
   for (result, name) in [
+    (root.memory().current().map(|_| ()), "memory.current"),
+    (root.memory().max().map(|_| ()), "memory.max"),
+    (root.memory().high().map(|_| ()), "memory.high"),
     (root.memory().peak().map(|_| ()), "memory.peak"),
-    (root.memory().stat().map(|_| ()), "memory.stat"),
   ] {
     assert!(
       matches!(result, Err(Error::FileMissing { path }) if path == root_path.join(name))
     );
   }
+  assert_ok!(root.memory().stat());
 }
