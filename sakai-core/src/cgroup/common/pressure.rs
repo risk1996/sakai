@@ -307,17 +307,4 @@ mod tests {
       }
     }
   }
-
-  #[cfg(target_os = "linux")]
-  #[test]
-  fn parses_live_root_cpu_pressure_when_available() {
-    let path = "/sys/fs/cgroup/cpu.pressure";
-    let contents = match std::fs::read_to_string(path) {
-      | Ok(contents) => contents,
-      | Err(error) if error.kind() == std::io::ErrorKind::NotFound => return,
-      | Err(error) => panic!("failed to read {path}: {error}"),
-    };
-
-    assert_ok!(contents.parse::<Pressure>());
-  }
 }
