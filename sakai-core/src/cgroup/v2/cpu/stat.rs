@@ -1,9 +1,10 @@
-use std::{collections::BTreeMap, str::FromStr};
+use std::str::FromStr;
 
 use crate::cgroup::common::{
   error::ParseError,
   parser::{
-    ParseCgroup, ParseCount, ParseMicroseconds, ParseValueError, Parser,
+    KeyedFields, ParseCgroup, ParseCount, ParseMicroseconds, ParseValueError,
+    Parser,
   },
   unit::{Count, Time},
 };
@@ -57,9 +58,7 @@ impl FromStr for CpuStatLocal {
     Ok(Self {
       throttled: fields
         .values
-        .get("throttled_usec")
-        .map(|value| Time::parse_field(contents, "throttled_usec", value))
-        .transpose()?,
+        .optional::<ParseMicroseconds, Time>("throttled_usec")?,
     })
   }
 }
@@ -273,8 +272,7 @@ impl CpuStatField {
 }
 
 struct CpuStatFields<'a> {
-  raw: &'a str,
-  values: BTreeMap<&'a str, &'a str>,
+  values: KeyedFields<'a>,
 }
 
 impl<'a> CpuStatFields<'a> {
@@ -292,14 +290,16 @@ impl<'a> CpuStatFields<'a> {
           Ok((key, value))
         })
       })
-      .collect::<Result<_, _>>()?;
+      .collect::<Result<Vec<_>, _>>()?;
 
-    Ok(Self { raw, values })
+    Ok(Self {
+      values: KeyedFields::new(raw, values),
+    })
   }
 
   fn contains(&self, field: CpuStatField) -> bool {
     let name: &'static str = field.into();
-    self.values.contains_key(name)
+    self.values.contains(name)
   }
 
   fn has_bandwidth(&self) -> bool {
@@ -320,13 +320,7 @@ impl<'a> CpuStatFields<'a> {
   ) -> Result<T, ParseError<'static, T::Error>>
   where
     T: ParseCgroup<Unit>, {
-    let name = field.into();
-    let value = self
-      .values
-      .get(name)
-      .ok_or_else(|| ParseError::missing(self.raw, name))?;
-
-    T::parse_field(self.raw, name, value)
+    self.values.required::<Unit, T>(field.into())
   }
 }
 
@@ -551,6 +545,22 @@ mod tests {
           "cgroup content \"usage_usec 18446744073709552\\nuser_usec \
            2\\nsystem_usec 3\\n\" has an invalid field \"usage_usec\" value \
            \"18446744073709552\"",
+        ),
+      },
+      TestCase {
+        input: "usage_usec 1\nuser_usec 2\nsystem_usec\n",
+        expected: Err(
+          "cgroup content \"usage_usec 1\\nuser_usec 2\\nsystem_usec\\n\" has \
+           missing field \"system_usec\"",
+        ),
+      },
+      TestCase {
+        input: "usage_usec 1\nuser_usec 2\nsystem_usec 3\nnr_periods \
+                4\nnr_throttled 5\nthrottled_usec 6\nnr_bursts 7\n",
+        expected: Err(
+          "cgroup content \"usage_usec 1\\nuser_usec 2\\nsystem_usec \
+           3\\nnr_periods 4\\nnr_throttled 5\\nthrottled_usec 6\\nnr_bursts \
+           7\\n\" has missing field \"burst_usec\"",
         ),
       },
     ];
