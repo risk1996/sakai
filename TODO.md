@@ -6,9 +6,7 @@ items before starting memory; work below memory stays out of the v0 scope.
 An interface item is complete when it has a typed public reader, key-based
 parsing where applicable, fixtures for supported and missing/older-kernel
 forms, documented volatility and units, and a Linux live test where the file
-is expected to exist. Missing optional files must return `FileMissing`, and
-unknown keyed fields must be preserved when the public type provides an
-`extra` map.
+is expected to exist. Missing optional files must return `FileMissing`.
 
 ## P0 — CPU (complete first)
 
