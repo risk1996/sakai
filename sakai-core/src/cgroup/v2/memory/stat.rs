@@ -10,14 +10,13 @@ use crate::{
 ///
 /// Memory amounts are bytes, page quantities are numbers of pages (not bytes),
 /// and event counts are dimensionless. Kernel versions and configurations can
-/// omit individual fields. Unknown numeric keys are retained in [`Self::extra`]
-/// without assigning them a unit.
+/// omit individual fields. Unknown keys are ignored because their units are
+/// not defined by this type.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct MemoryStat {
   bytes: BTreeMap<MemoryStatByteField, Bytes>,
   pages: BTreeMap<MemoryStatPageField, Pages>,
   counts: BTreeMap<MemoryStatCountField, Count>,
-  extra: BTreeMap<String, u64>,
 }
 
 impl MemoryStat {
@@ -39,12 +38,6 @@ impl MemoryStat {
     &self.counts
   }
 
-  /// Returns kernel-added fields with unknown units.
-  #[must_use]
-  pub const fn extra(&self) -> &BTreeMap<String, u64> {
-    &self.extra
-  }
-
   fn insert(
     &mut self,
     raw: &str,
@@ -63,18 +56,6 @@ impl MemoryStat {
       self
         .counts
         .insert(field, Count::parse_field(raw, field.into(), value)?);
-    } else {
-      self.extra.insert(
-        key.to_owned(),
-        value.parse().map_err(|source| {
-          ParseError::invalid(
-            raw,
-            "value",
-            value,
-            ParseValueError::Integer(source),
-          )
-        })?,
-      );
     }
     Ok(())
   }
@@ -246,7 +227,7 @@ mod tests {
       (
         indoc! {"
           pgscan_direct 7
-          future_metric 99
+          future_metric nope
           file 4096
           pgfault 3
           anon 8192
@@ -285,7 +266,6 @@ mod tests {
               ..Default::default()
             }),
           ]),
-          extra: BTreeMap::from([("future_metric".to_owned(), 99)]),
         },
       ),
       ("anon 0\nfile 1\n", MemoryStat {
@@ -300,7 +280,6 @@ mod tests {
           (MemoryStatByteField::Anon, Bytes::new::<byte>(3)),
           (MemoryStatByteField::File, Bytes::new::<byte>(2)),
         ]),
-        extra: BTreeMap::from([("future".to_owned(), 5)]),
         ..Default::default()
       }),
     ] {
@@ -318,11 +297,6 @@ mod tests {
       (
         "anon 1\nfile 1\npgscan 18446744073709551616",
         "invalid field \"pgscan\"",
-      ),
-      ("anon 1\nfile 1\nfuture nope", "invalid field \"value\""),
-      (
-        "anon 1\nfile 1\nfuture 18446744073709551616",
-        "invalid field \"value\"",
       ),
       ("anon 1\nfile 1\nextra", "missing field \"value\""),
       ("anon 1 2\nfile 1", "excess field \"additional\""),

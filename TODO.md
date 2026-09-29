@@ -37,7 +37,7 @@ unknown keyed fields must be preserved when the public type provides an
 - [ ] `memory.events` — hierarchical low/high/max/OOM counters, preserving
       version-dependent optional keys.
 - [x] `memory.stat` — split byte, page, and count fields into distinct typed
-      groups and retain unknown keys in `extra`.
+      groups and ignore unknown keys.
 - [x] `memory.pressure` — shared PSI `some`/`full` averages and total stall
       time; never write to the file on the read path.
 - [x] `memory.peak` — peak usage in bytes; document that reset semantics are
@@ -108,6 +108,7 @@ as `FileMissing`, not a parse failure or panic.
 
 ## Others
 
+- [ ] Duplicate and extra (future) fields (explicitly out-of-scope for now)
 - [ ] cgroup v1
 - [ ] cgroup v2 write
 - [ ] Benchmark
