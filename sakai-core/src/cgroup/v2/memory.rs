@@ -3,8 +3,10 @@
 use std::str::FromStr;
 
 pub use events::*;
+pub use numa_stat::*;
 pub use stat::*;
 pub use swap::*;
+pub use zswap::*;
 
 #[cfg(target_os = "linux")]
 use super::Cgroup;
@@ -20,8 +22,10 @@ use crate::{
 };
 
 mod events;
+mod numa_stat;
 mod stat;
 mod swap;
+mod zswap;
 
 /// A borrowed view of one open cgroup's memory interfaces.
 ///
@@ -40,6 +44,13 @@ impl Memory<'_> {
   /// Borrows this cgroup's swap interfaces.
   pub const fn swap(&self) -> Swap<'_> {
     Swap {
+      cgroup: self.cgroup,
+    }
+  }
+
+  /// Borrows this cgroup's compressed swap interfaces.
+  pub const fn zswap(&self) -> Zswap<'_> {
+    Zswap {
       cgroup: self.cgroup,
     }
   }
@@ -67,6 +78,11 @@ impl Memory<'_> {
   /// Live memory event counters originating in this cgroup only.
   pub fn events_local(&self) -> Result<MemoryEventsLocal, Error> {
     self.cgroup.parse("memory.events.local")
+  }
+
+  /// Live per-NUMA-node memory amounts, page quantities, and event counts.
+  pub fn numa_stat(&self) -> Result<MemoryNumaStat, Error> {
+    self.cgroup.parse("memory.numa_stat")
   }
 
   /// Live PSI averages and totals. Never registers a pressure trigger.

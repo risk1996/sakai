@@ -49,10 +49,10 @@ is expected to exist. Missing optional files must return `FileMissing`.
 - [x] `memory.swap.events` — swap high/max/fail counters.
 - [x] `memory.swap.high` — swap throttling limit as `MaxOr<Bytes>`.
 - [x] `memory.swap.peak` — peak swap usage in bytes.
-- [ ] `memory.numa_stat` — per-memory-type, per-NUMA-node byte totals.
-- [ ] `memory.zswap.current` — current zswap memory usage in bytes.
-- [ ] `memory.zswap.max` — zswap limit as `MaxOr<Bytes>`.
-- [ ] `memory.zswap.writeback` — boolean zswap writeback policy.
+- [x] `memory.numa_stat` — typed byte, page, and event totals per NUMA node.
+- [x] `memory.zswap.current` — current zswap memory usage in bytes.
+- [x] `memory.zswap.max` — zswap limit as `MaxOr<Bytes>`.
+- [x] `memory.zswap.writeback` — boolean zswap writeback policy.
 
 The root cgroup lacks `memory.current` and the memory limit and protection
 files. Treat that as `FileMissing`, not a parse failure or panic.
