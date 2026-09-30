@@ -4,6 +4,7 @@ use std::str::FromStr;
 
 pub use events::*;
 pub use stat::*;
+pub use swap::*;
 
 #[cfg(target_os = "linux")]
 use super::Cgroup;
@@ -20,6 +21,7 @@ use crate::{
 
 mod events;
 mod stat;
+mod swap;
 
 /// A borrowed view of one open cgroup's memory interfaces.
 ///
@@ -35,6 +37,13 @@ pub struct Memory<'a> {
 
 #[cfg(target_os = "linux")]
 impl Memory<'_> {
+  /// Borrows this cgroup's swap interfaces.
+  pub const fn swap(&self) -> Swap<'_> {
+    Swap {
+      cgroup: self.cgroup,
+    }
+  }
+
   /// Live memory usage of this cgroup and its descendants, in bytes.
   pub fn current(&self) -> Result<MemoryCurrent, Error> {
     self.cgroup.parse("memory.current")

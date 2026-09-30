@@ -44,11 +44,11 @@ is expected to exist. Missing optional files must return `FileMissing`.
 - [x] `memory.min` — hard memory protection in bytes.
 - [x] `memory.oom.group` — boolean group OOM policy.
 - [x] `memory.events.local` — local, non-hierarchical memory event counters.
-- [ ] `memory.swap.current` — current swap usage in bytes.
-- [ ] `memory.swap.max` — hard swap limit as `MaxOr<Bytes>`.
-- [ ] `memory.swap.events` — swap high/max/fail counters.
-- [ ] `memory.swap.high` — swap throttling limit as `MaxOr<Bytes>`.
-- [ ] `memory.swap.peak` — peak swap usage in bytes.
+- [x] `memory.swap.current` — current swap usage in bytes.
+- [x] `memory.swap.max` — hard swap limit as `MaxOr<Bytes>`.
+- [x] `memory.swap.events` — swap high/max/fail counters.
+- [x] `memory.swap.high` — swap throttling limit as `MaxOr<Bytes>`.
+- [x] `memory.swap.peak` — peak swap usage in bytes.
 - [ ] `memory.numa_stat` — per-memory-type, per-NUMA-node byte totals.
 - [ ] `memory.zswap.current` — current zswap memory usage in bytes.
 - [ ] `memory.zswap.max` — zswap limit as `MaxOr<Bytes>`.
@@ -110,5 +110,4 @@ files. Treat that as `FileMissing`, not a parse failure or panic.
 - [ ] cgroup v1
 - [ ] cgroup v2 write
 - [ ] Benchmark
-- [ ] E2E tests
 - [ ] "Since Linux x.x" documentation

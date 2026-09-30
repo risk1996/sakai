@@ -16,6 +16,7 @@ use sakai_core::{
     memory::{
       MemoryCurrent, MemoryEvents, MemoryEventsLocal, MemoryHigh, MemoryLow,
       MemoryMax, MemoryMin, MemoryOomGroup, MemoryPeak, MemoryStat,
+      SwapCurrent, SwapEvents, SwapHigh, SwapMax, SwapPeak,
     },
   },
 };
@@ -57,6 +58,11 @@ fn reads_current_cgroup_without_privileges() {
     cgroup.memory().events_local().map(|_| ()),
     cgroup.memory().oom_group().map(|_| ()),
     cgroup.memory().pressure().map(|_| ()),
+    cgroup.memory().swap().current().map(|_| ()),
+    cgroup.memory().swap().peak().map(|_| ()),
+    cgroup.memory().swap().max().map(|_| ()),
+    cgroup.memory().swap().high().map(|_| ()),
+    cgroup.memory().swap().events().map(|_| ()),
   ] {
     match result {
       | Ok(()) | Err(Error::FileMissing { .. }) => {},
@@ -288,6 +294,31 @@ fn parses_live_delegated_controller_interfaces() {
     true,
     reader.memory().pressure(),
   );
+  fixture.check::<SwapCurrent>(
+    "memory.swap.current",
+    true,
+    reader.memory().swap().current(),
+  );
+  fixture.check::<SwapPeak>(
+    "memory.swap.peak",
+    true,
+    reader.memory().swap().peak(),
+  );
+  fixture.check::<SwapMax>(
+    "memory.swap.max",
+    true,
+    reader.memory().swap().max(),
+  );
+  fixture.check::<SwapHigh>(
+    "memory.swap.high",
+    true,
+    reader.memory().swap().high(),
+  );
+  fixture.check::<SwapEvents>(
+    "memory.swap.events",
+    true,
+    reader.memory().swap().events(),
+  );
 
   // No process joins the fixture, so its usage is stable across these reads.
   let current_contents =
@@ -372,6 +403,17 @@ fn root_memory_stat_is_readable_and_settings_are_missing() {
       "memory.events.local",
     ),
     (root.memory().oom_group().map(|_| ()), "memory.oom.group"),
+    (
+      root.memory().swap().current().map(|_| ()),
+      "memory.swap.current",
+    ),
+    (root.memory().swap().peak().map(|_| ()), "memory.swap.peak"),
+    (root.memory().swap().max().map(|_| ()), "memory.swap.max"),
+    (root.memory().swap().high().map(|_| ()), "memory.swap.high"),
+    (
+      root.memory().swap().events().map(|_| ()),
+      "memory.swap.events",
+    ),
   ] {
     assert!(
       matches!(result, Err(Error::FileMissing { path }) if path == root_path.join(name))
