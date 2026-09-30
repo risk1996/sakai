@@ -32,7 +32,7 @@ is expected to exist. Missing optional files must return `FileMissing`.
 - [x] `memory.current` — current hierarchical memory usage in bytes.
 - [x] `memory.max` — hard limit as `MaxOr<Bytes>`.
 - [x] `memory.high` — throttling limit as `MaxOr<Bytes>`.
-- [ ] `memory.events` — hierarchical low/high/max/OOM counters, preserving
+- [x] `memory.events` — hierarchical low/high/max/OOM counters, preserving
       version-dependent optional keys.
 - [x] `memory.stat` — split byte, page, and count fields into distinct typed
       groups and ignore unknown keys.
@@ -42,8 +42,8 @@ is expected to exist. Missing optional files must return `FileMissing`.
       per file descriptor on kernels that support writes.
 - [x] `memory.low` — best-effort memory protection in bytes.
 - [x] `memory.min` — hard memory protection in bytes.
-- [ ] `memory.oom.group` — boolean group OOM policy.
-- [ ] `memory.events.local` — local, non-hierarchical memory event counters.
+- [x] `memory.oom.group` — boolean group OOM policy.
+- [x] `memory.events.local` — local, non-hierarchical memory event counters.
 - [ ] `memory.swap.current` — current swap usage in bytes.
 - [ ] `memory.swap.max` — hard swap limit as `MaxOr<Bytes>`.
 - [ ] `memory.swap.events` — swap high/max/fail counters.
