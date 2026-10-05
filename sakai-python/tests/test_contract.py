@@ -227,9 +227,10 @@ class ContractTest(unittest.TestCase):
       os.fsdecode(b"sakai-nonexistent-\xff"),
       BytePath(),
     ):
-      with self.subTest(name=name), self.assertRaises(OSError) as caught:
-        self.group.child(name)
-      self.assertEqual(caught.exception.errno, errno.ENOENT)
+      with self.subTest(name=name):
+        with self.assertRaises(OSError) as caught:
+          self.group.child(name)
+        self.assertEqual(caught.exception.errno, errno.ENOENT)
 
 
 if __name__ == "__main__":

@@ -48,7 +48,8 @@ jobs:
       - name: Build Linux wheel and source distribution
         run: |
           python_executable="$(command -v python)"
-          devenv --profile python shell -- env PYO3_PYTHON="$python_executable" maturin build --manifest-path sakai-python/Cargo.toml --interpreter "$python_executable" --locked --out dist
+          # The hosted interpreter must not load Nix's newer libpython/glibc.
+          devenv --profile python shell -- env -u LD_LIBRARY_PATH PYO3_PYTHON="$python_executable" maturin build --manifest-path sakai-python/Cargo.toml --interpreter "$python_executable" --locked --out dist
           devenv --profile python shell -- maturin sdist --manifest-path sakai-python/Cargo.toml --out dist
           compgen -G 'dist/*-cp310-abi3-*.whl'
       - name: Test installed wheel outside checkout

@@ -62,6 +62,20 @@ create_exception!(
 
 struct PythonError;
 
+struct PythonPath;
+
+impl PythonPath {
+  fn extract<T>(object: &Bound<'_, T>) -> PyResult<PathBuf> {
+    // fsdecode first applies os.fspath and decodes bytes with surrogateescape.
+    // PyO3 0.29's PathBuf extractor accepts only str results from os.fspath.
+    object
+      .py()
+      .import("os")?
+      .call_method1("fsdecode", (object.as_any(),))?
+      .extract()
+  }
+}
+
 impl PythonError {
   fn with_path<E: PyTypeInfo>(
     py: Python<'_>,
@@ -164,7 +178,10 @@ impl Cgroup {
   ///
   /// Accepts str, bytes, and os.PathLike without lossy path conversion.
   #[staticmethod]
-  fn from_path(py: Python<'_>, path: PathBuf) -> PyResult<Self> {
+  fn from_path(
+    py: Python<'_>,
+    #[pyo3(from_py_with = PythonPath::extract)] path: PathBuf,
+  ) -> PyResult<Self> {
     PythonError::result(
       py,
       py.detach(move || sakai_core::Cgroup::from_path(&path)),
@@ -179,7 +196,11 @@ impl Cgroup {
   }
 
   /// Open a direct child by one filesystem name, without following slashes.
-  fn child(&self, py: Python<'_>, name: PathBuf) -> PyResult<Self> {
+  fn child(
+    &self,
+    py: Python<'_>,
+    #[pyo3(from_py_with = PythonPath::extract)] name: PathBuf,
+  ) -> PyResult<Self> {
     PythonError::read(py, &self.owner, move |owner| {
       owner.child(name.as_os_str())
     })
@@ -972,12 +993,19 @@ mod tests {
     Python::attach(|py| {
       let raw = b"child-\xff";
       let name = PyBytes::new(py, raw);
-      let extracted = assert_ok!(name.extract::<PathBuf>());
+      let extracted = assert_ok!(PythonPath::extract(&name));
       assert_eq!(extracted.as_os_str().as_bytes(), raw);
       let decoded = assert_ok!(
         assert_ok!(py.import("os")).call_method1("fsdecode", (name,))
       );
-      let extracted = assert_ok!(decoded.extract::<PathBuf>());
+      let extracted = assert_ok!(PythonPath::extract(&decoded));
+      assert_eq!(extracted.as_os_str().as_bytes(), raw);
+      let pathlike = assert_ok!(py.eval(
+        c"type('BytePath', (), {'__fspath__': lambda self: b'child-\\xff'})()",
+        None,
+        None,
+      ));
+      let extracted = assert_ok!(PythonPath::extract(&pathlike));
       assert_eq!(extracted.as_os_str().as_bytes(), raw);
 
       let error = PythonError::from_core(py, Error::FileMissing {

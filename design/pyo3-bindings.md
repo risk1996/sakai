@@ -119,10 +119,13 @@ PyO3's limited API (that capability starts at Python 3.12). Keep the custom
 hierarchy rooted in `SakaiError` and preserve ordinary `OSError` separately.
 
 PyO3 has `PathBuf` extraction through `os.fspath()` and converts OS strings
-without requiring UTF-8. Use this for `from_path`, `child`, and the path
-property. Test a non-UTF-8 child name on Linux and reject slash/traversal via
-the core's existing validation. Python integer conversion rejects values outside
-`u32`; `Cgroup::from_pid` validates the positive `i32` range.
+without requiring UTF-8, but 0.29's extractor rejects byte-valued paths.
+Normalize inputs with `os.fsdecode()` before extraction for `from_path` and
+`child`; this preserves non-UTF-8 bytes through surrogateescape. Use PyO3's
+lossless conversion for the path property. Test a non-UTF-8 child name on Linux
+and reject slash/traversal via the core's existing validation. Python integer
+conversion rejects values outside `u32`; `Cgroup::from_pid` validates the
+positive `i32` range.
 
 ## Build layout and development workflow
 
