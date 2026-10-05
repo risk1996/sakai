@@ -817,7 +817,7 @@ mod tests {
     os::unix::ffi::{OsStrExt, OsStringExt},
   };
 
-  use assertables::{assert_in_delta, assert_ok};
+  use assertables::{assert_err, assert_in_delta, assert_ok};
   use pyo3::types::{PyBytes, PyFloat, PyInt};
 
   use super::*;
@@ -872,9 +872,9 @@ mod tests {
     let limited =
       CpuMax::from(assert_ok!("25000 100000".parse::<CoreCpuMax>()));
     assert!(unlimited.quota_ns.is_max());
-    assert!(unlimited.quota_ns.value().is_err());
+    assert_err!(unlimited.quota_ns.value());
     assert!(unlimited.cpu_count.is_max());
-    assert!(unlimited.cpu_count.value().is_err());
+    assert_err!(unlimited.cpu_count.value());
     assert!(matches!(
       assert_ok!(limited.quota_ns.value()),
       PythonLimitValue::Integer(25_000_000)
@@ -894,7 +894,7 @@ mod tests {
 
     let max = MaxOr::from_bytes(CoreMaxOr::Max);
     assert!(max.is_max());
-    assert!(max.value().is_err());
+    assert_err!(max.value());
     assert!(matches!(
       assert_ok!(
         MaxOr::from_bytes(CoreMaxOr::Value(Bytes::new::<byte>(0))).value()
@@ -921,7 +921,11 @@ mod tests {
       ));
       let ratio_value = assert_ok!(ratio_limit.bind(py).getattr("value"));
       assert!(ratio_value.is_instance_of::<PyFloat>());
-      assert_eq!(assert_ok!(ratio_value.extract::<f64>()), 0.25);
+      assert_in_delta!(
+        assert_ok!(ratio_value.extract::<f64>()),
+        0.25,
+        f64::EPSILON
+      );
 
       let max = assert_ok!(Py::new(py, MaxOr::from_bytes(CoreMaxOr::Max)));
       let error = max.bind(py).getattr("value").expect_err("max has no value");
