@@ -105,7 +105,7 @@ jobs:
           devenv shell -- ./target/debug/xtask build-live-test
           cp target/debug/xtask tests/.cache/sakai-vmtest/bin/xtask
           ldd tests/.cache/sakai-vmtest/bin/linux_live
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: linux-live-host-binaries
           path: tests/.cache/sakai-vmtest/bin/
@@ -160,7 +160,7 @@ jobs:
               mv vmtest-failure.log vmtest-console.log
             fi
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure() || (github.event_name == 'workflow_dispatch' && inputs.vmtest_debug)
         with:
           name: vmtest-console-${{ matrix.kernel }}
