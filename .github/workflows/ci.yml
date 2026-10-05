@@ -22,6 +22,48 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  python:
+    name: Python ${{ matrix.python-version }} wheel and sdist
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # Exercise the minimum and newest runtime for the cp310-abi3 wheel.
+        python-version: ['3.10', '3.14']
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - uses: cachix/install-nix-action@v31
+      - uses: cachix/cachix-action@v17
+        with:
+          name: devenv
+          skipPush: true
+      - name: Install devenv from the locked nixpkgs revision
+        run: |
+          nixpkgs_rev=$(jq -r '.nodes.nixpkgs.locked.rev' devenv.lock)
+          nix profile add "github:NixOS/nixpkgs/$nixpkgs_rev#devenv"
+      - name: Build Linux wheel and source distribution
+        run: |
+          python_executable="$(command -v python)"
+          devenv --profile python shell -- env PYO3_PYTHON="$python_executable" maturin build --manifest-path sakai-python/Cargo.toml --interpreter "$python_executable" --locked --out dist
+          devenv --profile python shell -- maturin sdist --manifest-path sakai-python/Cargo.toml --out dist
+          compgen -G 'dist/*-cp310-abi3-*.whl'
+      - name: Test installed wheel outside checkout
+        run: |
+          python -m venv "$RUNNER_TEMP/sakai-wheel"
+          "$RUNNER_TEMP/sakai-wheel/bin/python" -m pip install dist/*.whl
+          cd "$RUNNER_TEMP"
+          "$RUNNER_TEMP/sakai-wheel/bin/python" -m unittest discover -s "$GITHUB_WORKSPACE/sakai-python/tests"
+      - name: Rebuild and test installed source distribution
+        run: |
+          python -m venv "$RUNNER_TEMP/sakai-sdist"
+          "$RUNNER_TEMP/sakai-sdist/bin/python" -m pip install --no-cache-dir dist/*.tar.gz
+          cd "$RUNNER_TEMP"
+          "$RUNNER_TEMP/sakai-sdist/bin/python" -m unittest discover -s "$GITHUB_WORKSPACE/sakai-python/tests"
+
   checks:
     name: Tests and lints
     runs-on: ubuntu-24.04
@@ -70,8 +112,8 @@ jobs:
             cargo-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('devenv.lock', 'devenv.yaml', '**/*.nix', '.github/workflows/ci.yml') }}-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}-
             cargo-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('devenv.lock', 'devenv.yaml', '**/*.nix', '.github/workflows/ci.yml') }}-
 
-      - name: Run formatting, Clippy, tests, and doctests
-        run: devenv test
+      - name: Run Rust and Python checks
+        run: devenv --profile python test
 
   build-live-test:
     name: Build Linux live test

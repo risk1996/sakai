@@ -1,0 +1,20 @@
+[package]
+name = "sakai-python"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "_sakai"
+crate-type = ["cdylib"]
+
+[lints]
+workspace = true
+
+[dependencies]
+pyo3 = { version = "=0.29.2", features = ["abi3-py310"] }
+sakai-core = { path = "../sakai-core" }
+uom = { version = "0.38.0", default-features = false, features = ["f64", "u64", "si"] }
+
+[dev-dependencies]
+assertables = "10.1.0"

@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
   "sakai-core",
+  "sakai-python",
   "xtask",
 ]
 

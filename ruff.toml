@@ -1,0 +1,21 @@
+target-version = "py310"
+line-length = 88
+indent-width = 2
+
+[lint]
+# Start from all stable rules; retain narrowly documented exceptions.
+select = ["ALL"]
+ignore = [
+  "COM812", # Conflicts with the formatter's trailing-comma decisions.
+  "CPY001", # This personal project has no copyright-header policy.
+  "D203",   # Prefer no blank line before a class docstring (D211).
+  "D213",   # Prefer the summary on the first line (D212).
+]
+
+[lint.per-file-ignores]
+"sakai-python/python/sakai/_sakai.pyi" = ["D", "PYI021"] # Native docs live in Rust; stubs describe types.
+"sakai-python/tests/**/*.py" = ["D", "INP001", "PLR2004", "PT", "S101"] # unittest, not pytest.
+
+[format]
+indent-style = "space"
+docstring-code-format = true

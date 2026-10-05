@@ -38,11 +38,11 @@ queries. Revisit portable parser bindings if there is a concrete use case.
 | Current source | Consequence for Python |
 | --- | --- |
 | [`Cgroup`](../sakai-core/src/cgroup/v2/handle.rs) owns an open directory; `cpu()`, `memory()`, and `core()` borrow it. | Python reader objects must keep the owner alive, for example with `Arc<Cgroup>` in their native wrappers. A Python `Cgroup` is not reconstructed from its display path on each call. |
-| `from_current_process`, `from_pid(u32)`, `from_path`, `child`, and `children` are implemented. | Expose constructors and traversal; accept `os.PathLike` paths and child names without lossy UTF-8 conversion. Validate PID before conversion, including negatives, zero, and values above `i32::MAX`. |
+| `from_current_process`, `from_pid(u32)`, `from_path`, `child`, and `children` are implemented. | Expose constructors and traversal; accept `os.PathLike` paths and child names without lossy UTF-8 conversion. Convert Python PIDs to `u32` and leave range validation to the core. |
 | `Cgroup::path()` is diagnostic and can become stale. | Expose a `path` property for display only; never use it to perform subsequent reads. |
 | Each reader opens and reads an interface anew. | Methods stay methods, not cached properties. Document that values from separate methods are not an atomic snapshot. |
 | [`Error`](../sakai-core/src/error.rs) distinguishes missing interfaces, unsupported operations, non-v2 filesystems, deleted cgroups, parse failures, and I/O. | Preserve these categories in Python exceptions, including the interface path and underlying OS error where available. |
-| [`MaxOr<T>`](../sakai-core/src/limit.rs) distinguishes `max` from a numeric value. | Map `Max` to `None` only inside a successful limit reading. A missing file still raises an exception. |
+| [`MaxOr<T>`](../sakai-core/src/limit.rs) distinguishes `max` from a numeric value. | Preserve the variant as a generic Python `MaxOr[T]` with `is_max` and a guarded `value` property. A missing file still raises an exception. |
 | [`Time`, `Bytes`, `Count`, `Pages`, `Ratio`](../sakai-core/src/unit.rs) are `uom` quantities. | Return Python `int` nanoseconds/bytes/count/pages and `float` dimensionless ratios; encode units in attribute names and stubs. Do not pass `uom` types through FFI. |
 | [`TODO.md`](../TODO.md) has unfinished swap, pids, I/O, and cpuset work. | Bind only implemented readers; add later surfaces as their core readers land. The old conceptual MVP in `bindings.md` lists some interfaces that are still unimplemented. |
 
@@ -60,13 +60,13 @@ The reader methods mirror existing Rust names. The return mapping is:
 | Rust read surface | Python return |
 | --- | --- |
 | `cpu.stat()`, `stat_local()` | Immutable `CpuStat` with `time` and optional `bandwidth`; immutable nested `CpuTimeStat`, `CpuBandwidthStat`, `CpuBurstStat`, and `CpuStatLocal` values. Time fields end in `_ns`; counts are integers. Preserve the difference between absent bandwidth and zero counters. |
-| `cpu.max()` | Immutable `CpuMax(quota_ns: int | None, period_ns: int)` with `cpu_count: float | None`, documented as this cgroup's quota/period only. |
+| `cpu.max()` | Immutable `CpuMax(quota_ns: MaxOr[int], period_ns: int)` with `cpu_count: MaxOr[float]`, documented as this cgroup's quota/period only. |
 | `cpu.weight()` | Immutable `CpuWeight(is_idle: bool, shares: int | None)`. Idle is distinct from a zero share; shares are 1–10,000. |
 | `cpu.weight_nice()`, `max_burst()`, `idle()` | `int` nice value, `int` nanoseconds, and `bool`, respectively. |
-| `cpu.uclamp_min()`, `uclamp_max()` | `float` ratio and `float | None` ratio. `None` means the kernel's `max`, not zero. |
+| `cpu.uclamp_min()`, `uclamp_max()` | `float` ratio and `MaxOr[float]` ratio. `is_max` distinguishes the kernel's `max` from zero. |
 | `cpu.pressure()`, `memory.pressure()` | Immutable `Pressure(some, full)` and `PressureLine(avg10, avg60, avg300, total_ns)`. Ratios are 0–1; `full` can be `None` on older CPU PSI. |
 | `memory.current()`, `peak()`, `low()`, `min()` | `int` bytes. |
-| `memory.max()`, `high()` | `int | None` bytes; `None` means `max`. |
+| `memory.max()`, `high()` | `MaxOr[int]` bytes; `is_max` distinguishes `max` from a concrete byte count. |
 | `memory.oom_group()` | `bool`. |
 | `memory.events()`, `events_local()` | Immutable `MemoryEventCounts` values (or two distinct wrappers around the same fields), including `None` for version-dependent optional counters. Keep hierarchical and local methods distinct. |
 | `memory.stat()` | Immutable `MemoryStat` with separate read-only `bytes`, `pages`, and `counts` mappings. Keys use the kernel's snake_case field names; unknown fields remain ignored, matching the parser. Do not collapse page counts into byte amounts. |
@@ -92,14 +92,15 @@ quota = cgroup.cpu().max()
 print(stat.time.usage_ns, quota.cpu_count)
 
 try:
-    current_bytes = cgroup.memory().current()
+  current_bytes = cgroup.memory().current()
 except InterfaceMissingError:
-    current_bytes = None  # memory controller/root interface unavailable
+  current_bytes = None  # memory controller/root interface unavailable
 ```
 
-`None` from `quota.cpu_count` means unlimited **at this cgroup**. It does not
-mean unlimited effective process CPU capacity: ancestor quotas, affinity, and
-other policy are outside this API.
+`quota.cpu_count.is_max` means unlimited **at this cgroup**. It does not mean
+unlimited effective process CPU capacity: ancestor quotas, affinity, and other
+policy are outside this API. Accessing `MaxOr.value` when `is_max` is true
+raises `ValueError`.
 
 ## Error and path contract
 
@@ -110,9 +111,7 @@ can distinguish a missing optional kernel interface from a missing cgroup
 directory. Map `NotSupported` to a dedicated `SakaiError` subclass. For
 `Error::Io`, retain the native `OSError` category, `errno`, and message; wrapping
 it in `SakaiError` would lose useful standard exception behavior. For parse
-failures expose the interface path and a concise reason; retain the original
-Rust error text as context, and avoid placing entire large raw interface files
-in the default exception message if it is unwieldy. Tests should assert types,
+failures expose the interface path and source error in the message. Tests should assert types,
 paths, and `errno`, not only string renderings.
 
 The `abi3-py310` target cannot subclass native Python exception types through
@@ -122,9 +121,8 @@ hierarchy rooted in `SakaiError` and preserve ordinary `OSError` separately.
 PyO3 has `PathBuf` extraction through `os.fspath()` and converts OS strings
 without requiring UTF-8. Use this for `from_path`, `child`, and the path
 property. Test a non-UTF-8 child name on Linux and reject slash/traversal via
-the core's existing validation. Python integer conversion should reject a PID
-outside the core's valid positive `i32` range as `ValueError` or `OverflowError`
-before discovery. Keep `Cgroup::from_pid` as the final validator.
+the core's existing validation. Python integer conversion rejects values outside
+`u32`; `Cgroup::from_pid` validates the positive `i32` range.
 
 ## Build layout and development workflow
 
