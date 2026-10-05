@@ -61,7 +61,7 @@ The reader methods mirror existing Rust names. The return mapping is:
 | --- | --- |
 | `cpu.stat()`, `stat_local()` | Immutable `CpuStat` with `time` and optional `bandwidth`; immutable nested `CpuTimeStat`, `CpuBandwidthStat`, `CpuBurstStat`, and `CpuStatLocal` values. Time fields end in `_ns`; counts are integers. Preserve the difference between absent bandwidth and zero counters. |
 | `cpu.max()` | Immutable `CpuMax(quota_ns: MaxOr[int], period_ns: int)` with `cpu_count: MaxOr[float]`, documented as this cgroup's quota/period only. |
-| `cpu.weight()` | Immutable `CpuWeight(is_idle: bool, shares: int | None)`. Idle is distinct from a zero share; shares are 1–10,000. |
+| `cpu.weight()` | Immutable `CpuWeight(is_idle: bool, shares: int \| None)`. Idle is distinct from a zero share; shares are 1–10,000. |
 | `cpu.weight_nice()`, `max_burst()`, `idle()` | `int` nice value, `int` nanoseconds, and `bool`, respectively. |
 | `cpu.uclamp_min()`, `uclamp_max()` | `float` ratio and `MaxOr[float]` ratio. `is_max` distinguishes the kernel's `max` from zero. |
 | `cpu.pressure()`, `memory.pressure()` | Immutable `Pressure(some, full)` and `PressureLine(avg10, avg60, avg300, total_ns)`. Ratios are 0–1; `full` can be `None` on older CPU PSI. |
