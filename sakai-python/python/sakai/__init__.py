@@ -2,7 +2,9 @@
 
 from . import _sakai
 from ._sakai import Cgroup as Cgroup
+from ._sakai import CgroupEvents as CgroupEvents
 from ._sakai import CgroupParseError as CgroupParseError
+from ._sakai import CgroupStat as CgroupStat
 from ._sakai import CoreReader as CoreReader
 from ._sakai import CpuBandwidthStat as CpuBandwidthStat
 from ._sakai import CpuBurstStat as CpuBurstStat
@@ -20,6 +22,8 @@ from ._sakai import MemoryReader as MemoryReader
 from ._sakai import MemoryStat as MemoryStat
 from ._sakai import NotCgroupV2Error as NotCgroupV2Error
 from ._sakai import NotSupportedError as NotSupportedError
+from ._sakai import PidsEvents as PidsEvents
+from ._sakai import PidsReader as PidsReader
 from ._sakai import Pressure as Pressure
 from ._sakai import PressureLine as PressureLine
 from ._sakai import SakaiError as SakaiError

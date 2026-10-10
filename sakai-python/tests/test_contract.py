@@ -14,6 +14,8 @@ import sakai
 import sakai._sakai as native
 from sakai import (
   Cgroup,
+  CgroupEvents,
+  CgroupStat,
   CpuMax,
   CpuStat,
   InterfaceMissingError,
@@ -21,6 +23,8 @@ from sakai import (
   MemoryNumaStat,
   MemoryStat,
   NotCgroupV2Error,
+  PidsEvents,
+  PidsReader,
   Pressure,
   SwapEvents,
   SwapReader,
@@ -217,6 +221,51 @@ class ContractTest(unittest.TestCase):
       zswap.writeback,
       lambda value: self.assertIsInstance(value, bool),
     )
+
+  def test_pids_contract(self) -> None:
+    pids = self.group.pids()
+    self.assertIsInstance(pids, PidsReader)
+    self.check_optional("pids.current", pids.current, self.check_unsigned)
+    self.check_optional("pids.max", pids.max, self.check_limit)
+
+    def check_events(events: PidsEvents) -> None:
+      self.assertIsInstance(events, PidsEvents)
+      self.check_unsigned(events.max)
+      with self.assertRaises(AttributeError):
+        cast("Any", events).max = 0
+
+    self.check_optional("pids.events", pids.events, check_events)
+
+  def test_cgroup_state_contract(self) -> None:
+    def check_events(events: CgroupEvents) -> None:
+      self.assertIsInstance(events, CgroupEvents)
+      self.assertIsInstance(events.populated, bool)
+      if events.frozen is not None:
+        self.assertIsInstance(events.frozen, bool)
+      with self.assertRaises(AttributeError):
+        cast("Any", events).populated = False
+
+    self.check_optional("cgroup.events", self.group.core().events, check_events)
+    stat = self.group.core().stat()
+    self.assertIsInstance(stat, CgroupStat)
+    self.check_unsigned(stat.descendants)
+    self.check_unsigned(stat.dying_descendants)
+    for mapping in (stat.subsystems, stat.dying_subsystems):
+      self.assertTrue(all(isinstance(key, str) for key in mapping))
+      for value in mapping.values():
+        self.check_unsigned(value)
+      with self.assertRaises(TypeError):
+        cast("Any", mapping)["memory"] = 0
+    with self.assertRaises(AttributeError):
+      cast("Any", stat).descendants = 0
+
+  def test_process_and_core_readers_retain_handle(self) -> None:
+    parent = Cgroup.from_path(self.group.path)
+    pids = parent.pids()
+    core = parent.core()
+    del parent
+    self.check_optional("pids.current", pids.current, self.check_unsigned)
+    self.assertIsInstance(core.stat(), CgroupStat)
 
   def test_nested_memory_readers_retain_handle(self) -> None:
     parent = Cgroup.from_path(self.group.path)

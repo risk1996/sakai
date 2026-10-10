@@ -1,5 +1,9 @@
 //! Core interfaces that explain controller availability and threaded topology.
 
+pub use state::{CgroupEvents, CgroupStat};
+
+mod state;
+
 #[cfg(target_os = "linux")]
 use super::Cgroup;
 #[cfg(target_os = "linux")]
@@ -83,6 +87,12 @@ pub struct Core<'a> {
 
 #[cfg(target_os = "linux")]
 impl Core<'_> {
+  /// Volatile populated and frozen lifecycle state; root cgroups lack this file.
+  pub fn events(&self) -> Result<CgroupEvents, Error> { self.cgroup.parse(CgroupEvents::FILE_NAME) }
+
+  /// Volatile descendant and subsystem counts, including at the hierarchy root.
+  pub fn stat(&self) -> Result<CgroupStat, Error> { self.cgroup.parse(CgroupStat::FILE_NAME) }
+
   /// Configuration snapshot; the hierarchy root may lack this file.
   pub fn kind(&self) -> Result<CgroupType, Error> {
     let contents = self.cgroup.read(CgroupType::FILE_NAME)?;

@@ -5,8 +5,8 @@ use std::{any::type_name, fmt, marker::PhantomData, str::FromStr};
 use crate::{
   error::{ParseError, ParseValueError},
   limit::MaxOr,
-  parse::{ParseBoolean, ParseBytes, ParseCgroup, ParseMicroseconds, ParsePercent, Parser},
-  unit::{Bytes, Ratio, Time},
+  parse::{ParseBoolean, ParseBytes, ParseCgroup, ParseCount, ParseMicroseconds, ParsePercent, Parser},
+  unit::{Bytes, Count, Ratio, Time},
 };
 
 /// The filename and diagnostic label of a scalar interface.
@@ -58,6 +58,9 @@ impl ScalarValue for bool {
 impl ScalarValue for Bytes {
   type Encoding = ParseBytes;
 }
+impl ScalarValue for Count {
+  type Encoding = ParseCount;
+}
 impl ScalarValue for Time {
   type Encoding = ParseMicroseconds;
 }
@@ -82,6 +85,20 @@ where
 /// Interface markers used by the public snapshot aliases.
 pub mod interface {
   use super::Interface;
+
+  #[derive(Clone, Copy, PartialEq, Eq, Hash)]
+  pub struct PidsCurrent;
+  impl Interface for PidsCurrent {
+    const FIELD: &'static str = "current";
+    const FILE_NAME: &'static str = "pids.current";
+  }
+
+  #[derive(Clone, Copy, PartialEq, Eq, Hash)]
+  pub struct PidsMax;
+  impl Interface for PidsMax {
+    const FIELD: &'static str = "max";
+    const FILE_NAME: &'static str = "pids.max";
+  }
 
   #[derive(Clone, Copy, PartialEq, Eq, Hash)]
   pub struct MemoryOomGroup;

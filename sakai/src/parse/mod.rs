@@ -41,6 +41,10 @@ impl<'a> KeyedFields<'a> {
     fields.into_iter().any(|field| self.values.contains_key(field.into()))
   }
 
+  pub(crate) fn iter(&self) -> impl Iterator<Item = (&'a str, &'a str)> + '_ {
+    self.values.iter().map(|(&key, &value)| (key, value))
+  }
+
   pub(crate) fn required<Unit, T>(&self, field: impl Into<&'static str>) -> Result<T, ParseError<T::Error>>
   where
     T: ParseCgroup<Unit>, {

@@ -38,6 +38,17 @@ set to `None` when an older kernel omits that counter. Missing files raise
 to NUMA node IDs and values, for example `numa.bytes["anon"][0]`. Both mapping
 levels are read-only, and unknown fields are ignored.
 
+`group.pids()` reads `.current()` as an integer task count, `.max()` as
+`MaxOr[int]`, and `.events().max` as an integer limit-event count. Task counts
+include threads and can exceed the configured limit. Event counts normally
+include descendants; older kernels and `pids_localevents` report local events.
+`group.core().events()` returns immutable `.populated` and `.frozen` states;
+`.frozen` is `None` when an older kernel omits it. `group.core().stat()` returns
+integer `.descendants` and `.dying_descendants` counts and read-only `.subsystems`
+and `.dying_subsystems` mappings from controller names to integer object counts.
+Missing subsystem counters are absent from the maps. Every reading is volatile;
+missing files, including root exemptions, raise `InterfaceMissingError`.
+
 Native classes, methods, and snapshot attributes carry Python `__doc__`
 strings generated from their Rust documentation comments. Use `help(Cgroup)`
 or inspect an individual method such as `Cgroup.current.__doc__`.

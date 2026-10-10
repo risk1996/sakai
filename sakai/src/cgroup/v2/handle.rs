@@ -17,6 +17,7 @@ use super::{
   cpu::Cpu,
   memory::Memory,
   path::{CgroupPath, CgroupPathError},
+  pids::Pids,
 };
 use crate::error::Error;
 
@@ -153,6 +154,9 @@ impl Cgroup {
   /// Borrows this handle to read memory controller interfaces.
   pub fn memory(&self) -> Memory<'_> { Memory { cgroup: self } }
 
+  /// Borrows this handle to read process-number controller interfaces.
+  pub fn pids(&self) -> Pids<'_> { Pids { cgroup: self } }
+
   /// Borrows this handle to read core cgroup interfaces.
   pub fn core(&self) -> Core<'_> { Core { cgroup: self } }
 
@@ -181,9 +185,10 @@ mod tests {
     error::{ParseError, ParseValueError},
     pressure::Pressure,
     v2::{
-      core::CgroupType,
+      core::{CgroupEvents, CgroupStat, CgroupType},
       cpu::{CpuIdle, CpuStatLocal},
       memory::{MemoryCurrent, MemoryHigh, MemoryLow, MemoryMax, MemoryMin, MemoryPeak, MemoryStat},
+      pids::{PidsCurrent, PidsEvents, PidsMax},
     },
   };
 
@@ -226,6 +231,11 @@ mod tests {
     for (result, name) in [
       (cgroup.cpu().stat_local().map(|_| ()), CpuStatLocal::FILE_NAME),
       (cgroup.core().kind().map(|_| ()), CgroupType::FILE_NAME),
+      (cgroup.core().events().map(|_| ()), CgroupEvents::FILE_NAME),
+      (cgroup.core().stat().map(|_| ()), CgroupStat::FILE_NAME),
+      (cgroup.pids().current().map(|_| ()), PidsCurrent::FILE_NAME),
+      (cgroup.pids().max().map(|_| ()), PidsMax::FILE_NAME),
+      (cgroup.pids().events().map(|_| ()), PidsEvents::FILE_NAME),
       (cgroup.memory().current().map(|_| ()), MemoryCurrent::FILE_NAME),
       (cgroup.memory().max().map(|_| ()), MemoryMax::FILE_NAME),
       (cgroup.memory().high().map(|_| ()), MemoryHigh::FILE_NAME),
@@ -244,6 +254,29 @@ mod tests {
     }
     for pid in [0, u32::MAX] {
       assert!(matches!(Cgroup::from_pid(pid), Err(Error::Io(error)) if error.kind() == io::ErrorKind::InvalidInput));
+    }
+  }
+
+  #[test]
+  fn reads_process_and_state_fixtures() {
+    for (fixture, frozen, has_subsystems) in [("p2", Some(false), true), ("p2_older", None, false)] {
+      let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/cgroup/v2/fixtures").join(fixture);
+      let cgroup = Cgroup { directory: assert_ok!(fs::open(&path, DIRECTORY_FLAGS, Mode::empty())), path };
+      let current = assert_ok!(cgroup.pids().current());
+      let max = assert_ok!(cgroup.pids().max());
+      let events = assert_ok!(cgroup.pids().events());
+      let state = assert_ok!(cgroup.core().events());
+      let stat = assert_ok!(cgroup.core().stat());
+      assert_eq!(current, assert_ok!("12".parse::<PidsCurrent>()));
+      assert_eq!(max, assert_ok!("10".parse::<PidsMax>()));
+      assert_eq!(events, assert_ok!("max 3".parse::<PidsEvents>()));
+      assert_eq!(events.max().value, 3);
+      assert!(state.populated());
+      assert_eq!(state.frozen(), frozen);
+      assert_eq!(stat.descendants().value, 2);
+      assert_eq!(stat.dying_descendants().value, 1);
+      assert_eq!(!stat.subsystems().is_empty(), has_subsystems);
+      assert_eq!(!stat.dying_subsystems().is_empty(), has_subsystems);
     }
   }
 

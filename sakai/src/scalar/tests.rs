@@ -10,6 +10,7 @@ use crate::{
   v2::{
     cpu::{CpuIdle, CpuMaxBurst, CpuUclampMax, CpuUclampMin},
     memory::*,
+    pids::{PidsCurrent, PidsMax},
   },
 };
 
@@ -28,6 +29,8 @@ where
 
 #[test]
 fn retains_each_interface_contract() {
+  PidsCurrent::contract("pids.current", "current", "123", Count { value: 123, ..Default::default() });
+  PidsMax::contract("pids.max", "max", "123", MaxOr::Value(Count { value: 123, ..Default::default() }));
   MemoryOomGroup::contract("memory.oom.group", "oom.group", "1", true);
   MemoryCurrent::contract("memory.current", "current", "123", Bytes::new::<byte>(123));
   MemoryPeak::contract("memory.peak", "peak", "123", Bytes::new::<byte>(123));
@@ -55,6 +58,24 @@ fn retains_each_interface_contract() {
 
 #[test]
 fn parses_scalar_encodings() {
+  let count = |value| Count { value, ..Default::default() };
+  let cases = [
+    ("0\n", Ok(count(0))),
+    ("123\n", Ok(count(123))),
+    ("18446744073709551615", Ok(count(u64::MAX))),
+    ("max", Err(Invalid("current", "max"))),
+    ("-1", Err(Invalid("current", "-1"))),
+    ("18446744073709551616", Err(Invalid("current", "18446744073709551616"))),
+  ];
+  Cases::<PidsCurrent>::check(cases.map(|(input, result)| (input, result.map(PidsCurrent::new))));
+  Cases::<PidsMax>::check([
+    ("max\n", Ok(PidsMax::new(MaxOr::Max))),
+    ("0\n", Ok(PidsMax::new(MaxOr::Value(count(0))))),
+    ("123\n", Ok(PidsMax::new(MaxOr::Value(count(123))))),
+    ("18446744073709551615", Ok(PidsMax::new(MaxOr::Value(count(u64::MAX))))),
+    ("-1", Err(Invalid("max", "-1"))),
+    ("18446744073709551616", Err(Invalid("max", "18446744073709551616"))),
+  ]);
   Cases::<MemoryCurrent>::bytes("current", MemoryCurrent::new);
   Cases::<MemoryMax>::limit("max", MemoryMax::new);
   Cases::<CpuIdle>::boolean("idle", CpuIdle::new);
