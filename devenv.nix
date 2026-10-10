@@ -24,6 +24,7 @@
   };
 
   packages = [
+    (pkgs.callPackage ./tools/coderabbit.nix { })
     pkgs.cargo-nextest
     pkgs.coreutils
     pkgs.curl

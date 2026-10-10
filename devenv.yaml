@@ -1,4 +1,7 @@
 # See https://devenv.sh/reference/yaml-options/
+nixpkgs:
+  permitted_unfree_packages:
+    - coderabbit-cli
 inputs:
   nixpkgs:
     url: github:NixOS/nixpkgs/nixpkgs-unstable
