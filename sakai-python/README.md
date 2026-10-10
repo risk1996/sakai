@@ -51,3 +51,8 @@ devenv --profile python shell -- rtk maturin sdist --manifest-path sakai-python/
 
 Install the wheel into a clean environment and run
 `python -m unittest discover -s sakai-python/tests` from outside the checkout.
+
+For exact assertions against Kubernetes container CPU and memory resources,
+run the [Kubernetes resource test](../tools/kubernetes/README.md). It checks the
+installed Python bindings inside a Pod, including request mappings with
+MemoryQoS enabled.

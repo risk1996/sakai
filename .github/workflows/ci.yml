@@ -22,6 +22,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  kubernetes:
+    name: Kubernetes resources through Python
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@v31
+      - uses: cachix/cachix-action@v17
+        with:
+          name: devenv
+          skipPush: true
+      - name: Install devenv from the locked nixpkgs revision
+        run: |
+          nixpkgs_rev=$(jq -r '.nodes.nixpkgs.locked.rev' devenv.lock)
+          nix profile add "github:NixOS/nixpkgs/$nixpkgs_rev#devenv"
+      - name: Assert Pod resources using the installed Python bindings
+        run: devenv tasks run check:kubernetes
+
   python:
     name: Python ${{ matrix.python-version }} wheel and sdist
     runs-on: ubuntu-26.04
@@ -71,7 +91,7 @@ jobs:
 
   checks:
     name: Tests and lints
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 30
     env:
       CARGO_TERM_COLOR: always
@@ -122,7 +142,7 @@ jobs:
 
   build-live-test:
     name: Build Linux live test
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
@@ -160,7 +180,7 @@ jobs:
 
   kernels:
     name: Linux ${{ matrix.kernel }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     needs: build-live-test
     timeout-minutes: 10
     strategy:

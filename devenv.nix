@@ -26,6 +26,8 @@
     pkgs.cargo-nextest
     pkgs.coreutils
     pkgs.curl
+    pkgs.k3d
+    pkgs.kubectl
     pkgs.pkg-config
     pkgs.protobuf
   ] ++ lib.optionals (pkgs.stdenv.hostPlatform.isLinux && pkgs.stdenv.hostPlatform.isx86_64) [
@@ -51,6 +53,23 @@
     "check:test".exec = "cargo nextest run --workspace --all-targets --all-features --locked";
     # nextest does not execute documentation tests.
     "check:doc".exec = "cargo test --workspace --all-features --doc --locked";
+    # Explicit opt-in: this integration check requires a running Docker daemon.
+    "check:kubernetes".exec = ''
+      set -euo pipefail
+      k3d cluster create --config tools/kubernetes/cluster.yaml
+      trap 'k3d cluster delete sakai-resource-test' EXIT
+      kubeconfig="$(k3d kubeconfig write sakai-resource-test)"
+      export KUBECONFIG="$kubeconfig"
+      docker build -f tools/kubernetes/Containerfile -t sakai-resource-test:local .
+      k3d image import --cluster sakai-resource-test sakai-resource-test:local
+      kubectl create -f tools/kubernetes/pod.yaml
+      status=0
+      kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/sakai-resource-test --timeout=120s || status=$?
+      if [ "$status" -ne 0 ]; then kubectl describe pod sakai-resource-test; fi
+      kubectl logs sakai-resource-test
+      kubectl get pod sakai-resource-test -o wide
+      exit "$status"
+    '';
   };
 
   # devenv.sh/profiles/

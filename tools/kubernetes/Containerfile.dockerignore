@@ -1,0 +1,11 @@
+**
+!Cargo.toml
+!Cargo.lock
+!sakai-core/
+!sakai-core/**
+!sakai-python/
+!sakai-python/**
+!xtask/
+!xtask/**
+**/__pycache__
+**/*.pyc
