@@ -1,0 +1,40 @@
+[graph]
+# Include every target, workspace member, and development dependency.
+all-features = true
+
+[advisories]
+# Vulnerabilities and notices are errors by default. Check informational
+# advisories in transitive dependencies as well as direct dependencies.
+unmaintained = "all"
+unsound = "all"
+yanked = "deny"
+unused-ignored-advisory = "deny"
+
+[licenses]
+include-dev = true
+confidence-threshold = 0.93
+allow = [
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-3-Clause",
+  "ISC",
+  "MIT",
+  "Unicode-3.0",
+]
+
+[[licenses.exceptions]]
+# Mozilla's root certificate data is distributed under this permissive data license.
+crate = "webpki-root-certs"
+allow = ["CDLA-Permissive-2.0"]
+
+[bans]
+# Transitive dependencies can legitimately require different major versions.
+multiple-versions = "warn"
+wildcards = "deny"
+# Internal unpublished crates use workspace path dependencies without a version.
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

@@ -25,6 +25,9 @@
 
   packages = [
     inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}.coderabbit-cli
+    pkgs.cargo-audit
+    pkgs.cargo-auditable
+    pkgs.cargo-deny
     pkgs.cargo-nextest
     pkgs.coreutils
     pkgs.curl
@@ -61,6 +64,10 @@
     "check:test".exec = "cargo nextest run --workspace --all-targets --all-features --locked";
     # nextest does not execute documentation tests.
     "check:doc".exec = "cargo test --workspace --all-features --doc --locked";
+    # Explicit opt-in: security checks fetch current advisories and registry data.
+    "check:security".after = [ "check:audit" "check:deny" ];
+    "check:audit".exec = "cargo audit --file Cargo.lock";
+    "check:deny".exec = "cargo deny --locked check";
     # Explicit opt-in: this integration check requires a running Docker daemon.
     "check:kubernetes".exec = ''
       set -euo pipefail

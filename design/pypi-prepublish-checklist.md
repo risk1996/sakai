@@ -1,7 +1,7 @@
 # PyPI pre-publication checklist
 
-Research checked on 2026-09-30. Use this **after implementing** the bindings
-described in [pyo3-bindings.md](pyo3-bindings.md) and **before uploading a
+Research checked on 2026-09-30. Use this for the implemented
+[Python bindings](../sakai-python/README.md) **before uploading a
 release to production PyPI**. Checked boxes record completed preparation;
 unchecked items remain release gates. A successful local import is not the
 release gate; test the actual archives that will be uploaded.
@@ -10,7 +10,7 @@ First release target: Linux CPython, Python 3.11 minimum,
 `abi3-py311`, package import `sakai`, built with Maturin. Do not silently add
 macOS/Windows wheels or claim free-threaded CPython support while the Linux-only
 handle API and ABI plan remain as documented. Sources for these package-specific
-choices are the binding plan and current Rust code; the external best-practice
+choices are the package metadata and current Rust code; the external best-practice
 sources are linked below.
 
 ## 1. Settle the public release contract
@@ -34,10 +34,10 @@ sources are linked below.
   the intended Linux release archives still require the checks below.
   [Python metadata specification](https://packaging.python.org/en/latest/specifications/pyproject-toml/).
 - [ ] Freeze and review the initial Python surface: class and method names,
-  unit suffixes, `None` for a successful `max` reading, optional older-kernel
+  unit suffixes, `MaxOr.is_max` and its guarded `.value`, optional older-kernel
   fields, exception types, and the no-atomic-snapshot guarantee. Verify that
   the docs and `.pyi` describe what the installed extension actually exports.
-  [Binding contract](pyo3-bindings.md).
+  [Binding contract](../sakai-python/python/sakai/_sakai.pyi).
 - [ ] Set one release version consistently in Python metadata, Rust extension
   metadata, wheel/sdist filenames, and the release tag. Check that `Name`,
   `Version`, `Requires-Python`, and dependencies agree across **all** archives
@@ -74,11 +74,11 @@ sources are linked below.
   existing older-kernel VM matrix where file availability varies. Cover root
   exemptions, controller-disabled/missing files, optional counters, read-only
   behavior, and a process moving or cgroup disappearing during a query.
-  [Repository semantics](../README.md), [binding contract](pyo3-bindings.md).
+  [Repository semantics](../README.md), [binding contract](../sakai-python/README.md).
 - [ ] Test invalid inputs and boundaries: PID 0/negative/overflow, non-cgroup
   paths, child traversal/symlinks, non-UTF-8 path round trips, parse errors,
   and permission errors. Assert Python exception classes and attributes, not
-  only messages. [Binding error contract](pyo3-bindings.md).
+  only messages. [Binding error contract](../sakai-python/src/linux.rs).
 - [ ] If the extension declares free-threaded safety through current PyO3
   defaults, audit shared native state and verify behavior on a supported
   free-threaded interpreter, even if no free-threaded wheel will be uploaded.
