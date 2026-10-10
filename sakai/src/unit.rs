@@ -38,6 +38,18 @@ const _: () = {
   assert!(align_of::<Bytes>() == align_of::<u64>());
 };
 
+/// An integer bandwidth stored in bytes per second, using second-based units.
+///
+/// Unlike [`Time`], the base time unit is a second so small bandwidth limits
+/// retain their precision. Construct with `uom::si::information_rate::byte_per_second`.
+pub type BytesPerSecond = uom::si::u64::InformationRate;
+
+/// An integer operation rate stored in operations per second.
+///
+/// Uses second-based units to preserve small IOPS limits. Construct with
+/// `uom::si::frequency::hertz`; one hertz represents one operation per second.
+pub type OperationsPerSecond = uom::si::u64::Frequency;
+
 /// Separates event counts from other dimensionless quantities.
 pub trait CountKind: uom::Kind {}
 

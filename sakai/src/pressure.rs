@@ -25,6 +25,8 @@ pub struct Pressure {
 impl Pressure {
   /// The cgroup v2 `cpu.pressure` interface filename.
   pub const CPU_FILE_NAME: &'static str = "cpu.pressure";
+  /// The cgroup v2 `io.pressure` interface filename.
+  pub const IO_FILE_NAME: &'static str = "io.pressure";
   /// The cgroup v2 `memory.pressure` interface filename.
   pub const MEMORY_FILE_NAME: &'static str = "memory.pressure";
 
@@ -142,6 +144,23 @@ mod tests {
       let [avg10, avg60, avg300] = averages.map(Ratio::new::<percent>);
       Self { avg10, avg60, avg300, total: Time::new::<microsecond>(total) }
     }
+  }
+
+  #[test]
+  fn parses_io_pressure_fixtures() {
+    Cases::<Pressure>::check([
+      (
+        include_str!("cgroup/v2/fixtures/p3/io.pressure"),
+        Ok(Pressure {
+          some: PressureLine::expected([12.34, 5.67, 0.89], 1_234_567),
+          full: Some(PressureLine::expected([1.25, 0.50, 0.10], 98_765)),
+        }),
+      ),
+      (
+        include_str!("cgroup/v2/fixtures/p3_older/io.pressure"),
+        Ok(Pressure { some: PressureLine::expected([0.00, 0.01, 0.02], 42), full: None }),
+      ),
+    ]);
   }
 
   #[test]
