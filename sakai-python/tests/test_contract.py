@@ -16,6 +16,7 @@ from sakai import (
   CpuStat,
   InterfaceMissingError,
   MaxOr,
+  MemoryNumaStat,
   MemoryStat,
   NotCgroupV2Error,
   Pressure,
@@ -87,12 +88,14 @@ class ContractTest(unittest.TestCase):
         "low",
         "min",
         "stat",
+        "numa_stat",
         "pressure",
       ),
       "MemoryStat": ("bytes", "pages", "counts"),
       "SwapReader": ("current", "peak", "max", "high", "events"),
       "SwapEvents": ("high", "max", "fail"),
       "ZswapReader": ("current", "max", "writeback"),
+      "MemoryNumaStat": ("bytes", "pages", "counts"),
       "CoreReader": ("kind", "controllers", "subtree_control"),
     }
     for class_name, members in public_members.items():
@@ -311,6 +314,29 @@ class ContractTest(unittest.TestCase):
           self.assertEqual(error.path, self.group.path / name)
         else:
           self.assertIsInstance(value, int)
+
+  def test_numa_contract(self) -> None:
+    try:
+      stat = self.group.memory().numa_stat()
+    except InterfaceMissingError as error:
+      self.assertEqual(error.path, self.group.path / "memory.numa_stat")
+      return
+    self.assertIsInstance(stat, MemoryNumaStat)
+    self.assertIn("anon", stat.bytes)
+    self.assertIn("file", stat.bytes)
+    for values in (stat.bytes, stat.pages, stat.counts):
+      with self.assertRaises(TypeError):
+        cast("Any", values)["future"] = {}
+      for field, nodes in values.items():
+        with self.subTest(field=field):
+          self.assertTrue(all(isinstance(node, int) for node in nodes))
+          self.assertTrue(
+            all(isinstance(value, int) and value >= 0 for value in nodes.values())
+          )
+          with self.assertRaises(TypeError):
+            cast("Any", nodes)[0] = 0
+    with self.assertRaises(AttributeError):
+      cast("Any", stat).bytes = {}
 
   def test_non_utf8_child_lookup(self) -> None:
     class BytePath(os.PathLike[bytes]):

@@ -18,7 +18,10 @@ use sakai_core::{
       CpuStat as CoreCpuStat, CpuStatLocal as CoreCpuStatLocal,
       CpuTimeStat as CoreCpuTimeStat, CpuWeight as CoreCpuWeight,
     },
-    memory::{MemoryStat as CoreMemoryStat, SwapEvents as CoreSwapEvents},
+    memory::{
+      MemoryNumaStat as CoreMemoryNumaStat, MemoryStat as CoreMemoryStat,
+      SwapEvents as CoreSwapEvents,
+    },
   },
 };
 use uom::si::{information::byte, ratio::ratio, time::nanosecond};
@@ -680,6 +683,12 @@ impl MemoryReader {
       .map(Into::into)
   }
 
+  /// Read memory statistics by field and NUMA node, grouped by native units.
+  fn numa_stat(&self, py: Python<'_>) -> PyResult<MemoryNumaStat> {
+    PythonError::read(py, &self.owner, |owner| owner.memory().numa_stat())
+      .map(Into::into)
+  }
+
   /// Read memory pressure-stall averages and cumulative times.
   fn pressure(&self, py: Python<'_>) -> PyResult<Pressure> {
     PythonError::read(py, &self.owner, |owner| owner.memory().pressure())
@@ -847,6 +856,104 @@ impl MemoryStat {
   }
 }
 
+type NumaValues = BTreeMap<&'static str, BTreeMap<u32, u64>>;
+
+/// Immutable per-NUMA-node memory statistics grouped by native units.
+///
+/// Outer keys retain kernel field names; inner keys are integer NUMA node IDs.
+/// Both levels of every mapping are read-only. Unknown fields are ignored.
+#[pyclass(frozen, module = "sakai._sakai")]
+#[derive(Debug, PartialEq, Eq)]
+struct MemoryNumaStat {
+  bytes: NumaValues,
+  pages: NumaValues,
+  counts: NumaValues,
+}
+
+impl From<CoreMemoryNumaStat> for MemoryNumaStat {
+  fn from(value: CoreMemoryNumaStat) -> Self {
+    Self {
+      bytes: value
+        .bytes()
+        .iter()
+        .map(|(key, nodes)| {
+          (
+            (*key).into(),
+            nodes
+              .iter()
+              .map(|(node, value)| (*node, value.get::<byte>()))
+              .collect(),
+          )
+        })
+        .collect(),
+      pages: value
+        .pages()
+        .iter()
+        .map(|(key, nodes)| {
+          (
+            (*key).into(),
+            nodes
+              .iter()
+              .map(|(node, value)| (*node, value.value))
+              .collect(),
+          )
+        })
+        .collect(),
+      counts: value
+        .counts()
+        .iter()
+        .map(|(key, nodes)| {
+          (
+            (*key).into(),
+            nodes
+              .iter()
+              .map(|(node, value)| (*node, value.value))
+              .collect(),
+          )
+        })
+        .collect(),
+    }
+  }
+}
+
+#[pymethods]
+impl MemoryNumaStat {
+  /// Read-only byte amounts by memory field and NUMA node ID.
+  #[getter]
+  fn bytes(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
+    Self::mapping(py, &self.bytes)
+  }
+
+  /// Read-only page quantities by memory field and NUMA node ID.
+  #[getter]
+  fn pages(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
+    Self::mapping(py, &self.pages)
+  }
+
+  /// Read-only event counts by memory field and NUMA node ID.
+  #[getter]
+  fn counts(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
+    Self::mapping(py, &self.counts)
+  }
+}
+
+impl MemoryNumaStat {
+  fn mapping(
+    py: Python<'_>,
+    values: &NumaValues,
+  ) -> PyResult<Py<PyMappingProxy>> {
+    let dict = PyDict::new(py);
+    for (key, nodes) in values {
+      let inner = PyDict::new(py);
+      for (node, value) in nodes {
+        inner.set_item(node, value)?;
+      }
+      dict.set_item(key, PyMappingProxy::new(py, inner.as_mapping()))?;
+    }
+    Ok(PyMappingProxy::new(py, dict.as_mapping()).unbind())
+  }
+}
+
 /// Fresh reads of cgroup topology and controller files.
 #[pyclass(frozen, module = "sakai._sakai")]
 struct CoreReader {
@@ -916,6 +1023,7 @@ fn _sakai(module: &Bound<'_, PyModule>) -> PyResult<()> {
   module.add_class::<PressureLine>()?;
   module.add_class::<MemoryStat>()?;
   module.add_class::<SwapEvents>()?;
+  module.add_class::<MemoryNumaStat>()?;
   Ok(())
 }
 
@@ -929,7 +1037,7 @@ mod tests {
 
   use assertables::{assert_err, assert_in_delta, assert_ok};
   use pyo3::{
-    exceptions::PyAttributeError,
+    exceptions::{PyAttributeError, PyTypeError},
     types::{PyBytes, PyFloat, PyInt},
   };
 
@@ -1094,6 +1202,63 @@ mod tests {
         let error = assert_err!(object.bind(py).setattr("fail", 0));
         assert!(error.is_instance_of::<PyAttributeError>(py));
       }
+    });
+  }
+
+  #[test]
+  fn converts_numa_units_and_freezes_both_mapping_levels() {
+    let stat = MemoryNumaStat::from(assert_ok!(
+      "anon N0=4096 N2=8192\nfile N0=0\npgdemote_direct \
+       N2=3\nworkingset_refault_file N2=7\nfuture N0=nope\n"
+        .parse::<CoreMemoryNumaStat>()
+    ));
+    assert_eq!(stat, MemoryNumaStat {
+      bytes: BTreeMap::from([
+        ("anon", BTreeMap::from([(0, 4096), (2, 8192)])),
+        ("file", BTreeMap::from([(0, 0)])),
+      ]),
+      pages: BTreeMap::from([("pgdemote_direct", BTreeMap::from([(2, 3)]))]),
+      counts: BTreeMap::from([(
+        "workingset_refault_file",
+        BTreeMap::from([(2, 7)])
+      )]),
+    });
+
+    Python::initialize();
+    Python::attach(|py| {
+      let object = assert_ok!(Py::new(py, stat));
+      for (name, field, expected) in [
+        (
+          "bytes",
+          "anon",
+          BTreeMap::from([(0_u32, 4096_u64), (2, 8192)]),
+        ),
+        ("pages", "pgdemote_direct", BTreeMap::from([(2, 3)])),
+        (
+          "counts",
+          "workingset_refault_file",
+          BTreeMap::from([(2, 7)]),
+        ),
+      ] {
+        let mapping = assert_ok!(object.bind(py).getattr(name));
+        let nodes = assert_ok!(mapping.get_item(field));
+        let values = assert_ok!(py.get_type::<PyDict>().call1((&nodes,)));
+        assert_eq!(
+          assert_ok!(values.extract::<BTreeMap<u32, u64>>()),
+          expected
+        );
+        assert!(
+          assert_err!(mapping.set_item("future", 0))
+            .is_instance_of::<PyTypeError>(py)
+        );
+        assert!(
+          assert_err!(nodes.set_item(0, 0)).is_instance_of::<PyTypeError>(py)
+        );
+      }
+      assert!(
+        assert_err!(object.bind(py).setattr("bytes", 0))
+          .is_instance_of::<PyAttributeError>(py)
+      );
     });
   }
 
