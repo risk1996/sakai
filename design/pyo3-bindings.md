@@ -19,9 +19,9 @@ claim that several calls are atomic.
 Use PyO3 0.29.x and Maturin 1.x as the implementation baseline, pinning exact
 versions in `Cargo.lock` and the Python build lock during implementation.
 PyO3's current guide is at 0.29.2; the exact patch should be selected when the
-crate is added. Set Python 3.10 as the minimum supported version in package
-metadata (`requires-python = ">=3.10"`) and target `abi3-py310` for the first
-release. Build with a Python 3.10-or-newer interpreter. This reduces normal
+crate is added. Set Python 3.11 as the minimum supported version in package
+metadata (`requires-python = ">=3.11"`) and target `abi3-py311` for the first
+release. Build with a Python 3.11-or-newer interpreter. This reduces normal
 CPython wheel variants, but these `abi3` wheels do **not**
 load in free-threaded CPython. Support for free-threaded Python warrants a
 separate build/test matrix and wheel decision after the first binding is working.
@@ -114,7 +114,7 @@ it in `SakaiError` would lose useful standard exception behavior. For parse
 failures expose the interface path and source error in the message. Tests should assert types,
 paths, and `errno`, not only string renderings.
 
-The `abi3-py310` target cannot subclass native Python exception types through
+The `abi3-py311` target cannot subclass native Python exception types through
 PyO3's limited API (that capability starts at Python 3.12). Keep the custom
 hierarchy rooted in `SakaiError` and preserve ordinary `OSError` separately.
 
@@ -158,15 +158,15 @@ binding-specific check to `devenv test` only after the extension exists. Use
 the existing command conventions (`devenv shell -- rtk ...` for project tools;
 `devenv test` or `devenv tasks run check:*` for checks). Pin and test the Python
 interpreter used by Maturin instead of silently building against whichever
-interpreter happens to be on `PATH`. Run the Python contract tests on 3.10 and
+interpreter happens to be on `PATH`. Run the Python contract tests on 3.11 and
 each newer minor version supported by the release; keep `.pyi` syntax and
-runtime annotations valid on 3.10.
+runtime annotations valid on 3.11.
 
 ## Implementation sequence
 
 1. **Scaffold packaging.** Add the workspace crate, Maturin config, Python
    package shell, stubs, and a minimal import smoke test. Make a local wheel,
-   install it into a clean Python 3.10 virtual environment, and confirm
+   install it into a clean Python 3.11 virtual environment, and confirm
    `import sakai`.
 2. **Bind the pinned handle and errors.** Implement constructors, ownership of
    reader views, path and child traversal, and one common Rust-error translator.
@@ -183,15 +183,15 @@ runtime annotations valid on 3.10.
 6. **Integrate CI and release preparation.** Run Rust checks and Python tests on
    Linux, exercise old-kernel behavior with existing VM fixtures where useful,
    build audited Linux wheels for supported architectures, and test a fresh
-   install of each wheel on Python 3.10 and each supported newer minor version.
-   Confirm the wheel carries a `cp310-abi3` tag. Add publication only after
+   install of each wheel on Python 3.11 and each supported newer minor version.
+   Confirm the wheel carries a `cp311-abi3` tag. Add publication only after
    project license/metadata and package-name ownership are settled;
    `project-direction.md` already tracks Rust crate release metadata as
    unfinished.
 
 Acceptance criteria: every currently implemented CPU, memory, and core reader
 is reachable from Python; all unit/limit/optional distinctions above have
-conversion tests; Python 3.10 imports and passes the contract tests; live
+conversion tests; Python 3.11 imports and passes the contract tests; live
 Linux reads work without privilege; a missing optional
 kernel file raises the documented exception; multiple calls are documented as
 non-atomic; an installed wheel and a separately rebuilt sdist both import and
@@ -207,7 +207,7 @@ pass the package tests. No method writes to cgroupfs.
   reader state instead of Rust borrowed views in Python objects.
 - [PyO3 building and distribution](https://pyo3.rs/main/building-and-distribution)
   documents `cdylib`, Maturin's build environment, and the deprecated
-  `extension-module` feature. It also documents `abi3-py310` and the
+  `extension-module` feature. It also documents `abi3-py311` and the
   Python 3.12 threshold for subclassing native exception types through the
   limited API. [Its feature guide](https://pyo3.rs/main/features)
   distinguishes `abi3` from `abi3t`; an `abi3` wheel does not cover

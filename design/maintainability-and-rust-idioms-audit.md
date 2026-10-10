@@ -307,7 +307,7 @@ Acceptance criteria:
 Priority: Medium. Evidence: Observed.
 
 Every runner in [the current workflow](../.github/workflows/ci.yml) is
-`ubuntu-24.04`. [The README](../README.md) says CI tests macOS and Linux.
+`ubuntu-26.04`. [The README](../README.md) says CI tests macOS and Linux.
 The Linux kernel matrix varies kernel versions, but does not provide a
 non-Linux compile, test, or documentation check.
 

@@ -24,7 +24,7 @@ concurrency:
 jobs:
   kubernetes:
     name: Kubernetes resources through Python
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
@@ -44,13 +44,13 @@ jobs:
 
   python:
     name: Python ${{ matrix.python-version }} wheel and sdist
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        # Exercise the minimum and newest runtime for the cp310-abi3 wheel.
-        python-version: ['3.10', '3.14']
+        # Exercise the minimum and newest runtime for the cp311-abi3 wheel.
+        python-version: ['3.11', '3.15']
     steps:
       - uses: actions/checkout@v7
         with:
@@ -58,6 +58,8 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
+          # Prefer stable 3.15, falling back until GitHub publishes its build.
+          allow-prereleases: ${{ matrix.python-version == '3.15' }}
       - uses: cachix/install-nix-action@v31
       - uses: cachix/cachix-action@v17
         with:
@@ -73,7 +75,7 @@ jobs:
           # The hosted interpreter must not load Nix's newer libpython/glibc.
           devenv --profile python shell -- env -u LD_LIBRARY_PATH PYO3_PYTHON="$python_executable" maturin build --manifest-path sakai-python/Cargo.toml --interpreter "$python_executable" --locked --out dist
           devenv --profile python shell -- maturin sdist --manifest-path sakai-python/Cargo.toml --out dist
-          compgen -G 'dist/*-cp310-abi3-*.whl'
+          compgen -G 'dist/*-cp311-abi3-*.whl'
       - name: Test installed wheel outside checkout
         run: |
           python -m venv "$RUNNER_TEMP/sakai-wheel"
@@ -89,7 +91,7 @@ jobs:
 
   checks:
     name: Tests and lints
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 30
     env:
       CARGO_TERM_COLOR: always
@@ -140,7 +142,7 @@ jobs:
 
   build-live-test:
     name: Build Linux live test
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
@@ -178,7 +180,7 @@ jobs:
 
   kernels:
     name: Linux ${{ matrix.kernel }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     needs: build-live-test
     timeout-minutes: 10
     strategy:
