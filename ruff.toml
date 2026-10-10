@@ -12,6 +12,10 @@ ignore = [
   "D213",   # Prefer the summary on the first line (D212).
 ]
 
+[lint.isort]
+# The Rust crate directory also uses this name; classify all Python imports alike.
+known-first-party = ["sakai"]
+
 [lint.per-file-ignores]
 "sakai-python/python/sakai/_sakai.pyi" = ["D", "PYI021"] # Native docs live in Rust; stubs describe types.
 "sakai-python/tests/**/*.py" = ["D", "INP001", "PLR2004", "PT", "S101"] # unittest, not pytest.
