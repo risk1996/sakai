@@ -104,9 +104,7 @@ impl<'a> Parser<'a> {
   pub(crate) fn next_field<Unit, T>(&mut self, field: &'static str) -> Result<T, ParseError<T::Error>>
   where
     T: ParseCgroup<Unit>, {
-    let value = self.next_raw_field(field)?;
-
-    T::parse_field(self.raw, field, value)
+    T::parse_field(self.raw, field, self.next_raw_field(field)?)
   }
 
   /// Returns an error if an excess field remains.

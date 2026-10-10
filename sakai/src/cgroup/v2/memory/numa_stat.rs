@@ -1,4 +1,7 @@
-use std::{collections::BTreeMap, str::FromStr};
+use std::{
+  collections::BTreeMap,
+  str::{FromStr, SplitAsciiWhitespace as Tokens},
+};
 
 use super::{MemoryStatByteField, MemoryStatCountField, MemoryStatPageField};
 use crate::{
@@ -39,16 +42,15 @@ impl MemoryNumaStat {
   fn parse_nodes<Unit, T>(
     raw: &str,
     field: &'static str,
-    tokens: &[&str],
+    tokens: Tokens<'_>,
   ) -> Result<BTreeMap<u32, T>, ParseError<ParseValueError>>
   where
     T: ParseCgroup<Unit, Error = ParseValueError>, {
-    if tokens.is_empty() {
+    if tokens.clone().next().is_none() {
       return Err(ParseError::missing(raw, "node"));
     }
 
     tokens
-      .iter()
       .map(|token| {
         let (node, value) =
           token.split_once('=').ok_or_else(|| ParseError::invalid(raw, "node", token, ParseValueError::OutOfRange))?;
@@ -62,7 +64,7 @@ impl MemoryNumaStat {
       .collect()
   }
 
-  fn insert(&mut self, raw: &str, key: &str, tokens: &[&str]) -> Result<(), ParseError<ParseValueError>> {
+  fn insert(&mut self, raw: &str, key: &str, tokens: Tokens<'_>) -> Result<(), ParseError<ParseValueError>> {
     if let Ok(field) = MemoryStatByteField::from_str(key) {
       self.bytes.insert(field, Self::parse_nodes::<ParseBytes, Bytes>(raw, field.into(), tokens)?);
     } else if let Ok(field) = MemoryStatPageField::from_str(key) {
@@ -80,54 +82,54 @@ impl FromStr for MemoryNumaStat {
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
     let stat =
       contents.lines().filter(|line| !line.trim().is_empty()).try_fold(Self::default(), |mut stat, line| {
-        let fields = line.split_ascii_whitespace().collect::<Vec<_>>();
-        let (key, nodes) = fields.split_first().ok_or_else(|| ParseError::missing(contents, "key"))?;
-        stat.insert(contents, key, nodes)?;
+        let mut fields = line.split_ascii_whitespace();
+        let key = fields.next().ok_or_else(|| ParseError::missing(contents, "key"))?;
+        stat.insert(contents, key, fields)?;
         Ok::<_, Self::Err>(stat)
       })?;
 
-    for (field, name) in [(MemoryStatByteField::Anon, "anon"), (MemoryStatByteField::File, "file")] {
-      if !stat.bytes.contains_key(&field) {
-        return Err(ParseError::missing(contents, name));
-      }
-    }
+    MemoryStatByteField::require_baseline(contents, &stat.bytes)?;
     Ok(stat)
   }
 }
 
 #[cfg(test)]
 mod tests {
-  use assertables::{assert_err, assert_ok};
+  use assertables::assert_ok;
   use indoc::indoc;
   use uom::si::information::byte;
 
-  use super::*;
+  use super::{
+    MemoryStatByteField::{Anon, File},
+    MemoryStatCountField::WorkingsetRefaultFile,
+    MemoryStatPageField::PgdemoteDirect,
+    *,
+  };
+  use crate::parse::tests::{
+    Cases,
+    Failure::{Invalid, Missing},
+  };
 
   #[test]
   fn parses_numa_stat_groups_and_ignores_unknowns() {
     for (input, expected) in [
       (
-        indoc! {"
-          file N2=2048 N0=1024
-          future_metric N0=nope
-          workingset_refault_file N2=3 N0=1
-          anon N0=4096 N2=8192
-          pgdemote_direct N2=5 N0=0
-        "},
+        indoc! {"file N2=2048 N0=1024\nfuture_metric N0=nope\nworkingset_refault_file N2=3 N0=1\n\
+        anon N0=4096 N2=8192\npgdemote_direct N2=5 N0=0\n"},
         MemoryNumaStat {
           bytes: BTreeMap::from([
-            (MemoryStatByteField::Anon, BTreeMap::from([(0, Bytes::new::<byte>(4096)), (2, Bytes::new::<byte>(8192))])),
-            (MemoryStatByteField::File, BTreeMap::from([(0, Bytes::new::<byte>(1024)), (2, Bytes::new::<byte>(2048))])),
+            (Anon, BTreeMap::from([(0, Bytes::new::<byte>(4096)), (2, Bytes::new::<byte>(8192))])),
+            (File, BTreeMap::from([(0, Bytes::new::<byte>(1024)), (2, Bytes::new::<byte>(2048))])),
           ]),
           pages: BTreeMap::from([(
-            MemoryStatPageField::PgdemoteDirect,
+            PgdemoteDirect,
             BTreeMap::from([
               (0, Pages { value: 0, ..Default::default() }),
               (2, Pages { value: 5, ..Default::default() }),
             ]),
           )]),
           counts: BTreeMap::from([(
-            MemoryStatCountField::WorkingsetRefaultFile,
+            WorkingsetRefaultFile,
             BTreeMap::from([
               (0, Count { value: 1, ..Default::default() }),
               (2, Count { value: 3, ..Default::default() }),
@@ -137,8 +139,8 @@ mod tests {
       ),
       ("anon N0=0\nfile N0=18446744073709551615\n", MemoryNumaStat {
         bytes: BTreeMap::from([
-          (MemoryStatByteField::Anon, BTreeMap::from([(0, Bytes::new::<byte>(0))])),
-          (MemoryStatByteField::File, BTreeMap::from([(0, Bytes::new::<byte>(u64::MAX))])),
+          (Anon, BTreeMap::from([(0, Bytes::new::<byte>(0))])),
+          (File, BTreeMap::from([(0, Bytes::new::<byte>(u64::MAX))])),
         ]),
         ..Default::default()
       }),
@@ -149,19 +151,20 @@ mod tests {
 
   #[test]
   fn rejects_invalid_numa_stat_fields() {
-    for (input, expected) in [
-      ("", "missing field \"anon\""),
-      ("anon N0=1", "missing field \"file\""),
-      ("anon\nfile N0=1", "missing field \"node\""),
-      ("anon N0=1\nfile N0=", "invalid field \"file\""),
-      ("anon N0=-1\nfile N0=1", "invalid field \"anon\""),
-      ("anon N0=1\nfile N0=18446744073709551616", "invalid field \"file\""),
-      ("anon 0=1\nfile N0=1", "invalid field \"node\""),
-      ("anon N-1=1\nfile N0=1", "invalid field \"node\""),
-      ("anon N0\nfile N0=1", "invalid field \"node\""),
-      ("anon N4294967296=1\nfile N0=1", "invalid field \"node\""),
-    ] {
-      assert!(assert_err!(input.parse::<MemoryNumaStat>()).to_string().contains(expected), "input: {input:?}");
-    }
+    Cases::<MemoryNumaStat>::check(
+      [
+        ("", Missing("anon")),
+        ("anon N0=1", Missing("file")),
+        ("anon\nfile N0=1", Missing("node")),
+        ("anon N0=1\nfile N0=", Invalid("file", "")),
+        ("anon N0=-1\nfile N0=1", Invalid("anon", "-1")),
+        ("anon N0=1\nfile N0=18446744073709551616", Invalid("file", "18446744073709551616")),
+        ("anon 0=1\nfile N0=1", Invalid("node", "0=1")),
+        ("anon N-1=1\nfile N0=1", Invalid("node", "N-1=1")),
+        ("anon N0\nfile N0=1", Invalid("node", "N0")),
+        ("anon N4294967296=1\nfile N0=1", Invalid("node", "N4294967296=1")),
+      ]
+      .map(|(input, failure)| (input, Err(failure))),
+    );
   }
 }

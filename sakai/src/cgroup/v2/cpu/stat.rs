@@ -278,100 +278,42 @@ mod tests {
   fn parses_cpu_stat() {
     Cases::<CpuStat>::check([
       (
-        indoc! {"
-          usage_usec 54321
-          user_usec 32100
-          system_usec 22221
-        "},
+        indoc! {"usage_usec 54321\nuser_usec 32100\nsystem_usec 22221\n"},
         Ok(CpuStat { time: CpuTimeStat::expected([54_321, 32_100, 22_221]), bandwidth: None }),
       ),
       (
-        indoc! {"
-          usage_usec 54321
-          user_usec 32100
-          system_usec 22221
-          nr_periods 100
-          nr_throttled 7
-          throttled_usec 1234
-          nr_bursts 3
-          burst_usec 456
-        "},
+        indoc! {"usage_usec 54321\nuser_usec 32100\nsystem_usec 22221\nnr_periods 100\nnr_throttled 7\n\
+        throttled_usec 1234\nnr_bursts 3\nburst_usec 456\n"},
         Ok(CpuStat {
           time: CpuTimeStat::expected([54_321, 32_100, 22_221]),
           bandwidth: Some(CpuBandwidthStat::expected([100, 7, 1_234], Some(CpuBurstStat::expected([3, 456])))),
         }),
       ),
       (
-        indoc! {"
-          usage_usec 1
-          user_usec 2
-          system_usec 3
-          nr_periods 4
-          nr_throttled 5
-          throttled_usec 6
-        "},
+        indoc! {"usage_usec 1\nuser_usec 2\nsystem_usec 3\nnr_periods 4\nnr_throttled 5\nthrottled_usec 6\n"},
         Ok(CpuStat {
           time: CpuTimeStat::expected([1, 2, 3]),
           bandwidth: Some(CpuBandwidthStat::expected([4, 5, 6], None)),
         }),
       ),
       (
-        indoc! {"
-          usage_usec 0
-          user_usec 0
-          system_usec 0
-          nr_periods 0
-          nr_throttled 0
-          throttled_usec 0
-          nr_bursts 0
-          burst_usec 0
-        "},
+        indoc! {"usage_usec 0\nuser_usec 0\nsystem_usec 0\nnr_periods 0\nnr_throttled 0\nthrottled_usec 0\n\
+        nr_bursts 0\nburst_usec 0\n"},
         Ok(CpuStat {
           time: CpuTimeStat::expected([0, 0, 0]),
           bandwidth: Some(CpuBandwidthStat::expected([0, 0, 0], Some(CpuBurstStat::expected([0, 0])))),
         }),
       ),
       (
-        indoc! {"
-          system_usec 3
-          future_counter nope
-          usage_usec 1
-          nice_usec 4
-          user_usec 2
-        "},
+        indoc! {"system_usec 3\nfuture_counter nope\nusage_usec 1\nnice_usec 4\nuser_usec 2\n"},
         Ok(CpuStat { time: CpuTimeStat::expected([1, 2, 3]), bandwidth: None }),
       ),
       ("", Err(Missing("usage_usec"))),
+      (indoc! {"usage_usec 1\nuser_usec 2\n"}, Err(Missing("system_usec"))),
+      (indoc! {"usage_usec nope\nuser_usec 2\nsystem_usec 3\n"}, Err(Invalid("usage_usec", "nope"))),
+      (indoc! {"usage_usec 1\nuser_usec 2\nsystem_usec 3\nnr_periods 4\n"}, Err(Missing("nr_throttled"))),
       (
-        indoc! {"
-          usage_usec 1
-          user_usec 2
-        "},
-        Err(Missing("system_usec")),
-      ),
-      (
-        indoc! {"
-          usage_usec nope
-          user_usec 2
-          system_usec 3
-        "},
-        Err(Invalid("usage_usec", "nope")),
-      ),
-      (
-        indoc! {"
-          usage_usec 1
-          user_usec 2
-          system_usec 3
-          nr_periods 4
-        "},
-        Err(Missing("nr_throttled")),
-      ),
-      (
-        indoc! {"
-          usage_usec 18446744073709552
-          user_usec 2
-          system_usec 3
-        "},
+        indoc! {"usage_usec 18446744073709552\nuser_usec 2\nsystem_usec 3\n"},
         Err(Invalid("usage_usec", "18446744073709552")),
       ),
       ("usage_usec 1\nuser_usec 2\nsystem_usec\n", Err(Missing("system_usec"))),
@@ -384,16 +326,8 @@ mod tests {
 
   #[test]
   fn parses_stat_groups_independently() {
-    let input = indoc! {"
-      usage_usec 54321
-      user_usec 32100
-      system_usec 22221
-      nr_periods 100
-      nr_throttled 7
-      throttled_usec 1234
-      nr_bursts 3
-      burst_usec 456
-    "};
+    let input = indoc! {"usage_usec 54321\nuser_usec 32100\nsystem_usec 22221\nnr_periods 100\nnr_throttled 7\n\
+    throttled_usec 1234\nnr_bursts 3\nburst_usec 456\n"};
     let time = CpuTimeStat::expected([54_321, 32_100, 22_221]);
     let burst = CpuBurstStat::expected([3, 456]);
     let bandwidth = CpuBandwidthStat::expected([100, 7, 1_234], Some(burst));

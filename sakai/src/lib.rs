@@ -25,4 +25,6 @@ pub mod error;
 pub mod limit;
 mod parse;
 pub mod pressure;
+#[doc(hidden)]
+pub mod scalar;
 pub mod unit;

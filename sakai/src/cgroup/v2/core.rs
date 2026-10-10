@@ -94,26 +94,16 @@ impl Core<'_> {
 
   /// Configuration snapshot of controllers available to enable for children.
   pub fn controllers(&self) -> Result<Vec<CgroupController>, Error> {
-    Ok(
-      self
-        .cgroup
-        .read(CgroupController::CONTROLLERS_FILE_NAME)?
-        .split_ascii_whitespace()
-        .map(CgroupController::from)
-        .collect(),
-    )
+    self.controller_list(CgroupController::CONTROLLERS_FILE_NAME)
   }
 
   /// Configuration snapshot of controllers enabled for children.
   pub fn subtree_control(&self) -> Result<Vec<CgroupController>, Error> {
-    Ok(
-      self
-        .cgroup
-        .read(CgroupController::SUBTREE_CONTROL_FILE_NAME)?
-        .split_ascii_whitespace()
-        .map(CgroupController::from)
-        .collect(),
-    )
+    self.controller_list(CgroupController::SUBTREE_CONTROL_FILE_NAME)
+  }
+
+  fn controller_list(&self, file: &'static str) -> Result<Vec<CgroupController>, Error> {
+    Ok(self.cgroup.read(file)?.split_ascii_whitespace().map(CgroupController::from).collect())
   }
 }
 
@@ -121,7 +111,7 @@ impl Core<'_> {
 mod tests {
   use assertables::{assert_err, assert_ok};
 
-  use super::*;
+  use super::{CgroupController::*, *};
 
   #[test]
   fn parses_topology() {
@@ -144,17 +134,17 @@ mod tests {
       .map(CgroupController::from)
       .collect::<Vec<_>>();
     assert_eq!(controllers, vec![
-      CgroupController::Cpu,
-      CgroupController::Cpuset,
-      CgroupController::Io,
-      CgroupController::Memory,
-      CgroupController::Hugetlb,
-      CgroupController::Pids,
-      CgroupController::Rdma,
-      CgroupController::Misc,
-      CgroupController::Dmem,
-      CgroupController::PerfEvent,
-      CgroupController::Other("future_controller".into()),
+      Cpu,
+      Cpuset,
+      Io,
+      Memory,
+      Hugetlb,
+      Pids,
+      Rdma,
+      Misc,
+      Dmem,
+      PerfEvent,
+      Other("future_controller".into()),
     ]);
     assert_eq!(
       controllers.iter().map(ToString::to_string).collect::<Vec<_>>(),

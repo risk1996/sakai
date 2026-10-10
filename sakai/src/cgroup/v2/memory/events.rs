@@ -119,26 +119,22 @@ impl FromStr for MemoryEventCounts {
 
 #[cfg(test)]
 mod tests {
-  use assertables::{assert_err, assert_ok};
+  use assertables::assert_ok;
   use indoc::indoc;
 
   use super::*;
+  use crate::parse::tests::{
+    Cases,
+    Failure::{Excess, Invalid, Missing},
+  };
 
   #[test]
   fn parses_hierarchical_and_local_event_snapshots() {
     let count = |value| Count { value, ..Default::default() };
     for (input, expected) in [
       (
-        indoc! {"
-          oom_kill 5
-          future_counter nope
-          high 2
-          low 1
-          oom_group_kill 6
-          max 3
-          oom 4
-          sock_throttled 7
-        "},
+        indoc! {"oom_kill 5\nfuture_counter nope\nhigh 2\nlow 1\noom_group_kill 6\nmax 3\noom 4\n\
+        sock_throttled 7\n"},
         MemoryEventCounts {
           low: count(1),
           high: count(2),
@@ -166,24 +162,19 @@ mod tests {
 
   #[test]
   fn rejects_malformed_event_snapshots() {
-    for (input, expected) in [
-      ("", "missing field \"low\""),
-      ("low 1\nhigh 2\nmax 3\noom 4", "missing field \"oom_kill\""),
-      ("low -1\nhigh 2\nmax 3\noom 4\noom_kill 5", "invalid field \"low\""),
-      ("low 1\nhigh 2\nmax 3\noom 4\noom_kill 5\noom_group_kill nope", "invalid field \"oom_group_kill\""),
+    let cases = [
+      ("", Missing("low")),
+      ("low 1\nhigh 2\nmax 3\noom 4", Missing("oom_kill")),
+      ("low -1\nhigh 2\nmax 3\noom 4\noom_kill 5", Invalid("low", "-1")),
+      ("low 1\nhigh 2\nmax 3\noom 4\noom_kill 5\noom_group_kill nope", Invalid("oom_group_kill", "nope")),
       (
         "low 1\nhigh 2\nmax 3\noom 4\noom_kill 5\nsock_throttled 18446744073709551616",
-        "invalid field \"sock_throttled\"",
+        Invalid("sock_throttled", "18446744073709551616"),
       ),
-      ("low 1\nhigh", "missing field \"value\""),
-      ("low 1 2", "excess field \"additional\""),
-    ] {
-      for error in [
-        assert_err!(input.parse::<MemoryEvents>()).to_string(),
-        assert_err!(input.parse::<MemoryEventsLocal>()).to_string(),
-      ] {
-        assert!(error.contains(expected), "input: {input:?}, error: {error}");
-      }
-    }
+      ("low 1\nhigh", Missing("value")),
+      ("low 1 2", Excess),
+    ];
+    Cases::<MemoryEvents>::check(cases.map(|(input, failure)| (input, Err(failure))));
+    Cases::<MemoryEventsLocal>::check(cases.map(|(input, failure)| (input, Err(failure))));
   }
 }
