@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use crate::{
   error::{ParseError, ParseValueError},
-  parse::{KeyedFields, ParseCgroup, ParseCount, ParseMicroseconds, Parser},
+  parse::{KeyedFields, ParseCount, ParseMicroseconds},
   unit::{Count, Time},
 };
 
@@ -23,15 +23,11 @@ impl CpuStat {
 
   /// Returns CPU usage times.
   #[must_use]
-  pub const fn time(&self) -> CpuTimeStat {
-    self.time
-  }
+  pub const fn time(&self) -> CpuTimeStat { self.time }
 
   /// Returns CPU bandwidth counters when the CPU controller reports them.
   #[must_use]
-  pub const fn bandwidth(&self) -> Option<CpuBandwidthStat> {
-    self.bandwidth
-  }
+  pub const fn bandwidth(&self) -> Option<CpuBandwidthStat> { self.bandwidth }
 }
 
 /// Runqueue throttling in `cpu.stat.local`, including ancestor bandwidth limits.
@@ -48,21 +44,15 @@ impl CpuStatLocal {
   pub const FILE_NAME: &'static str = "cpu.stat.local";
 
   /// Returns throttling of this cgroup's own runqueues, when reported.
-  pub const fn throttled(&self) -> Option<Time> {
-    self.throttled
-  }
+  pub const fn throttled(&self) -> Option<Time> { self.throttled }
 }
 
 impl FromStr for CpuStatLocal {
   type Err = ParseError<ParseValueError>;
 
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    let fields = CpuStatFields::parse(contents)?;
-    Ok(Self {
-      throttled: fields
-        .values
-        .optional::<ParseMicroseconds, Time>("throttled_usec")?,
-    })
+    let fields = CpuStatField::fields(contents)?;
+    Ok(Self { throttled: fields.optional::<ParseMicroseconds, Time>("throttled_usec")? })
   }
 }
 
@@ -77,31 +67,21 @@ pub struct CpuTimeStat {
 impl CpuTimeStat {
   /// Returns total CPU time consumed by the cgroup and its descendants.
   #[must_use]
-  pub const fn usage(self) -> Time {
-    self.usage
-  }
+  pub const fn usage(self) -> Time { self.usage }
 
   /// Returns CPU time consumed in user mode.
   #[must_use]
-  pub const fn user(self) -> Time {
-    self.user
-  }
+  pub const fn user(self) -> Time { self.user }
 
   /// Returns CPU time consumed in kernel mode.
   #[must_use]
-  pub const fn system(self) -> Time {
-    self.system
-  }
+  pub const fn system(self) -> Time { self.system }
 
-  fn from_fields(
-    fields: &CpuStatFields<'_>,
-  ) -> Result<Self, ParseError<ParseValueError>> {
+  fn from_fields(fields: &KeyedFields<'_>) -> Result<Self, ParseError<ParseValueError>> {
     Ok(Self {
-      usage: fields
-        .required::<ParseMicroseconds, _>(CpuStatField::UsageUsec)?,
+      usage: fields.required::<ParseMicroseconds, _>(CpuStatField::UsageUsec)?,
       user: fields.required::<ParseMicroseconds, _>(CpuStatField::UserUsec)?,
-      system: fields
-        .required::<ParseMicroseconds, _>(CpuStatField::SystemUsec)?,
+      system: fields.required::<ParseMicroseconds, _>(CpuStatField::SystemUsec)?,
     })
   }
 }
@@ -119,32 +99,22 @@ pub struct CpuBandwidthStat {
 impl CpuBandwidthStat {
   /// Returns the number of elapsed enforcement periods.
   #[must_use]
-  pub const fn nr_periods(self) -> Count {
-    self.nr_periods
-  }
+  pub const fn nr_periods(self) -> Count { self.nr_periods }
 
   /// Returns the number of periods in which the cgroup was throttled.
   #[must_use]
-  pub const fn nr_throttled(self) -> Count {
-    self.nr_throttled
-  }
+  pub const fn nr_throttled(self) -> Count { self.nr_throttled }
 
   /// Returns the total time for which the cgroup was throttled.
   #[must_use]
-  pub const fn throttled(self) -> Time {
-    self.throttled
-  }
+  pub const fn throttled(self) -> Time { self.throttled }
 
   /// Returns CPU burst counters when reported by the kernel.
   #[must_use]
-  pub const fn burst(self) -> Option<CpuBurstStat> {
-    self.burst
-  }
+  pub const fn burst(self) -> Option<CpuBurstStat> { self.burst }
 
-  fn from_fields(
-    fields: &CpuStatFields<'_>,
-  ) -> Result<Self, ParseError<ParseValueError>> {
-    let burst = if fields.has_bandwidth_burst() {
+  fn from_fields(fields: &KeyedFields<'_>) -> Result<Self, ParseError<ParseValueError>> {
+    let burst = if fields.contains_any(CpuStatField::bandwidth_burst_fields()) {
       Some(CpuBurstStat::from_fields(fields)?)
     } else {
       None
@@ -152,10 +122,8 @@ impl CpuBandwidthStat {
 
     Ok(Self {
       nr_periods: fields.required::<ParseCount, _>(CpuStatField::NrPeriods)?,
-      nr_throttled: fields
-        .required::<ParseCount, _>(CpuStatField::NrThrottled)?,
-      throttled: fields
-        .required::<ParseMicroseconds, _>(CpuStatField::ThrottledUsec)?,
+      nr_throttled: fields.required::<ParseCount, _>(CpuStatField::NrThrottled)?,
+      throttled: fields.required::<ParseMicroseconds, _>(CpuStatField::ThrottledUsec)?,
       burst,
     })
   }
@@ -171,23 +139,16 @@ pub struct CpuBurstStat {
 impl CpuBurstStat {
   /// Returns the number of periods in which a burst occurred.
   #[must_use]
-  pub const fn nr_bursts(self) -> Count {
-    self.nr_bursts
-  }
+  pub const fn nr_bursts(self) -> Count { self.nr_bursts }
 
   /// Returns cumulative CPU time consumed above quota during bursts.
   #[must_use]
-  pub const fn burst(self) -> Time {
-    self.burst
-  }
+  pub const fn burst(self) -> Time { self.burst }
 
-  fn from_fields(
-    fields: &CpuStatFields<'_>,
-  ) -> Result<Self, ParseError<ParseValueError>> {
+  fn from_fields(fields: &KeyedFields<'_>) -> Result<Self, ParseError<ParseValueError>> {
     Ok(Self {
       nr_bursts: fields.required::<ParseCount, _>(CpuStatField::NrBursts)?,
-      burst: fields
-        .required::<ParseMicroseconds, _>(CpuStatField::BurstUsec)?,
+      burst: fields.required::<ParseMicroseconds, _>(CpuStatField::BurstUsec)?,
     })
   }
 }
@@ -196,11 +157,11 @@ impl FromStr for CpuStat {
   type Err = ParseError<ParseValueError>;
 
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    let fields = CpuStatFields::parse(contents)?;
+    let fields = CpuStatField::fields(contents)?;
 
     Ok(Self {
       time: CpuTimeStat::from_fields(&fields)?,
-      bandwidth: if fields.has_bandwidth() {
+      bandwidth: if fields.contains_any(CpuStatField::bandwidth_fields()) {
         Some(CpuBandwidthStat::from_fields(&fields)?)
       } else {
         None
@@ -212,39 +173,23 @@ impl FromStr for CpuStat {
 impl FromStr for CpuTimeStat {
   type Err = ParseError<ParseValueError>;
 
-  fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    Self::from_fields(&CpuStatFields::parse(contents)?)
-  }
+  fn from_str(contents: &str) -> Result<Self, Self::Err> { Self::from_fields(&CpuStatField::fields(contents)?) }
 }
 
 impl FromStr for CpuBandwidthStat {
   type Err = ParseError<ParseValueError>;
 
-  fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    Self::from_fields(&CpuStatFields::parse(contents)?)
-  }
+  fn from_str(contents: &str) -> Result<Self, Self::Err> { Self::from_fields(&CpuStatField::fields(contents)?) }
 }
 
 impl FromStr for CpuBurstStat {
   type Err = ParseError<ParseValueError>;
 
-  fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    Self::from_fields(&CpuStatFields::parse(contents)?)
-  }
+  fn from_str(contents: &str) -> Result<Self, Self::Err> { Self::from_fields(&CpuStatField::fields(contents)?) }
 }
 
 #[derive(
-  Debug,
-  Clone,
-  Copy,
-  PartialEq,
-  Eq,
-  PartialOrd,
-  Ord,
-  Hash,
-  strum::EnumString,
-  strum::Display,
-  strum::IntoStaticStr,
+  Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, strum::EnumString, strum::Display, strum::IntoStaticStr,
 )]
 #[strum(serialize_all = "snake_case")]
 pub enum CpuStatField {
@@ -259,130 +204,89 @@ pub enum CpuStatField {
 }
 
 impl CpuStatField {
+  fn fields(raw: &str) -> Result<KeyedFields<'_>, ParseError<ParseValueError>> {
+    KeyedFields::parse(raw, |key| Self::from_str(key).map(Into::into).unwrap_or("value"))
+  }
+
   pub fn bandwidth_fields() -> [Self; 5] {
-    [
-      Self::NrPeriods,
-      Self::NrThrottled,
-      Self::ThrottledUsec,
-      Self::NrBursts,
-      Self::BurstUsec,
-    ]
+    [Self::NrPeriods, Self::NrThrottled, Self::ThrottledUsec, Self::NrBursts, Self::BurstUsec]
   }
 
-  pub fn bandwidth_burst_fields() -> [Self; 2] {
-    [Self::NrBursts, Self::BurstUsec]
-  }
-}
-
-struct CpuStatFields<'a> {
-  values: KeyedFields<'a>,
-}
-
-impl<'a> CpuStatFields<'a> {
-  fn parse(raw: &'a str) -> Result<Self, ParseError<ParseValueError>> {
-    let values = raw
-      .lines()
-      .filter(|line| !line.trim().is_empty())
-      .map(|line| {
-        Parser::parse_line(raw, line, |parser| {
-          let key = parser.next_raw_field("key")?;
-          let field = CpuStatField::from_str(key).ok();
-          let name: &'static str = field.map(Into::into).unwrap_or("value");
-          let value = parser.next_raw_field(name)?;
-
-          Ok((key, value))
-        })
-      })
-      .collect::<Result<Vec<_>, _>>()?;
-
-    Ok(Self {
-      values: KeyedFields::new(raw, values),
-    })
-  }
-
-  fn contains(&self, field: CpuStatField) -> bool {
-    let name: &'static str = field.into();
-    self.values.contains(name)
-  }
-
-  fn has_bandwidth(&self) -> bool {
-    CpuStatField::bandwidth_fields()
-      .into_iter()
-      .any(|field| self.contains(field))
-  }
-
-  fn has_bandwidth_burst(&self) -> bool {
-    CpuStatField::bandwidth_burst_fields()
-      .into_iter()
-      .any(|field| self.contains(field))
-  }
-
-  fn required<Unit, T>(
-    &self,
-    field: CpuStatField,
-  ) -> Result<T, ParseError<T::Error>>
-  where
-    T: ParseCgroup<Unit>, {
-    self.values.required::<Unit, T>(field.into())
-  }
+  pub fn bandwidth_burst_fields() -> [Self; 2] { [Self::NrBursts, Self::BurstUsec] }
 }
 
 #[cfg(test)]
 mod tests {
-  use assertables::{assert_err, assert_ok};
+  use assertables::assert_ok;
   use indoc::indoc;
   use uom::si::time::microsecond;
 
   use super::*;
+  use crate::parse::tests::{
+    Cases,
+    Failure::{Excess, Invalid, Missing},
+  };
 
-  #[test]
-  fn parses_local_throttling_and_ignores_unknowns() {
-    for (input, expected) in [
-      ("", CpuStatLocal { throttled: None }),
-      ("throttled_usec 123\n", CpuStatLocal {
-        throttled: Some(Time::new::<microsecond>(123)),
-      }),
-      ("future 7\nthrottled_usec 0\n", CpuStatLocal {
-        throttled: Some(Time::new::<microsecond>(0)),
-      }),
-      ("future nope\n", CpuStatLocal { throttled: None }),
-    ] {
-      assert_eq!(assert_ok!(input.parse::<CpuStatLocal>()), expected);
+  impl CpuTimeStat {
+    fn expected([usage, user, system]: [u64; 3]) -> Self {
+      Self {
+        usage: Time::new::<microsecond>(usage),
+        user: Time::new::<microsecond>(user),
+        system: Time::new::<microsecond>(system),
+      }
     }
-    for input in [
-      "throttled_usec nope",
-      "throttled_usec 18446744073709552",
-      "throttled_usec 1 extra",
-    ] {
-      assert_err!(input.parse::<CpuStatLocal>());
+  }
+
+  impl CpuBurstStat {
+    fn expected([nr_bursts, burst]: [u64; 2]) -> Self {
+      Self { nr_bursts: Count { value: nr_bursts, ..Default::default() }, burst: Time::new::<microsecond>(burst) }
+    }
+  }
+
+  impl CpuBandwidthStat {
+    fn expected([nr_periods, nr_throttled, throttled]: [u64; 3], burst: Option<CpuBurstStat>) -> Self {
+      Self {
+        nr_periods: Count { value: nr_periods, ..Default::default() },
+        nr_throttled: Count { value: nr_throttled, ..Default::default() },
+        throttled: Time::new::<microsecond>(throttled),
+        burst,
+      }
     }
   }
 
   #[test]
-  fn parses_cpu_stat() {
-    struct TestCase {
-      input: &'static str,
-      expected: Result<CpuStat, &'static str>,
-    }
+  fn parses_local_throttling_and_ignores_unknowns() {
+    Cases::<CpuStatLocal>::check([
+      ("", Ok(CpuStatLocal { throttled: None })),
+      ("throttled_usec 123\n", Ok(CpuStatLocal { throttled: Some(Time::new::<microsecond>(123)) })),
+      ("future 7\nthrottled_usec 0\n", Ok(CpuStatLocal { throttled: Some(Time::new::<microsecond>(0)) })),
+      ("future nope\n", Ok(CpuStatLocal { throttled: None })),
+      (
+        "\n\t\nthrottled_usec nope\nthrottled_usec 123\n",
+        Ok(CpuStatLocal { throttled: Some(Time::new::<microsecond>(123)) }),
+      ),
+      ("throttled_usec 123\nthrottled_usec nope", Err(Invalid("throttled_usec", "nope"))),
+      ("throttled_usec nope", Err(Invalid("throttled_usec", "nope"))),
+      ("throttled_usec 18446744073709552", Err(Invalid("throttled_usec", "18446744073709552"))),
+      ("throttled_usec 1 extra", Err(Excess)),
+      ("throttled_usec", Err(Missing("throttled_usec"))),
+      ("future", Err(Missing("value"))),
+    ]);
+  }
 
-    let cases = [
-      TestCase {
-        input: indoc! {"
+  #[test]
+  fn parses_cpu_stat() {
+    Cases::<CpuStat>::check([
+      (
+        indoc! {"
           usage_usec 54321
           user_usec 32100
           system_usec 22221
         "},
-        expected: Ok(CpuStat {
-          time: CpuTimeStat {
-            usage: Time::new::<microsecond>(54_321),
-            user: Time::new::<microsecond>(32_100),
-            system: Time::new::<microsecond>(22_221),
-          },
-          bandwidth: None,
-        }),
-      },
-      TestCase {
-        input: indoc! {"
+        Ok(CpuStat { time: CpuTimeStat::expected([54_321, 32_100, 22_221]), bandwidth: None }),
+      ),
+      (
+        indoc! {"
           usage_usec 54321
           user_usec 32100
           system_usec 22221
@@ -392,34 +296,13 @@ mod tests {
           nr_bursts 3
           burst_usec 456
         "},
-        expected: Ok(CpuStat {
-          time: CpuTimeStat {
-            usage: Time::new::<microsecond>(54_321),
-            user: Time::new::<microsecond>(32_100),
-            system: Time::new::<microsecond>(22_221),
-          },
-          bandwidth: Some(CpuBandwidthStat {
-            nr_periods: Count {
-              value: 100,
-              ..Default::default()
-            },
-            nr_throttled: Count {
-              value: 7,
-              ..Default::default()
-            },
-            throttled: Time::new::<microsecond>(1_234),
-            burst: Some(CpuBurstStat {
-              nr_bursts: Count {
-                value: 3,
-                ..Default::default()
-              },
-              burst: Time::new::<microsecond>(456),
-            }),
-          }),
+        Ok(CpuStat {
+          time: CpuTimeStat::expected([54_321, 32_100, 22_221]),
+          bandwidth: Some(CpuBandwidthStat::expected([100, 7, 1_234], Some(CpuBurstStat::expected([3, 456])))),
         }),
-      },
-      TestCase {
-        input: indoc! {"
+      ),
+      (
+        indoc! {"
           usage_usec 1
           user_usec 2
           system_usec 3
@@ -427,28 +310,13 @@ mod tests {
           nr_throttled 5
           throttled_usec 6
         "},
-        expected: Ok(CpuStat {
-          time: CpuTimeStat {
-            usage: Time::new::<microsecond>(1),
-            user: Time::new::<microsecond>(2),
-            system: Time::new::<microsecond>(3),
-          },
-          bandwidth: Some(CpuBandwidthStat {
-            nr_periods: Count {
-              value: 4,
-              ..Default::default()
-            },
-            nr_throttled: Count {
-              value: 5,
-              ..Default::default()
-            },
-            throttled: Time::new::<microsecond>(6),
-            burst: None,
-          }),
+        Ok(CpuStat {
+          time: CpuTimeStat::expected([1, 2, 3]),
+          bandwidth: Some(CpuBandwidthStat::expected([4, 5, 6], None)),
         }),
-      },
-      TestCase {
-        input: indoc! {"
+      ),
+      (
+        indoc! {"
           usage_usec 0
           user_usec 0
           system_usec 0
@@ -458,129 +326,60 @@ mod tests {
           nr_bursts 0
           burst_usec 0
         "},
-        expected: Ok(CpuStat {
-          time: CpuTimeStat {
-            usage: Time::new::<microsecond>(0),
-            user: Time::new::<microsecond>(0),
-            system: Time::new::<microsecond>(0),
-          },
-          bandwidth: Some(CpuBandwidthStat {
-            nr_periods: Count {
-              value: 0,
-              ..Default::default()
-            },
-            nr_throttled: Count {
-              value: 0,
-              ..Default::default()
-            },
-            throttled: Time::new::<microsecond>(0),
-            burst: Some(CpuBurstStat {
-              nr_bursts: Count {
-                value: 0,
-                ..Default::default()
-              },
-              burst: Time::new::<microsecond>(0),
-            }),
-          }),
+        Ok(CpuStat {
+          time: CpuTimeStat::expected([0, 0, 0]),
+          bandwidth: Some(CpuBandwidthStat::expected([0, 0, 0], Some(CpuBurstStat::expected([0, 0])))),
         }),
-      },
-      TestCase {
-        input: indoc! {"
+      ),
+      (
+        indoc! {"
           system_usec 3
           future_counter nope
           usage_usec 1
           nice_usec 4
           user_usec 2
         "},
-        expected: Ok(CpuStat {
-          time: CpuTimeStat {
-            usage: Time::new::<microsecond>(1),
-            user: Time::new::<microsecond>(2),
-            system: Time::new::<microsecond>(3),
-          },
-          bandwidth: None,
-        }),
-      },
-      TestCase {
-        input: "",
-        expected: Err("cgroup content \"\" has missing field \"usage_usec\""),
-      },
-      TestCase {
-        input: indoc! {"
+        Ok(CpuStat { time: CpuTimeStat::expected([1, 2, 3]), bandwidth: None }),
+      ),
+      ("", Err(Missing("usage_usec"))),
+      (
+        indoc! {"
           usage_usec 1
           user_usec 2
         "},
-        expected: Err(
-          "cgroup content \"usage_usec 1\\nuser_usec 2\\n\" has missing field \
-           \"system_usec\"",
-        ),
-      },
-      TestCase {
-        input: indoc! {"
+        Err(Missing("system_usec")),
+      ),
+      (
+        indoc! {"
           usage_usec nope
           user_usec 2
           system_usec 3
         "},
-        expected: Err(
-          "cgroup content \"usage_usec nope\\nuser_usec 2\\nsystem_usec \
-           3\\n\" has an invalid field \"usage_usec\" value \"nope\"",
-        ),
-      },
-      TestCase {
-        input: indoc! {"
+        Err(Invalid("usage_usec", "nope")),
+      ),
+      (
+        indoc! {"
           usage_usec 1
           user_usec 2
           system_usec 3
           nr_periods 4
         "},
-        expected: Err(
-          "cgroup content \"usage_usec 1\\nuser_usec 2\\nsystem_usec \
-           3\\nnr_periods 4\\n\" has missing field \"nr_throttled\"",
-        ),
-      },
-      TestCase {
-        input: indoc! {"
+        Err(Missing("nr_throttled")),
+      ),
+      (
+        indoc! {"
           usage_usec 18446744073709552
           user_usec 2
           system_usec 3
         "},
-        expected: Err(
-          "cgroup content \"usage_usec 18446744073709552\\nuser_usec \
-           2\\nsystem_usec 3\\n\" has an invalid field \"usage_usec\" value \
-           \"18446744073709552\"",
-        ),
-      },
-      TestCase {
-        input: "usage_usec 1\nuser_usec 2\nsystem_usec\n",
-        expected: Err(
-          "cgroup content \"usage_usec 1\\nuser_usec 2\\nsystem_usec\\n\" has \
-           missing field \"system_usec\"",
-        ),
-      },
-      TestCase {
-        input: "usage_usec 1\nuser_usec 2\nsystem_usec 3\nnr_periods \
-                4\nnr_throttled 5\nthrottled_usec 6\nnr_bursts 7\n",
-        expected: Err(
-          "cgroup content \"usage_usec 1\\nuser_usec 2\\nsystem_usec \
-           3\\nnr_periods 4\\nnr_throttled 5\\nthrottled_usec 6\\nnr_bursts \
-           7\\n\" has missing field \"burst_usec\"",
-        ),
-      },
-    ];
-
-    for case in cases {
-      let actual = case.input.parse::<CpuStat>();
-      match case.expected {
-        | Ok(expected) => {
-          let actual = assert_ok!(actual, "input: {:?}", case.input);
-          assert_eq!(actual, expected, "input: {:?}", case.input);
-        },
-        | Err(message) => {
-          let actual = assert_err!(actual, "input: {:?}", case.input);
-          assert_eq!(actual.to_string(), message, "input: {:?}", case.input);
-        },
-      }
-    }
+        Err(Invalid("usage_usec", "18446744073709552")),
+      ),
+      ("usage_usec 1\nuser_usec 2\nsystem_usec\n", Err(Missing("system_usec"))),
+      (
+        "usage_usec 1\nuser_usec 2\nsystem_usec 3\nnr_periods 4\nnr_throttled 5\nthrottled_usec 6\nnr_bursts 7\n",
+        Err(Missing("burst_usec")),
+      ),
+    ]);
   }
 
   #[test]
@@ -595,30 +394,9 @@ mod tests {
       nr_bursts 3
       burst_usec 456
     "};
-    let time = CpuTimeStat {
-      usage: Time::new::<microsecond>(54_321),
-      user: Time::new::<microsecond>(32_100),
-      system: Time::new::<microsecond>(22_221),
-    };
-    let burst = CpuBurstStat {
-      nr_bursts: Count {
-        value: 3,
-        ..Default::default()
-      },
-      burst: Time::new::<microsecond>(456),
-    };
-    let bandwidth = CpuBandwidthStat {
-      nr_periods: Count {
-        value: 100,
-        ..Default::default()
-      },
-      nr_throttled: Count {
-        value: 7,
-        ..Default::default()
-      },
-      throttled: Time::new::<microsecond>(1_234),
-      burst: Some(burst),
-    };
+    let time = CpuTimeStat::expected([54_321, 32_100, 22_221]);
+    let burst = CpuBurstStat::expected([3, 456]);
+    let bandwidth = CpuBandwidthStat::expected([100, 7, 1_234], Some(burst));
 
     assert_eq!(assert_ok!(input.parse::<CpuTimeStat>()), time);
     assert_eq!(assert_ok!(input.parse::<CpuBandwidthStat>()), bandwidth);

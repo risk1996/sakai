@@ -26,27 +26,15 @@ impl MemoryNumaStat {
 
   /// Returns byte amounts by memory field and NUMA node ID.
   #[must_use]
-  pub const fn bytes(
-    &self,
-  ) -> &BTreeMap<MemoryStatByteField, BTreeMap<u32, Bytes>> {
-    &self.bytes
-  }
+  pub const fn bytes(&self) -> &BTreeMap<MemoryStatByteField, BTreeMap<u32, Bytes>> { &self.bytes }
 
   /// Returns page quantities by memory field and NUMA node ID.
   #[must_use]
-  pub const fn pages(
-    &self,
-  ) -> &BTreeMap<MemoryStatPageField, BTreeMap<u32, Pages>> {
-    &self.pages
-  }
+  pub const fn pages(&self) -> &BTreeMap<MemoryStatPageField, BTreeMap<u32, Pages>> { &self.pages }
 
   /// Returns event counts by memory field and NUMA node ID.
   #[must_use]
-  pub const fn counts(
-    &self,
-  ) -> &BTreeMap<MemoryStatCountField, BTreeMap<u32, Count>> {
-    &self.counts
-  }
+  pub const fn counts(&self) -> &BTreeMap<MemoryStatCountField, BTreeMap<u32, Count>> { &self.counts }
 
   fn parse_nodes<Unit, T>(
     raw: &str,
@@ -62,44 +50,25 @@ impl MemoryNumaStat {
     tokens
       .iter()
       .map(|token| {
-        let (node, value) = token.split_once('=').ok_or_else(|| {
-          ParseError::invalid(raw, "node", token, ParseValueError::OutOfRange)
-        })?;
+        let (node, value) =
+          token.split_once('=').ok_or_else(|| ParseError::invalid(raw, "node", token, ParseValueError::OutOfRange))?;
         let id = node
           .strip_prefix('N')
-          .ok_or_else(|| {
-            ParseError::invalid(raw, "node", token, ParseValueError::OutOfRange)
-          })?
+          .ok_or_else(|| ParseError::invalid(raw, "node", token, ParseValueError::OutOfRange))?
           .parse::<u32>()
-          .map_err(|error| {
-            ParseError::invalid(raw, "node", token, error.into())
-          })?;
+          .map_err(|error| ParseError::invalid(raw, "node", token, error.into()))?;
         Ok((id, T::parse_field(raw, field, value)?))
       })
       .collect()
   }
 
-  fn insert(
-    &mut self,
-    raw: &str,
-    key: &str,
-    tokens: &[&str],
-  ) -> Result<(), ParseError<ParseValueError>> {
+  fn insert(&mut self, raw: &str, key: &str, tokens: &[&str]) -> Result<(), ParseError<ParseValueError>> {
     if let Ok(field) = MemoryStatByteField::from_str(key) {
-      self.bytes.insert(
-        field,
-        Self::parse_nodes::<ParseBytes, Bytes>(raw, field.into(), tokens)?,
-      );
+      self.bytes.insert(field, Self::parse_nodes::<ParseBytes, Bytes>(raw, field.into(), tokens)?);
     } else if let Ok(field) = MemoryStatPageField::from_str(key) {
-      self.pages.insert(
-        field,
-        Self::parse_nodes::<ParsePages, Pages>(raw, field.into(), tokens)?,
-      );
+      self.pages.insert(field, Self::parse_nodes::<ParsePages, Pages>(raw, field.into(), tokens)?);
     } else if let Ok(field) = MemoryStatCountField::from_str(key) {
-      self.counts.insert(
-        field,
-        Self::parse_nodes::<ParseCount, Count>(raw, field.into(), tokens)?,
-      );
+      self.counts.insert(field, Self::parse_nodes::<ParseCount, Count>(raw, field.into(), tokens)?);
     }
     Ok(())
   }
@@ -109,22 +78,15 @@ impl FromStr for MemoryNumaStat {
   type Err = ParseError<ParseValueError>;
 
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    let stat = contents
-      .lines()
-      .filter(|line| !line.trim().is_empty())
-      .try_fold(Self::default(), |mut stat, line| {
+    let stat =
+      contents.lines().filter(|line| !line.trim().is_empty()).try_fold(Self::default(), |mut stat, line| {
         let fields = line.split_ascii_whitespace().collect::<Vec<_>>();
-        let (key, nodes) = fields
-          .split_first()
-          .ok_or_else(|| ParseError::missing(contents, "key"))?;
+        let (key, nodes) = fields.split_first().ok_or_else(|| ParseError::missing(contents, "key"))?;
         stat.insert(contents, key, nodes)?;
         Ok::<_, Self::Err>(stat)
       })?;
 
-    for (field, name) in [
-      (MemoryStatByteField::Anon, "anon"),
-      (MemoryStatByteField::File, "file"),
-    ] {
+    for (field, name) in [(MemoryStatByteField::Anon, "anon"), (MemoryStatByteField::File, "file")] {
       if !stat.bytes.contains_key(&field) {
         return Err(ParseError::missing(contents, name));
       }
@@ -154,65 +116,32 @@ mod tests {
         "},
         MemoryNumaStat {
           bytes: BTreeMap::from([
-            (
-              MemoryStatByteField::Anon,
-              BTreeMap::from([
-                (0, Bytes::new::<byte>(4096)),
-                (2, Bytes::new::<byte>(8192)),
-              ]),
-            ),
-            (
-              MemoryStatByteField::File,
-              BTreeMap::from([
-                (0, Bytes::new::<byte>(1024)),
-                (2, Bytes::new::<byte>(2048)),
-              ]),
-            ),
+            (MemoryStatByteField::Anon, BTreeMap::from([(0, Bytes::new::<byte>(4096)), (2, Bytes::new::<byte>(8192))])),
+            (MemoryStatByteField::File, BTreeMap::from([(0, Bytes::new::<byte>(1024)), (2, Bytes::new::<byte>(2048))])),
           ]),
           pages: BTreeMap::from([(
             MemoryStatPageField::PgdemoteDirect,
             BTreeMap::from([
-              (0, Pages {
-                value: 0,
-                ..Default::default()
-              }),
-              (2, Pages {
-                value: 5,
-                ..Default::default()
-              }),
+              (0, Pages { value: 0, ..Default::default() }),
+              (2, Pages { value: 5, ..Default::default() }),
             ]),
           )]),
           counts: BTreeMap::from([(
             MemoryStatCountField::WorkingsetRefaultFile,
             BTreeMap::from([
-              (0, Count {
-                value: 1,
-                ..Default::default()
-              }),
-              (2, Count {
-                value: 3,
-                ..Default::default()
-              }),
+              (0, Count { value: 1, ..Default::default() }),
+              (2, Count { value: 3, ..Default::default() }),
             ]),
           )]),
         },
       ),
-      (
-        "anon N0=0\nfile N0=18446744073709551615\n",
-        MemoryNumaStat {
-          bytes: BTreeMap::from([
-            (
-              MemoryStatByteField::Anon,
-              BTreeMap::from([(0, Bytes::new::<byte>(0))]),
-            ),
-            (
-              MemoryStatByteField::File,
-              BTreeMap::from([(0, Bytes::new::<byte>(u64::MAX))]),
-            ),
-          ]),
-          ..Default::default()
-        },
-      ),
+      ("anon N0=0\nfile N0=18446744073709551615\n", MemoryNumaStat {
+        bytes: BTreeMap::from([
+          (MemoryStatByteField::Anon, BTreeMap::from([(0, Bytes::new::<byte>(0))])),
+          (MemoryStatByteField::File, BTreeMap::from([(0, Bytes::new::<byte>(u64::MAX))])),
+        ]),
+        ..Default::default()
+      }),
     ] {
       assert_eq!(assert_ok!(input.parse::<MemoryNumaStat>()), expected);
     }
@@ -226,21 +155,13 @@ mod tests {
       ("anon\nfile N0=1", "missing field \"node\""),
       ("anon N0=1\nfile N0=", "invalid field \"file\""),
       ("anon N0=-1\nfile N0=1", "invalid field \"anon\""),
-      (
-        "anon N0=1\nfile N0=18446744073709551616",
-        "invalid field \"file\"",
-      ),
+      ("anon N0=1\nfile N0=18446744073709551616", "invalid field \"file\""),
       ("anon 0=1\nfile N0=1", "invalid field \"node\""),
       ("anon N-1=1\nfile N0=1", "invalid field \"node\""),
       ("anon N0\nfile N0=1", "invalid field \"node\""),
       ("anon N4294967296=1\nfile N0=1", "invalid field \"node\""),
     ] {
-      assert!(
-        assert_err!(input.parse::<MemoryNumaStat>())
-          .to_string()
-          .contains(expected),
-        "input: {input:?}"
-      );
+      assert!(assert_err!(input.parse::<MemoryNumaStat>()).to_string().contains(expected), "input: {input:?}");
     }
   }
 }

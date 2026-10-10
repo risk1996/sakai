@@ -25,40 +25,23 @@ impl MemoryStat {
 
   /// Returns memory amounts measured in bytes.
   #[must_use]
-  pub const fn bytes(&self) -> &BTreeMap<MemoryStatByteField, Bytes> {
-    &self.bytes
-  }
+  pub const fn bytes(&self) -> &BTreeMap<MemoryStatByteField, Bytes> { &self.bytes }
 
   /// Returns quantities measured in pages; page size is not assumed.
   #[must_use]
-  pub const fn pages(&self) -> &BTreeMap<MemoryStatPageField, Pages> {
-    &self.pages
-  }
+  pub const fn pages(&self) -> &BTreeMap<MemoryStatPageField, Pages> { &self.pages }
 
   /// Returns event and object counts.
   #[must_use]
-  pub const fn counts(&self) -> &BTreeMap<MemoryStatCountField, Count> {
-    &self.counts
-  }
+  pub const fn counts(&self) -> &BTreeMap<MemoryStatCountField, Count> { &self.counts }
 
-  fn insert(
-    &mut self,
-    raw: &str,
-    key: &str,
-    value: &str,
-  ) -> Result<(), ParseError<ParseValueError>> {
+  fn insert(&mut self, raw: &str, key: &str, value: &str) -> Result<(), ParseError<ParseValueError>> {
     if let Ok(field) = MemoryStatByteField::from_str(key) {
-      self
-        .bytes
-        .insert(field, Bytes::parse_field(raw, field.into(), value)?);
+      self.bytes.insert(field, Bytes::parse_field(raw, field.into(), value)?);
     } else if let Ok(field) = MemoryStatPageField::from_str(key) {
-      self
-        .pages
-        .insert(field, Pages::parse_field(raw, field.into(), value)?);
+      self.pages.insert(field, Pages::parse_field(raw, field.into(), value)?);
     } else if let Ok(field) = MemoryStatCountField::from_str(key) {
-      self
-        .counts
-        .insert(field, Count::parse_field(raw, field.into(), value)?);
+      self.counts.insert(field, Count::parse_field(raw, field.into(), value)?);
     }
     Ok(())
   }
@@ -68,24 +51,16 @@ impl FromStr for MemoryStat {
   type Err = ParseError<ParseValueError>;
 
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    let stat = contents
-      .lines()
-      .filter(|line| !line.trim().is_empty())
-      .try_fold(Self::default(), |mut stat, line| {
+    let stat =
+      contents.lines().filter(|line| !line.trim().is_empty()).try_fold(Self::default(), |mut stat, line| {
         let (key, value) = Parser::parse_line(contents, line, |parser| {
-          Ok((
-            parser.next_raw_field("key")?,
-            parser.next_raw_field("value")?,
-          ))
+          Ok((parser.next_raw_field("key")?, parser.next_raw_field("value")?))
         })?;
         stat.insert(contents, key, value)?;
         Ok::<_, Self::Err>(stat)
       })?;
 
-    for (field, name) in [
-      (MemoryStatByteField::Anon, "anon"),
-      (MemoryStatByteField::File, "file"),
-    ] {
+    for (field, name) in [(MemoryStatByteField::Anon, "anon"), (MemoryStatByteField::File, "file")] {
       if !stat.bytes.contains_key(&field) {
         return Err(ParseError::missing(contents, name));
       }
@@ -95,18 +70,7 @@ impl FromStr for MemoryStat {
 }
 
 /// Keys in `memory.stat` whose values measure bytes.
-#[derive(
-  Debug,
-  Clone,
-  Copy,
-  PartialEq,
-  Eq,
-  PartialOrd,
-  Ord,
-  Hash,
-  strum::EnumString,
-  strum::IntoStaticStr,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, strum::EnumString, strum::IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]
 pub enum MemoryStatByteField {
   Anon,
@@ -142,18 +106,7 @@ pub enum MemoryStatByteField {
 }
 
 /// Keys in `memory.stat` whose values measure numbers of pages.
-#[derive(
-  Debug,
-  Clone,
-  Copy,
-  PartialEq,
-  Eq,
-  PartialOrd,
-  Ord,
-  Hash,
-  strum::EnumString,
-  strum::IntoStaticStr,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, strum::EnumString, strum::IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]
 pub enum MemoryStatPageField {
   Pswpin,
@@ -187,18 +140,7 @@ pub enum MemoryStatPageField {
 }
 
 /// Keys in `memory.stat` whose values count events or hugepage objects.
-#[derive(
-  Debug,
-  Clone,
-  Copy,
-  PartialEq,
-  Eq,
-  PartialOrd,
-  Ord,
-  Hash,
-  strum::EnumString,
-  strum::IntoStaticStr,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, strum::EnumString, strum::IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]
 pub enum MemoryStatCountField {
   WorkingsetRefaultAnon,
@@ -225,6 +167,20 @@ mod tests {
 
   use super::*;
 
+  impl MemoryStat {
+    fn expected<const B: usize, const P: usize, const C: usize>(
+      bytes: [(MemoryStatByteField, u64); B],
+      pages: [(MemoryStatPageField, u64); P],
+      counts: [(MemoryStatCountField, u64); C],
+    ) -> Self {
+      Self {
+        bytes: BTreeMap::from(bytes.map(|(field, value)| (field, Bytes::new::<byte>(value)))),
+        pages: BTreeMap::from(pages.map(|(field, value)| (field, Pages { value, ..Default::default() }))),
+        counts: BTreeMap::from(counts.map(|(field, value)| (field, Count { value, ..Default::default() }))),
+      }
+    }
+  }
+
   #[test]
   fn parses_full_and_older_stat_forms() {
     for (input, expected) in [
@@ -246,73 +202,34 @@ mod tests {
           pswpin 2
           thp_fault_alloc 1
         "},
-        MemoryStat {
-          bytes: BTreeMap::from([
-            (MemoryStatByteField::Anon, Bytes::new::<byte>(8192)),
-            (MemoryStatByteField::File, Bytes::new::<byte>(4096)),
-            (MemoryStatByteField::Kernel, Bytes::new::<byte>(1024)),
-            (MemoryStatByteField::ZswapIncomp, Bytes::new::<byte>(4096)),
-          ]),
-          pages: BTreeMap::from([
-            (MemoryStatPageField::PgscanDirect, Pages {
-              value: 7,
-              ..Default::default()
-            }),
-            (MemoryStatPageField::Pswpin, Pages {
-              value: 2,
-              ..Default::default()
-            }),
-          ]),
-          counts: BTreeMap::from([
-            (MemoryStatCountField::WorkingsetRefaultFile, Count {
-              value: 5,
-              ..Default::default()
-            }),
-            (MemoryStatCountField::WorkingsetRefaultAnon, Count {
-              value: 6,
-              ..Default::default()
-            }),
-            (MemoryStatCountField::WorkingsetActivateAnon, Count {
-              value: 7,
-              ..Default::default()
-            }),
-            (MemoryStatCountField::WorkingsetActivateFile, Count {
-              value: 8,
-              ..Default::default()
-            }),
-            (MemoryStatCountField::WorkingsetRestoreAnon, Count {
-              value: 9,
-              ..Default::default()
-            }),
-            (MemoryStatCountField::WorkingsetRestoreFile, Count {
-              value: 10,
-              ..Default::default()
-            }),
-            (MemoryStatCountField::Pgfault, Count {
-              value: 3,
-              ..Default::default()
-            }),
-            (MemoryStatCountField::ThpFaultAlloc, Count {
-              value: 1,
-              ..Default::default()
-            }),
-          ]),
-        },
+        MemoryStat::expected(
+          [
+            (MemoryStatByteField::Anon, 8192),
+            (MemoryStatByteField::File, 4096),
+            (MemoryStatByteField::Kernel, 1024),
+            (MemoryStatByteField::ZswapIncomp, 4096),
+          ],
+          [(MemoryStatPageField::PgscanDirect, 7), (MemoryStatPageField::Pswpin, 2)],
+          [
+            (MemoryStatCountField::WorkingsetRefaultFile, 5),
+            (MemoryStatCountField::WorkingsetRefaultAnon, 6),
+            (MemoryStatCountField::WorkingsetActivateAnon, 7),
+            (MemoryStatCountField::WorkingsetActivateFile, 8),
+            (MemoryStatCountField::WorkingsetRestoreAnon, 9),
+            (MemoryStatCountField::WorkingsetRestoreFile, 10),
+            (MemoryStatCountField::Pgfault, 3),
+            (MemoryStatCountField::ThpFaultAlloc, 1),
+          ],
+        ),
       ),
-      ("anon 0\nfile 1\n", MemoryStat {
-        bytes: BTreeMap::from([
-          (MemoryStatByteField::Anon, Bytes::new::<byte>(0)),
-          (MemoryStatByteField::File, Bytes::new::<byte>(1)),
-        ]),
-        ..Default::default()
-      }),
-      ("anon 1\nfile 2\nanon 3\nfuture 4\nfuture 5\n", MemoryStat {
-        bytes: BTreeMap::from([
-          (MemoryStatByteField::Anon, Bytes::new::<byte>(3)),
-          (MemoryStatByteField::File, Bytes::new::<byte>(2)),
-        ]),
-        ..Default::default()
-      }),
+      (
+        "anon 0\nfile 1\n",
+        MemoryStat::expected([(MemoryStatByteField::Anon, 0), (MemoryStatByteField::File, 1)], [], []),
+      ),
+      (
+        "anon 1\nfile 2\nanon 3\nfuture 4\nfuture 5\n",
+        MemoryStat::expected([(MemoryStatByteField::Anon, 3), (MemoryStatByteField::File, 2)], [], []),
+      ),
     ] {
       assert_eq!(assert_ok!(input.parse::<MemoryStat>()), expected);
     }
@@ -325,19 +242,11 @@ mod tests {
       ("anon 1", "missing field \"file\""),
       ("anon nope\nfile 1", "invalid field \"anon\""),
       ("anon -1\nfile 1", "invalid field \"anon\""),
-      (
-        "anon 1\nfile 1\npgscan 18446744073709551616",
-        "invalid field \"pgscan\"",
-      ),
+      ("anon 1\nfile 1\npgscan 18446744073709551616", "invalid field \"pgscan\""),
       ("anon 1\nfile 1\nextra", "missing field \"value\""),
       ("anon 1 2\nfile 1", "excess field \"additional\""),
     ] {
-      assert!(
-        assert_err!(input.parse::<MemoryStat>())
-          .to_string()
-          .contains(expected),
-        "input: {input:?}"
-      );
+      assert!(assert_err!(input.parse::<MemoryStat>()).to_string().contains(expected), "input: {input:?}");
     }
   }
 }

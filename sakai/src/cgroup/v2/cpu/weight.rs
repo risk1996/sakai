@@ -36,9 +36,7 @@ impl FromStr for CpuWeight {
   type Err = ParseError<ParseValueError>;
 
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    Parser::parse(contents, |parser| {
-      parser.next_field::<ParseCpuWeight, _>("weight")
-    })
+    Parser::parse(contents, |parser| parser.next_field::<ParseCpuWeight, _>("weight"))
   }
 }
 
@@ -51,90 +49,36 @@ impl ParseCgroup<ParseCpuWeight> for CpuWeight {
   fn parse_cgroup(value: &str) -> Result<Self, Self::Error> {
     match value.parse::<u16>()? {
       | 0 => Ok(Self::Idle),
-      | value => Weight::try_new(value)
-        .map(Self::Shares)
-        .map_err(|_error| ParseValueError::OutOfRange),
+      | value => Weight::try_new(value).map(Self::Shares).map_err(|_error| ParseValueError::OutOfRange),
     }
   }
 }
 
 #[cfg(test)]
 mod tests {
-  use assertables::{assert_err, assert_ok};
+  use assertables::assert_ok;
 
   use super::*;
+  use crate::parse::tests::{
+    Cases,
+    Failure::{Excess, Invalid, Missing},
+  };
 
   #[test]
   fn parses_cpu_weight() {
-    struct TestCase {
-      input: &'static str,
-      expected: Result<CpuWeight, &'static str>,
-    }
-
     let weight_1 = assert_ok!(Weight::try_new(1));
     let weight_100 = assert_ok!(Weight::try_new(100));
     let weight_10_000 = assert_ok!(Weight::try_new(10_000));
-    let cases = [
-      TestCase {
-        input: "0\n",
-        expected: Ok(CpuWeight::Idle),
-      },
-      TestCase {
-        input: "1",
-        expected: Ok(CpuWeight::Shares(weight_1)),
-      },
-      TestCase {
-        input: "100\n",
-        expected: Ok(CpuWeight::Shares(weight_100)),
-      },
-      TestCase {
-        input: "10000\n",
-        expected: Ok(CpuWeight::Shares(weight_10_000)),
-      },
-      TestCase {
-        input: "",
-        expected: Err("cgroup content \"\" has missing field \"weight\""),
-      },
-      TestCase {
-        input: "100 200",
-        expected: Err(
-          "cgroup content \"100 200\" has excess field \"additional\"",
-        ),
-      },
-      TestCase {
-        input: "10001",
-        expected: Err(
-          "cgroup content \"10001\" has an invalid field \"weight\" value \
-           \"10001\"",
-        ),
-      },
-      TestCase {
-        input: "-1",
-        expected: Err(
-          "cgroup content \"-1\" has an invalid field \"weight\" value \"-1\"",
-        ),
-      },
-      TestCase {
-        input: "heavy",
-        expected: Err(
-          "cgroup content \"heavy\" has an invalid field \"weight\" value \
-           \"heavy\"",
-        ),
-      },
-    ];
-
-    for case in cases {
-      let actual = case.input.parse::<CpuWeight>();
-      match case.expected {
-        | Ok(expected) => {
-          let actual = assert_ok!(actual, "input: {:?}", case.input);
-          assert_eq!(actual, expected, "input: {:?}", case.input);
-        },
-        | Err(message) => {
-          let actual = assert_err!(actual, "input: {:?}", case.input);
-          assert_eq!(actual.to_string(), message, "input: {:?}", case.input);
-        },
-      }
-    }
+    Cases::<CpuWeight>::check([
+      ("0\n", Ok(CpuWeight::Idle)),
+      ("1", Ok(CpuWeight::Shares(weight_1))),
+      ("100\n", Ok(CpuWeight::Shares(weight_100))),
+      ("10000\n", Ok(CpuWeight::Shares(weight_10_000))),
+      ("", Err(Missing("weight"))),
+      ("100 200", Err(Excess)),
+      ("10001", Err(Invalid("weight", "10001"))),
+      ("-1", Err(Invalid("weight", "-1"))),
+      ("heavy", Err(Invalid("weight", "heavy"))),
+    ]);
   }
 }

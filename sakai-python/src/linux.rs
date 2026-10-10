@@ -9,41 +9,26 @@ use pyo3::{
   types::{PyDict, PyMappingProxy, PyModule},
 };
 use sakai::{
-  Bytes, Error, MaxOr as CoreMaxOr, NonZeroTime, Pressure as CorePressure,
-  PressureLine as CorePressureLine, Ratio,
+  Bytes, Error, MaxOr as CoreMaxOr, NonZeroTime, Pressure as CorePressure, PressureLine as CorePressureLine, Ratio,
   v2::{
     cpu::{
-      CpuBandwidthStat as CoreCpuBandwidthStat,
-      CpuBurstStat as CoreCpuBurstStat, CpuMax as CoreCpuMax,
-      CpuStat as CoreCpuStat, CpuStatLocal as CoreCpuStatLocal,
-      CpuTimeStat as CoreCpuTimeStat, CpuWeight as CoreCpuWeight,
+      CpuBandwidthStat as CoreCpuBandwidthStat, CpuBurstStat as CoreCpuBurstStat, CpuMax as CoreCpuMax,
+      CpuStat as CoreCpuStat, CpuStatLocal as CoreCpuStatLocal, CpuTimeStat as CoreCpuTimeStat,
+      CpuWeight as CoreCpuWeight,
     },
-    memory::{
-      MemoryNumaStat as CoreMemoryNumaStat, MemoryStat as CoreMemoryStat,
-      SwapEvents as CoreSwapEvents,
-    },
+    memory::{MemoryNumaStat as CoreMemoryNumaStat, MemoryStat as CoreMemoryStat, SwapEvents as CoreSwapEvents},
   },
 };
 use uom::si::{information::byte, ratio::ratio, time::nanosecond};
 
-create_exception!(
-  _sakai,
-  SakaiError,
-  PyException,
-  "Base error for Sakai cgroup operations."
-);
+create_exception!(_sakai, SakaiError, PyException, "Base error for Sakai cgroup operations.");
 create_exception!(
   _sakai,
   InterfaceMissingError,
   SakaiError,
   "A cgroup interface file is missing; path identifies the interface."
 );
-create_exception!(
-  _sakai,
-  NotCgroupV2Error,
-  SakaiError,
-  "The requested path is not on a cgroup v2 filesystem."
-);
+create_exception!(_sakai, NotCgroupV2Error, SakaiError, "The requested path is not on a cgroup v2 filesystem.");
 create_exception!(
   _sakai,
   DeletedCgroupError,
@@ -56,12 +41,7 @@ create_exception!(
   SakaiError,
   "A cgroup interface could not be parsed; path identifies the interface."
 );
-create_exception!(
-  _sakai,
-  NotSupportedError,
-  SakaiError,
-  "The operation is not supported for this cgroup."
-);
+create_exception!(_sakai, NotSupportedError, SakaiError, "The operation is not supported for this cgroup.");
 
 struct PythonError;
 
@@ -71,20 +51,12 @@ impl PythonPath {
   fn extract<T>(object: &Bound<'_, T>) -> PyResult<PathBuf> {
     // fsdecode first applies os.fspath and decodes bytes with surrogateescape.
     // PyO3 0.29's PathBuf extractor accepts only str results from os.fspath.
-    object
-      .py()
-      .import("os")?
-      .call_method1("fsdecode", (object.as_any(),))?
-      .extract()
+    object.py().import("os")?.call_method1("fsdecode", (object.as_any(),))?.extract()
   }
 }
 
 impl PythonError {
-  fn with_path<E: PyTypeInfo>(
-    py: Python<'_>,
-    message: String,
-    path: PathBuf,
-  ) -> PyErr {
+  fn with_path<E: PyTypeInfo>(py: Python<'_>, message: String, path: PathBuf) -> PyErr {
     let error = PyErr::new::<E, _>(message);
     // A path is diagnostic. PyO3 uses os.fspath-compatible, lossless path conversion.
     if let Err(attribute_error) = error.value(py).setattr("path", path) {
@@ -96,28 +68,16 @@ impl PythonError {
   fn from_core(py: Python<'_>, error: Error) -> PyErr {
     match error {
       | Error::FileMissing { path } => {
-        Self::with_path::<InterfaceMissingError>(
-          py,
-          format!("cgroup interface is missing: {}", path.display()),
-          path,
-        )
+        Self::with_path::<InterfaceMissingError>(py, format!("cgroup interface is missing: {}", path.display()), path)
       },
-      | Error::NotSupported => {
-        NotSupportedError::new_err("operation is not supported for this cgroup")
+      | Error::NotSupported => NotSupportedError::new_err("operation is not supported for this cgroup"),
+      | Error::NotCgroupV2 => NotCgroupV2Error::new_err("not a cgroup v2 filesystem"),
+      | Error::DeletedCgroup { path } => {
+        Self::with_path::<DeletedCgroupError>(py, format!("cgroup has been deleted: {}", path.display()), path)
       },
-      | Error::NotCgroupV2 => {
-        NotCgroupV2Error::new_err("not a cgroup v2 filesystem")
+      | Error::Parse { path, source } => {
+        Self::with_path::<CgroupParseError>(py, format!("failed to parse {}: {source}", path.display()), path)
       },
-      | Error::DeletedCgroup { path } => Self::with_path::<DeletedCgroupError>(
-        py,
-        format!("cgroup has been deleted: {}", path.display()),
-        path,
-      ),
-      | Error::Parse { path, source } => Self::with_path::<CgroupParseError>(
-        py,
-        format!("failed to parse {}: {source}", path.display()),
-        path,
-      ),
       | Error::Io(source) => match source.raw_os_error() {
         | Some(errno) => PyOSError::new_err((errno, source.to_string())),
         | None => PyOSError::new_err(source.to_string()),
@@ -150,11 +110,7 @@ struct Cgroup {
 }
 
 impl From<sakai::Cgroup> for Cgroup {
-  fn from(owner: sakai::Cgroup) -> Self {
-    Self {
-      owner: Arc::new(owner),
-    }
-  }
+  fn from(owner: sakai::Cgroup) -> Self { Self { owner: Arc::new(owner) } }
 }
 
 #[pymethods]
@@ -162,46 +118,31 @@ impl Cgroup {
   /// Open the cgroup containing the current process.
   #[staticmethod]
   fn current(py: Python<'_>) -> PyResult<Self> {
-    PythonError::result(py, py.detach(sakai::Cgroup::from_current_process))
-      .map(Into::into)
+    PythonError::result(py, py.detach(sakai::Cgroup::from_current_process)).map(Into::into)
   }
 
   /// Open the cgroup containing a process ID.
   #[staticmethod]
   fn from_pid(py: Python<'_>, pid: i64) -> PyResult<Self> {
     let pid = u32::try_from(pid)?;
-    PythonError::result(py, py.detach(move || sakai::Cgroup::from_pid(pid)))
-      .map(Into::into)
+    PythonError::result(py, py.detach(move || sakai::Cgroup::from_pid(pid))).map(Into::into)
   }
 
   /// Open a cgroup v2 directory by its filesystem path.
   ///
   /// Accepts str, bytes, and os.PathLike without lossy path conversion.
   #[staticmethod]
-  fn from_path(
-    py: Python<'_>,
-    #[pyo3(from_py_with = PythonPath::extract)] path: PathBuf,
-  ) -> PyResult<Self> {
-    PythonError::result(py, py.detach(move || sakai::Cgroup::from_path(&path)))
-      .map(Into::into)
+  fn from_path(py: Python<'_>, #[pyo3(from_py_with = PythonPath::extract)] path: PathBuf) -> PyResult<Self> {
+    PythonError::result(py, py.detach(move || sakai::Cgroup::from_path(&path))).map(Into::into)
   }
 
   /// Diagnostic filesystem path; it may become stale after a rename.
   #[getter]
-  fn path(&self) -> PathBuf {
-    self.owner.path().to_owned()
-  }
+  fn path(&self) -> PathBuf { self.owner.path().to_owned() }
 
   /// Open a direct child by one filesystem name, without following slashes.
-  fn child(
-    &self,
-    py: Python<'_>,
-    #[pyo3(from_py_with = PythonPath::extract)] name: PathBuf,
-  ) -> PyResult<Self> {
-    PythonError::read(py, &self.owner, move |owner| {
-      owner.child(name.as_os_str())
-    })
-    .map(Into::into)
+  fn child(&self, py: Python<'_>, #[pyo3(from_py_with = PythonPath::extract)] name: PathBuf) -> PyResult<Self> {
+    PythonError::read(py, &self.owner, move |owner| owner.child(name.as_os_str())).map(Into::into)
   }
 
   /// Return separate pinned handles for the current direct children.
@@ -211,29 +152,15 @@ impl Cgroup {
   }
 
   /// Return a reader for CPU controller interfaces.
-  fn cpu(&self) -> CpuReader {
-    CpuReader {
-      owner: Arc::clone(&self.owner),
-    }
-  }
+  fn cpu(&self) -> CpuReader { CpuReader { owner: Arc::clone(&self.owner) } }
 
   /// Return a reader for memory controller interfaces.
-  fn memory(&self) -> MemoryReader {
-    MemoryReader {
-      owner: Arc::clone(&self.owner),
-    }
-  }
+  fn memory(&self) -> MemoryReader { MemoryReader { owner: Arc::clone(&self.owner) } }
 
   /// Return a reader for core cgroup topology interfaces.
-  fn core(&self) -> CoreReader {
-    CoreReader {
-      owner: Arc::clone(&self.owner),
-    }
-  }
+  fn core(&self) -> CoreReader { CoreReader { owner: Arc::clone(&self.owner) } }
 
-  fn __repr__(&self) -> String {
-    format!("Cgroup({:?})", self.owner.path())
-  }
+  fn __repr__(&self) -> String { format!("Cgroup({:?})", self.owner.path()) }
 }
 
 #[derive(Clone, Copy)]
@@ -261,33 +188,24 @@ struct MaxOr {
 }
 
 impl MaxOr {
+  fn from_value<T>(value: CoreMaxOr<T>, convert: impl FnOnce(T) -> LimitValue) -> Self {
+    let inner = match value {
+      | CoreMaxOr::Max => LimitValue::Max,
+      | CoreMaxOr::Value(value) => convert(value),
+    };
+    Self { inner }
+  }
+
   fn from_time(value: CoreMaxOr<NonZeroTime>) -> Self {
-    Self {
-      inner: match value {
-        | CoreMaxOr::Max => LimitValue::Max,
-        | CoreMaxOr::Value(time) => {
-          LimitValue::Integer(time.get::<nanosecond>())
-        },
-      },
-    }
+    Self::from_value(value, |time| LimitValue::Integer(time.get::<nanosecond>()))
   }
 
   fn from_bytes(value: CoreMaxOr<Bytes>) -> Self {
-    Self {
-      inner: match value {
-        | CoreMaxOr::Max => LimitValue::Max,
-        | CoreMaxOr::Value(bytes) => LimitValue::Integer(bytes.get::<byte>()),
-      },
-    }
+    Self::from_value(value, |bytes| LimitValue::Integer(bytes.get::<byte>()))
   }
 
   fn from_ratio(value: CoreMaxOr<Ratio>) -> Self {
-    Self {
-      inner: match value {
-        | CoreMaxOr::Max => LimitValue::Max,
-        | CoreMaxOr::Value(value) => LimitValue::Ratio(value.get::<ratio>()),
-      },
-    }
+    Self::from_value(value, |value| LimitValue::Ratio(value.get::<ratio>()))
   }
 }
 
@@ -295,17 +213,13 @@ impl MaxOr {
 impl MaxOr {
   /// Whether the kernel reported `max`.
   #[getter]
-  fn is_max(&self) -> bool {
-    matches!(self.inner, LimitValue::Max)
-  }
+  fn is_max(&self) -> bool { matches!(self.inner, LimitValue::Max) }
 
   /// Concrete value; raises ValueError when the kernel reported `max`.
   #[getter]
   fn value(&self) -> PyResult<PythonLimitValue> {
     match self.inner {
-      | LimitValue::Max => {
-        Err(PyValueError::new_err("max has no numeric value"))
-      },
+      | LimitValue::Max => Err(PyValueError::new_err("max has no numeric value")),
       | LimitValue::Integer(value) => Ok(PythonLimitValue::Integer(value)),
       | LimitValue::Ratio(value) => Ok(PythonLimitValue::Ratio(value)),
     }
@@ -330,62 +244,52 @@ struct CpuReader {
 impl CpuReader {
   /// Read hierarchical CPU usage and optional bandwidth counters.
   fn stat(&self, py: Python<'_>) -> PyResult<CpuStat> {
-    PythonError::read(py, &self.owner, |owner| owner.cpu().stat())
-      .map(|inner| CpuStat { inner })
+    PythonError::read(py, &self.owner, |owner| owner.cpu().stat()).map(|inner| CpuStat { inner })
   }
 
   /// Read local CPU throttling counters, if the interface exists.
   fn stat_local(&self, py: Python<'_>) -> PyResult<CpuStatLocal> {
-    PythonError::read(py, &self.owner, |owner| owner.cpu().stat_local())
-      .map(|inner| CpuStatLocal { inner })
+    PythonError::read(py, &self.owner, |owner| owner.cpu().stat_local()).map(|inner| CpuStatLocal { inner })
   }
 
   /// Read this cgroup's quota and period, not effective ancestor capacity.
   fn max(&self, py: Python<'_>) -> PyResult<CpuMax> {
-    PythonError::read(py, &self.owner, |owner| owner.cpu().max())
-      .map(Into::into)
+    PythonError::read(py, &self.owner, |owner| owner.cpu().max()).map(Into::into)
   }
 
   /// Read CPU weight, preserving the special idle state.
   fn weight(&self, py: Python<'_>) -> PyResult<CpuWeight> {
-    PythonError::read(py, &self.owner, |owner| owner.cpu().weight())
-      .map(Into::into)
+    PythonError::read(py, &self.owner, |owner| owner.cpu().weight()).map(Into::into)
   }
 
   /// Read CPU weight as a nice value from -20 through 19.
   fn weight_nice(&self, py: Python<'_>) -> PyResult<i8> {
-    PythonError::read(py, &self.owner, |owner| owner.cpu().weight_nice())
-      .map(|nice| *nice.as_ref())
+    PythonError::read(py, &self.owner, |owner| owner.cpu().weight_nice()).map(|nice| *nice.as_ref())
   }
 
   /// Read the allowed CPU bandwidth burst in nanoseconds.
   fn max_burst(&self, py: Python<'_>) -> PyResult<u64> {
-    PythonError::read(py, &self.owner, |owner| owner.cpu().max_burst())
-      .map(|burst| burst.value().get::<nanosecond>())
+    PythonError::read(py, &self.owner, |owner| owner.cpu().max_burst()).map(|burst| burst.value().get::<nanosecond>())
   }
 
   /// Read whether this cgroup is configured for idle CPU scheduling.
   fn idle(&self, py: Python<'_>) -> PyResult<bool> {
-    PythonError::read(py, &self.owner, |owner| owner.cpu().idle())
-      .map(|idle| idle.value())
+    PythonError::read(py, &self.owner, |owner| owner.cpu().idle()).map(|idle| idle.value())
   }
 
   /// Read the minimum utilization clamp as a ratio from zero to one.
   fn uclamp_min(&self, py: Python<'_>) -> PyResult<f64> {
-    PythonError::read(py, &self.owner, |owner| owner.cpu().uclamp_min())
-      .map(|clamp| clamp.value().get::<ratio>())
+    PythonError::read(py, &self.owner, |owner| owner.cpu().uclamp_min()).map(|clamp| clamp.value().get::<ratio>())
   }
 
   /// Read the maximum utilization clamp as `max` or a concrete ratio.
   fn uclamp_max(&self, py: Python<'_>) -> PyResult<MaxOr> {
-    PythonError::read(py, &self.owner, |owner| owner.cpu().uclamp_max())
-      .map(|clamp| MaxOr::from_ratio(clamp.value()))
+    PythonError::read(py, &self.owner, |owner| owner.cpu().uclamp_max()).map(|clamp| MaxOr::from_ratio(clamp.value()))
   }
 
   /// Read CPU pressure-stall averages and cumulative times.
   fn pressure(&self, py: Python<'_>) -> PyResult<Pressure> {
-    PythonError::read(py, &self.owner, |owner| owner.cpu().pressure())
-      .map(Into::into)
+    PythonError::read(py, &self.owner, |owner| owner.cpu().pressure()).map(Into::into)
   }
 }
 
@@ -399,15 +303,11 @@ struct CpuStat {
 impl CpuStat {
   /// CPU usage split into total, user, and system nanoseconds.
   #[getter]
-  fn time(&self) -> CpuTimeStat {
-    CpuTimeStat::from(self.inner.time())
-  }
+  fn time(&self) -> CpuTimeStat { CpuTimeStat::from(self.inner.time()) }
 
   /// Bandwidth counters, or None when the kernel omitted them.
   #[getter]
-  fn bandwidth(&self) -> Option<CpuBandwidthStat> {
-    self.inner.bandwidth().map(CpuBandwidthStat::from)
-  }
+  fn bandwidth(&self) -> Option<CpuBandwidthStat> { self.inner.bandwidth().map(CpuBandwidthStat::from) }
 }
 
 /// Local CPU statistics, distinct from hierarchical cpu.stat.
@@ -420,9 +320,7 @@ struct CpuStatLocal {
 impl CpuStatLocal {
   /// Locally throttled time in nanoseconds, if reported by the kernel.
   #[getter]
-  fn throttled_ns(&self) -> Option<u64> {
-    self.inner.throttled().map(|time| time.get::<nanosecond>())
-  }
+  fn throttled_ns(&self) -> Option<u64> { self.inner.throttled().map(|time| time.get::<nanosecond>()) }
 }
 
 /// CPU usage times in nanoseconds.
@@ -456,36 +354,26 @@ struct CpuBandwidthStat {
 }
 
 impl From<CoreCpuBandwidthStat> for CpuBandwidthStat {
-  fn from(inner: CoreCpuBandwidthStat) -> Self {
-    Self { inner }
-  }
+  fn from(inner: CoreCpuBandwidthStat) -> Self { Self { inner } }
 }
 
 #[pymethods]
 impl CpuBandwidthStat {
   /// Number of elapsed bandwidth periods.
   #[getter]
-  fn nr_periods(&self) -> u64 {
-    self.inner.nr_periods().value
-  }
+  fn nr_periods(&self) -> u64 { self.inner.nr_periods().value }
 
   /// Number of bandwidth periods in which the cgroup was throttled.
   #[getter]
-  fn nr_throttled(&self) -> u64 {
-    self.inner.nr_throttled().value
-  }
+  fn nr_throttled(&self) -> u64 { self.inner.nr_throttled().value }
 
   /// Cumulative throttled time in nanoseconds.
   #[getter]
-  fn throttled_ns(&self) -> u64 {
-    self.inner.throttled().get::<nanosecond>()
-  }
+  fn throttled_ns(&self) -> u64 { self.inner.throttled().get::<nanosecond>() }
 
   /// Burst counters, if the kernel reports them.
   #[getter]
-  fn burst(&self) -> Option<CpuBurstStat> {
-    self.inner.burst().map(CpuBurstStat::from)
-  }
+  fn burst(&self) -> Option<CpuBurstStat> { self.inner.burst().map(CpuBurstStat::from) }
 }
 
 /// CPU bandwidth burst counters.
@@ -501,10 +389,7 @@ struct CpuBurstStat {
 
 impl From<CoreCpuBurstStat> for CpuBurstStat {
   fn from(value: CoreCpuBurstStat) -> Self {
-    Self {
-      nr_bursts: value.nr_bursts().value,
-      burst_ns: value.burst().get::<nanosecond>(),
-    }
+    Self { nr_bursts: value.nr_bursts().value, burst_ns: value.burst().get::<nanosecond>() }
   }
 }
 
@@ -546,14 +431,8 @@ struct CpuWeight {
 impl From<CoreCpuWeight> for CpuWeight {
   fn from(value: CoreCpuWeight) -> Self {
     match value {
-      | CoreCpuWeight::Idle => Self {
-        is_idle: true,
-        shares: None,
-      },
-      | CoreCpuWeight::Shares(weight) => Self {
-        is_idle: false,
-        shares: Some(*weight.as_ref()),
-      },
+      | CoreCpuWeight::Idle => Self { is_idle: true, shares: None },
+      | CoreCpuWeight::Shares(weight) => Self { is_idle: false, shares: Some(*weight.as_ref()) },
     }
   }
 }
@@ -565,24 +444,18 @@ struct Pressure {
 }
 
 impl From<CorePressure> for Pressure {
-  fn from(inner: CorePressure) -> Self {
-    Self { inner }
-  }
+  fn from(inner: CorePressure) -> Self { Self { inner } }
 }
 
 #[pymethods]
 impl Pressure {
   /// Time during which some tasks were stalled.
   #[getter]
-  fn some(&self) -> PressureLine {
-    PressureLine::from(self.inner.some())
-  }
+  fn some(&self) -> PressureLine { PressureLine::from(self.inner.some()) }
 
   /// Time during which all tasks were stalled, if reported.
   #[getter]
-  fn full(&self) -> Option<PressureLine> {
-    self.inner.full().map(PressureLine::from)
-  }
+  fn full(&self) -> Option<PressureLine> { self.inner.full().map(PressureLine::from) }
 }
 
 /// Pressure averages as ratios and cumulative stall time in nanoseconds.
@@ -622,71 +495,54 @@ struct MemoryReader {
 #[pymethods]
 impl MemoryReader {
   /// Return a swap reader that retains this pinned cgroup handle.
-  fn swap(&self) -> SwapReader {
-    SwapReader {
-      owner: Arc::clone(&self.owner),
-    }
-  }
+  fn swap(&self) -> SwapReader { SwapReader { owner: Arc::clone(&self.owner) } }
 
   /// Return a compressed swap reader that retains this pinned cgroup handle.
-  fn zswap(&self) -> ZswapReader {
-    ZswapReader {
-      owner: Arc::clone(&self.owner),
-    }
-  }
+  fn zswap(&self) -> ZswapReader { ZswapReader { owner: Arc::clone(&self.owner) } }
 
   /// Read current memory usage in bytes.
   fn current(&self, py: Python<'_>) -> PyResult<u64> {
-    PythonError::read(py, &self.owner, |owner| owner.memory().current())
-      .map(|value| value.value().get::<byte>())
+    PythonError::read(py, &self.owner, |owner| owner.memory().current()).map(|value| value.value().get::<byte>())
   }
 
   /// Read peak memory usage in bytes.
   fn peak(&self, py: Python<'_>) -> PyResult<u64> {
-    PythonError::read(py, &self.owner, |owner| owner.memory().peak())
-      .map(|value| value.value().get::<byte>())
+    PythonError::read(py, &self.owner, |owner| owner.memory().peak()).map(|value| value.value().get::<byte>())
   }
 
   /// Read the hard memory limit as `max` or a concrete byte count.
   fn max(&self, py: Python<'_>) -> PyResult<MaxOr> {
-    PythonError::read(py, &self.owner, |owner| owner.memory().max())
-      .map(|value| MaxOr::from_bytes(value.value()))
+    PythonError::read(py, &self.owner, |owner| owner.memory().max()).map(|value| MaxOr::from_bytes(value.value()))
   }
 
   /// Read the throttling threshold as `max` or a concrete byte count.
   fn high(&self, py: Python<'_>) -> PyResult<MaxOr> {
-    PythonError::read(py, &self.owner, |owner| owner.memory().high())
-      .map(|value| MaxOr::from_bytes(value.value()))
+    PythonError::read(py, &self.owner, |owner| owner.memory().high()).map(|value| MaxOr::from_bytes(value.value()))
   }
 
   /// Read the best-effort memory protection boundary in bytes.
   fn low(&self, py: Python<'_>) -> PyResult<u64> {
-    PythonError::read(py, &self.owner, |owner| owner.memory().low())
-      .map(|value| value.value().get::<byte>())
+    PythonError::read(py, &self.owner, |owner| owner.memory().low()).map(|value| value.value().get::<byte>())
   }
 
   /// Read the hard memory protection boundary in bytes.
   fn min(&self, py: Python<'_>) -> PyResult<u64> {
-    PythonError::read(py, &self.owner, |owner| owner.memory().min())
-      .map(|value| value.value().get::<byte>())
+    PythonError::read(py, &self.owner, |owner| owner.memory().min()).map(|value| value.value().get::<byte>())
   }
 
   /// Read memory statistics in separate byte, page, and count mappings.
   fn stat(&self, py: Python<'_>) -> PyResult<MemoryStat> {
-    PythonError::read(py, &self.owner, |owner| owner.memory().stat())
-      .map(Into::into)
+    PythonError::read(py, &self.owner, |owner| owner.memory().stat()).map(Into::into)
   }
 
   /// Read memory statistics by field and NUMA node, grouped by native units.
   fn numa_stat(&self, py: Python<'_>) -> PyResult<MemoryNumaStat> {
-    PythonError::read(py, &self.owner, |owner| owner.memory().numa_stat())
-      .map(Into::into)
+    PythonError::read(py, &self.owner, |owner| owner.memory().numa_stat()).map(Into::into)
   }
 
   /// Read memory pressure-stall averages and cumulative times.
   fn pressure(&self, py: Python<'_>) -> PyResult<Pressure> {
-    PythonError::read(py, &self.owner, |owner| owner.memory().pressure())
-      .map(Into::into)
+    PythonError::read(py, &self.owner, |owner| owner.memory().pressure()).map(Into::into)
   }
 }
 
@@ -700,14 +556,12 @@ struct SwapReader {
 impl SwapReader {
   /// Read current hierarchical swap usage in bytes.
   fn current(&self, py: Python<'_>) -> PyResult<u64> {
-    PythonError::read(py, &self.owner, |owner| owner.memory().swap().current())
-      .map(|value| value.value().get::<byte>())
+    PythonError::read(py, &self.owner, |owner| owner.memory().swap().current()).map(|value| value.value().get::<byte>())
   }
 
   /// Read peak swap usage since cgroup creation; this never resets the peak.
   fn peak(&self, py: Python<'_>) -> PyResult<u64> {
-    PythonError::read(py, &self.owner, |owner| owner.memory().swap().peak())
-      .map(|value| value.value().get::<byte>())
+    PythonError::read(py, &self.owner, |owner| owner.memory().swap().peak()).map(|value| value.value().get::<byte>())
   }
 
   /// Read the hard swap limit as `max` or a concrete byte count.
@@ -724,8 +578,7 @@ impl SwapReader {
 
   /// Read swap threshold and allocation failure counters.
   fn events(&self, py: Python<'_>) -> PyResult<SwapEvents> {
-    PythonError::read(py, &self.owner, |owner| owner.memory().swap().events())
-      .map(Into::into)
+    PythonError::read(py, &self.owner, |owner| owner.memory().swap().events()).map(Into::into)
   }
 }
 
@@ -746,11 +599,7 @@ struct SwapEvents {
 
 impl From<CoreSwapEvents> for SwapEvents {
   fn from(value: CoreSwapEvents) -> Self {
-    Self {
-      high: value.high().map(|count| count.value),
-      max: value.max().value,
-      fail: value.fail().value,
-    }
+    Self { high: value.high().map(|count| count.value), max: value.max().value, fail: value.fail().value }
   }
 }
 
@@ -776,10 +625,7 @@ impl ZswapReader {
 
   /// Read the configured disk writeback policy; an ancestor can disable it.
   fn writeback(&self, py: Python<'_>) -> PyResult<bool> {
-    PythonError::read(py, &self.owner, |owner| {
-      owner.memory().zswap().writeback()
-    })
-    .map(|value| value.value())
+    PythonError::read(py, &self.owner, |owner| owner.memory().zswap().writeback()).map(|value| value.value())
   }
 }
 
@@ -797,21 +643,9 @@ struct MemoryStat {
 impl From<CoreMemoryStat> for MemoryStat {
   fn from(value: CoreMemoryStat) -> Self {
     Self {
-      bytes: value
-        .bytes()
-        .iter()
-        .map(|(key, value)| ((*key).into(), value.get::<byte>()))
-        .collect(),
-      pages: value
-        .pages()
-        .iter()
-        .map(|(key, value)| ((*key).into(), value.value))
-        .collect(),
-      counts: value
-        .counts()
-        .iter()
-        .map(|(key, value)| ((*key).into(), value.value))
-        .collect(),
+      bytes: MemoryValues::fields(value.bytes(), |value| value.get::<byte>()),
+      pages: MemoryValues::fields(value.pages(), |value| value.value),
+      counts: MemoryValues::fields(value.counts(), |value| value.value),
     }
   }
 }
@@ -820,28 +654,19 @@ impl From<CoreMemoryStat> for MemoryStat {
 impl MemoryStat {
   /// Read-only mapping of memory.stat byte-valued fields.
   #[getter]
-  fn bytes(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
-    Self::mapping(py, &self.bytes)
-  }
+  fn bytes(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> { Self::mapping(py, &self.bytes) }
 
   /// Read-only mapping of memory.stat page-valued fields.
   #[getter]
-  fn pages(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
-    Self::mapping(py, &self.pages)
-  }
+  fn pages(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> { Self::mapping(py, &self.pages) }
 
   /// Read-only mapping of memory.stat count-valued fields.
   #[getter]
-  fn counts(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
-    Self::mapping(py, &self.counts)
-  }
+  fn counts(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> { Self::mapping(py, &self.counts) }
 }
 
 impl MemoryStat {
-  fn mapping(
-    py: Python<'_>,
-    values: &BTreeMap<&str, u64>,
-  ) -> PyResult<Py<PyMappingProxy>> {
+  fn mapping(py: Python<'_>, values: &BTreeMap<&str, u64>) -> PyResult<Py<PyMappingProxy>> {
     let dict = PyDict::new(py);
     for (key, value) in values {
       dict.set_item(key, value)?;
@@ -851,6 +676,22 @@ impl MemoryStat {
 }
 
 type NumaValues = BTreeMap<&'static str, BTreeMap<u32, u64>>;
+
+/// Converts memory field names and quantities without assuming a page size.
+struct MemoryValues;
+
+impl MemoryValues {
+  fn fields<Field: Copy + Into<&'static str>, Value, Output>(
+    values: &BTreeMap<Field, Value>,
+    convert: impl Fn(&Value) -> Output,
+  ) -> BTreeMap<&'static str, Output> {
+    values.iter().map(|(key, value)| ((*key).into(), convert(value))).collect()
+  }
+
+  fn nodes<Value>(values: &BTreeMap<u32, Value>, convert: impl Fn(&Value) -> u64) -> BTreeMap<u32, u64> {
+    values.iter().map(|(node, value)| (*node, convert(value))).collect()
+  }
+}
 
 /// Immutable per-NUMA-node memory statistics grouped by native units.
 ///
@@ -867,45 +708,9 @@ struct MemoryNumaStat {
 impl From<CoreMemoryNumaStat> for MemoryNumaStat {
   fn from(value: CoreMemoryNumaStat) -> Self {
     Self {
-      bytes: value
-        .bytes()
-        .iter()
-        .map(|(key, nodes)| {
-          (
-            (*key).into(),
-            nodes
-              .iter()
-              .map(|(node, value)| (*node, value.get::<byte>()))
-              .collect(),
-          )
-        })
-        .collect(),
-      pages: value
-        .pages()
-        .iter()
-        .map(|(key, nodes)| {
-          (
-            (*key).into(),
-            nodes
-              .iter()
-              .map(|(node, value)| (*node, value.value))
-              .collect(),
-          )
-        })
-        .collect(),
-      counts: value
-        .counts()
-        .iter()
-        .map(|(key, nodes)| {
-          (
-            (*key).into(),
-            nodes
-              .iter()
-              .map(|(node, value)| (*node, value.value))
-              .collect(),
-          )
-        })
-        .collect(),
+      bytes: MemoryValues::fields(value.bytes(), |nodes| MemoryValues::nodes(nodes, |value| value.get::<byte>())),
+      pages: MemoryValues::fields(value.pages(), |nodes| MemoryValues::nodes(nodes, |value| value.value)),
+      counts: MemoryValues::fields(value.counts(), |nodes| MemoryValues::nodes(nodes, |value| value.value)),
     }
   }
 }
@@ -914,28 +719,19 @@ impl From<CoreMemoryNumaStat> for MemoryNumaStat {
 impl MemoryNumaStat {
   /// Read-only byte amounts by memory field and NUMA node ID.
   #[getter]
-  fn bytes(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
-    Self::mapping(py, &self.bytes)
-  }
+  fn bytes(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> { Self::mapping(py, &self.bytes) }
 
   /// Read-only page quantities by memory field and NUMA node ID.
   #[getter]
-  fn pages(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
-    Self::mapping(py, &self.pages)
-  }
+  fn pages(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> { Self::mapping(py, &self.pages) }
 
   /// Read-only event counts by memory field and NUMA node ID.
   #[getter]
-  fn counts(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
-    Self::mapping(py, &self.counts)
-  }
+  fn counts(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> { Self::mapping(py, &self.counts) }
 }
 
 impl MemoryNumaStat {
-  fn mapping(
-    py: Python<'_>,
-    values: &NumaValues,
-  ) -> PyResult<Py<PyMappingProxy>> {
+  fn mapping(py: Python<'_>, values: &NumaValues) -> PyResult<Py<PyMappingProxy>> {
     let dict = PyDict::new(py);
     for (key, nodes) in values {
       let inner = PyDict::new(py);
@@ -958,8 +754,7 @@ struct CoreReader {
 impl CoreReader {
   /// Read the cgroup type: domain, domain threaded, domain invalid, or threaded.
   fn kind(&self, py: Python<'_>) -> PyResult<String> {
-    PythonError::read(py, &self.owner, |owner| owner.core().kind())
-      .map(|kind| kind.to_string())
+    PythonError::read(py, &self.owner, |owner| owner.core().kind()).map(|kind| kind.to_string())
   }
 
   /// List controllers available to this cgroup, including unknown names.
@@ -979,26 +774,11 @@ impl CoreReader {
 #[pymodule]
 fn _sakai(module: &Bound<'_, PyModule>) -> PyResult<()> {
   module.add("SakaiError", module.py().get_type::<SakaiError>())?;
-  module.add(
-    "InterfaceMissingError",
-    module.py().get_type::<InterfaceMissingError>(),
-  )?;
-  module.add(
-    "NotCgroupV2Error",
-    module.py().get_type::<NotCgroupV2Error>(),
-  )?;
-  module.add(
-    "DeletedCgroupError",
-    module.py().get_type::<DeletedCgroupError>(),
-  )?;
-  module.add(
-    "CgroupParseError",
-    module.py().get_type::<CgroupParseError>(),
-  )?;
-  module.add(
-    "NotSupportedError",
-    module.py().get_type::<NotSupportedError>(),
-  )?;
+  module.add("InterfaceMissingError", module.py().get_type::<InterfaceMissingError>())?;
+  module.add("NotCgroupV2Error", module.py().get_type::<NotCgroupV2Error>())?;
+  module.add("DeletedCgroupError", module.py().get_type::<DeletedCgroupError>())?;
+  module.add("CgroupParseError", module.py().get_type::<CgroupParseError>())?;
+  module.add("NotSupportedError", module.py().get_type::<NotSupportedError>())?;
   module.add_class::<Cgroup>()?;
   module.add_class::<MaxOr>()?;
   module.add_class::<CpuReader>()?;
@@ -1039,66 +819,39 @@ mod tests {
 
   #[test]
   fn converts_cpu_stat_optional_fields_and_nanoseconds() {
-    let minimal = CpuStat {
-      inner: assert_ok!(
-        "usage_usec 10\nuser_usec 7\nsystem_usec 3\n".parse::<CoreCpuStat>()
-      ),
-    };
+    let minimal = CpuStat { inner: assert_ok!("usage_usec 10\nuser_usec 7\nsystem_usec 3\n".parse::<CoreCpuStat>()) };
     assert_eq!(minimal.time().usage_ns, 10_000);
     assert!(minimal.bandwidth().is_none());
 
     let complete = CpuStat {
       inner: assert_ok!(
-        "usage_usec 10\nuser_usec 7\nsystem_usec 3\nnr_periods \
-         5\nnr_throttled 2\nthrottled_usec 4\nnr_bursts 1\nburst_usec 6\n"
+        "usage_usec 10\nuser_usec 7\nsystem_usec 3\nnr_periods 5\nnr_throttled 2\nthrottled_usec 4\nnr_bursts \
+         1\nburst_usec 6\n"
           .parse::<CoreCpuStat>()
       ),
     };
     let bandwidth = complete.bandwidth();
-    assert_eq!(
-      bandwidth.as_ref().map(CpuBandwidthStat::nr_periods),
-      Some(5)
-    );
-    assert_eq!(
-      bandwidth.as_ref().map(CpuBandwidthStat::throttled_ns),
-      Some(4_000)
-    );
-    assert_eq!(
-      bandwidth
-        .and_then(|value| value.burst())
-        .map(|value| value.burst_ns),
-      Some(6_000)
-    );
+    assert_eq!(bandwidth.as_ref().map(CpuBandwidthStat::nr_periods), Some(5));
+    assert_eq!(bandwidth.as_ref().map(CpuBandwidthStat::throttled_ns), Some(4_000));
+    assert_eq!(bandwidth.and_then(|value| value.burst()).map(|value| value.burst_ns), Some(6_000));
 
-    let empty_local = CpuStatLocal {
-      inner: assert_ok!("".parse::<CoreCpuStatLocal>()),
-    };
-    let zero_local = CpuStatLocal {
-      inner: assert_ok!("throttled_usec 0".parse::<CoreCpuStatLocal>()),
-    };
+    let empty_local = CpuStatLocal { inner: assert_ok!("".parse::<CoreCpuStatLocal>()) };
+    let zero_local = CpuStatLocal { inner: assert_ok!("throttled_usec 0".parse::<CoreCpuStatLocal>()) };
     assert_eq!(empty_local.throttled_ns(), None);
     assert_eq!(zero_local.throttled_ns(), Some(0));
   }
 
   #[test]
   fn converts_limits_and_idle_without_collapsing_zero() {
-    let unlimited =
-      CpuMax::from(assert_ok!("max 100000".parse::<CoreCpuMax>()));
-    let limited =
-      CpuMax::from(assert_ok!("25000 100000".parse::<CoreCpuMax>()));
+    let unlimited = CpuMax::from(assert_ok!("max 100000".parse::<CoreCpuMax>()));
+    let limited = CpuMax::from(assert_ok!("25000 100000".parse::<CoreCpuMax>()));
     assert!(unlimited.quota_ns.is_max());
     assert_err!(unlimited.quota_ns.value());
     assert!(unlimited.cpu_count.is_max());
     assert_err!(unlimited.cpu_count.value());
-    assert!(matches!(
-      assert_ok!(limited.quota_ns.value()),
-      PythonLimitValue::Integer(25_000_000)
-    ));
+    assert!(matches!(assert_ok!(limited.quota_ns.value()), PythonLimitValue::Integer(25_000_000)));
     assert_eq!(limited.period_ns, 100_000_000);
-    assert!(matches!(
-      assert_ok!(limited.cpu_count.value()),
-      PythonLimitValue::Ratio(0.25)
-    ));
+    assert!(matches!(assert_ok!(limited.cpu_count.value()), PythonLimitValue::Ratio(0.25)));
 
     let idle = CpuWeight::from(assert_ok!("0".parse::<CoreCpuWeight>()));
     let weighted = CpuWeight::from(assert_ok!("100".parse::<CoreCpuWeight>()));
@@ -1111,9 +864,7 @@ mod tests {
     assert!(max.is_max());
     assert_err!(max.value());
     assert!(matches!(
-      assert_ok!(
-        MaxOr::from_bytes(CoreMaxOr::Value(Bytes::new::<byte>(0))).value()
-      ),
+      assert_ok!(MaxOr::from_bytes(CoreMaxOr::Value(Bytes::new::<byte>(0))).value()),
       PythonLimitValue::Integer(0)
     ));
   }
@@ -1122,25 +873,15 @@ mod tests {
   fn max_or_exposes_typed_python_values_and_guards_max() {
     Python::initialize();
     Python::attach(|py| {
-      let integer = assert_ok!(Py::new(
-        py,
-        MaxOr::from_bytes(CoreMaxOr::Value(Bytes::new::<byte>(0)))
-      ));
+      let integer = assert_ok!(Py::new(py, MaxOr::from_bytes(CoreMaxOr::Value(Bytes::new::<byte>(0)))));
       let integer_value = assert_ok!(integer.bind(py).getattr("value"));
       assert!(integer_value.is_instance_of::<PyInt>());
       assert_eq!(assert_ok!(integer_value.extract::<u64>()), 0);
 
-      let ratio_limit = assert_ok!(Py::new(
-        py,
-        MaxOr::from_ratio(CoreMaxOr::Value(Ratio::new::<ratio>(0.25)))
-      ));
+      let ratio_limit = assert_ok!(Py::new(py, MaxOr::from_ratio(CoreMaxOr::Value(Ratio::new::<ratio>(0.25)))));
       let ratio_value = assert_ok!(ratio_limit.bind(py).getattr("value"));
       assert!(ratio_value.is_instance_of::<PyFloat>());
-      assert_in_delta!(
-        assert_ok!(ratio_value.extract::<f64>()),
-        0.25,
-        f64::EPSILON
-      );
+      assert_in_delta!(assert_ok!(ratio_value.extract::<f64>()), 0.25, f64::EPSILON);
 
       let max = assert_ok!(Py::new(py, MaxOr::from_bytes(CoreMaxOr::Max)));
       let error = max.bind(py).getattr("value").expect_err("max has no value");
@@ -1150,10 +891,8 @@ mod tests {
 
   #[test]
   fn converts_pressure_percent_and_optional_full_line() {
-    let pressure = Pressure::from(assert_ok!(
-      "some avg10=12.50 avg60=0.00 avg300=100.00 total=23\n"
-        .parse::<CorePressure>()
-    ));
+    let pressure =
+      Pressure::from(assert_ok!("some avg10=12.50 avg60=0.00 avg300=100.00 total=23\n".parse::<CorePressure>()));
     assert_in_delta!(pressure.some().avg10, 0.125, f64::EPSILON);
     assert_eq!(pressure.some().total_ns, 23_000);
     assert!(pressure.full().is_none());
@@ -1161,9 +900,7 @@ mod tests {
 
   #[test]
   fn separates_memory_bytes_pages_and_counts() {
-    let stat = MemoryStat::from(assert_ok!(
-      "anon 4096\nfile 2048\npswpin 3\npgfault 7\n".parse::<CoreMemoryStat>()
-    ));
+    let stat = MemoryStat::from(assert_ok!("anon 4096\nfile 2048\npswpin 3\npgfault 7\n".parse::<CoreMemoryStat>()));
     assert_eq!(stat.bytes.get("anon"), Some(&4096));
     assert_eq!(stat.pages.get("pswpin"), Some(&3));
     assert_eq!(stat.counts.get("pgfault"), Some(&7));
@@ -1176,19 +913,10 @@ mod tests {
     Python::initialize();
     Python::attach(|py| {
       for (input, expected) in [
-        ("max 1\nfail 2\n", SwapEvents {
-          high: None,
-          max: 1,
-          fail: 2,
-        }),
-        ("high 0\nmax 0\nfail 18446744073709551615\n", SwapEvents {
-          high: Some(0),
-          max: 0,
-          fail: u64::MAX,
-        }),
+        ("max 1\nfail 2\n", SwapEvents { high: None, max: 1, fail: 2 }),
+        ("high 0\nmax 0\nfail 18446744073709551615\n", SwapEvents { high: Some(0), max: 0, fail: u64::MAX }),
       ] {
-        let events =
-          SwapEvents::from(assert_ok!(input.parse::<CoreSwapEvents>()));
+        let events = SwapEvents::from(assert_ok!(input.parse::<CoreSwapEvents>()));
         assert_eq!(events, expected);
         let object = assert_ok!(Py::new(py, events));
         let high = assert_ok!(object.bind(py).getattr("high"));
@@ -1202,57 +930,31 @@ mod tests {
   #[test]
   fn converts_numa_units_and_freezes_both_mapping_levels() {
     let stat = MemoryNumaStat::from(assert_ok!(
-      "anon N0=4096 N2=8192\nfile N0=0\npgdemote_direct \
-       N2=3\nworkingset_refault_file N2=7\nfuture N0=nope\n"
+      "anon N0=4096 N2=8192\nfile N0=0\npgdemote_direct N2=3\nworkingset_refault_file N2=7\nfuture N0=nope\n"
         .parse::<CoreMemoryNumaStat>()
     ));
     assert_eq!(stat, MemoryNumaStat {
-      bytes: BTreeMap::from([
-        ("anon", BTreeMap::from([(0, 4096), (2, 8192)])),
-        ("file", BTreeMap::from([(0, 0)])),
-      ]),
+      bytes: BTreeMap::from([("anon", BTreeMap::from([(0, 4096), (2, 8192)])), ("file", BTreeMap::from([(0, 0)])),]),
       pages: BTreeMap::from([("pgdemote_direct", BTreeMap::from([(2, 3)]))]),
-      counts: BTreeMap::from([(
-        "workingset_refault_file",
-        BTreeMap::from([(2, 7)])
-      )]),
+      counts: BTreeMap::from([("workingset_refault_file", BTreeMap::from([(2, 7)]))]),
     });
 
     Python::initialize();
     Python::attach(|py| {
       let object = assert_ok!(Py::new(py, stat));
       for (name, field, expected) in [
-        (
-          "bytes",
-          "anon",
-          BTreeMap::from([(0_u32, 4096_u64), (2, 8192)]),
-        ),
+        ("bytes", "anon", BTreeMap::from([(0_u32, 4096_u64), (2, 8192)])),
         ("pages", "pgdemote_direct", BTreeMap::from([(2, 3)])),
-        (
-          "counts",
-          "workingset_refault_file",
-          BTreeMap::from([(2, 7)]),
-        ),
+        ("counts", "workingset_refault_file", BTreeMap::from([(2, 7)])),
       ] {
         let mapping = assert_ok!(object.bind(py).getattr(name));
         let nodes = assert_ok!(mapping.get_item(field));
         let values = assert_ok!(py.get_type::<PyDict>().call1((&nodes,)));
-        assert_eq!(
-          assert_ok!(values.extract::<BTreeMap<u32, u64>>()),
-          expected
-        );
-        assert!(
-          assert_err!(mapping.set_item("future", 0))
-            .is_instance_of::<PyTypeError>(py)
-        );
-        assert!(
-          assert_err!(nodes.set_item(0, 0)).is_instance_of::<PyTypeError>(py)
-        );
+        assert_eq!(assert_ok!(values.extract::<BTreeMap<u32, u64>>()), expected);
+        assert!(assert_err!(mapping.set_item("future", 0)).is_instance_of::<PyTypeError>(py));
+        assert!(assert_err!(nodes.set_item(0, 0)).is_instance_of::<PyTypeError>(py));
       }
-      assert!(
-        assert_err!(object.bind(py).setattr("bytes", 0))
-          .is_instance_of::<PyAttributeError>(py)
-      );
+      assert!(assert_err!(object.bind(py).setattr("bytes", 0)).is_instance_of::<PyAttributeError>(py));
     });
   }
 
@@ -1261,25 +963,17 @@ mod tests {
     Python::initialize();
     Python::attach(|py| {
       let path = PathBuf::from("/sys/fs/cgroup/cpu.stat.local");
-      let missing = PythonError::result::<()>(
-        py,
-        Err(Error::FileMissing { path: path.clone() }),
-      )
-      .expect_err("a missing interface must raise");
+      let missing = PythonError::result::<()>(py, Err(Error::FileMissing { path: path.clone() }))
+        .expect_err("a missing interface must raise");
       assert!(missing.is_instance_of::<InterfaceMissingError>(py));
       assert!(missing.is_instance_of::<SakaiError>(py));
       assert!(!missing.is_instance_of::<PyOSError>(py));
-      let actual = assert_ok!(
-        assert_ok!(missing.value(py).getattr("path")).extract::<PathBuf>()
-      );
+      let actual = assert_ok!(assert_ok!(missing.value(py).getattr("path")).extract::<PathBuf>());
       assert_eq!(actual, path);
 
-      let denied =
-        PythonError::from_core(py, Error::Io(io::Error::from_raw_os_error(13)));
+      let denied = PythonError::from_core(py, Error::Io(io::Error::from_raw_os_error(13)));
       assert!(denied.is_instance_of::<PyOSError>(py));
-      let errno = assert_ok!(
-        assert_ok!(denied.value(py).getattr("errno")).extract::<i32>()
-      );
+      let errno = assert_ok!(assert_ok!(denied.value(py).getattr("errno")).extract::<i32>());
       assert_eq!(errno, 13);
 
       let parsed = PythonError::from_core(py, Error::Parse {
@@ -1299,32 +993,20 @@ mod tests {
       let name = PyBytes::new(py, raw);
       let extracted = assert_ok!(PythonPath::extract(&name));
       assert_eq!(extracted.as_os_str().as_bytes(), raw);
-      let decoded = assert_ok!(
-        assert_ok!(py.import("os")).call_method1("fsdecode", (name,))
-      );
+      let decoded = assert_ok!(assert_ok!(py.import("os")).call_method1("fsdecode", (name,)));
       let extracted = assert_ok!(PythonPath::extract(&decoded));
       assert_eq!(extracted.as_os_str().as_bytes(), raw);
-      let pathlike = assert_ok!(py.eval(
-        c"type('BytePath', (), {'__fspath__': lambda self: b'child-\\xff'})()",
-        None,
-        None,
-      ));
+      let pathlike =
+        assert_ok!(py.eval(c"type('BytePath', (), {'__fspath__': lambda self: b'child-\\xff'})()", None, None,));
       let extracted = assert_ok!(PythonPath::extract(&pathlike));
       assert_eq!(extracted.as_os_str().as_bytes(), raw);
 
       let error = PythonError::from_core(py, Error::FileMissing {
-        path: PathBuf::from(OsString::from_vec(
-          b"/sys/fs/cgroup/child-\xff/cpu.stat.local".to_vec(),
-        )),
+        path: PathBuf::from(OsString::from_vec(b"/sys/fs/cgroup/child-\xff/cpu.stat.local".to_vec())),
       });
       let path = assert_ok!(error.value(py).getattr("path"));
-      let encoded = assert_ok!(
-        assert_ok!(py.import("os")).call_method1("fsencode", (path,))
-      );
-      assert_eq!(
-        assert_ok!(encoded.cast::<PyBytes>()).as_bytes(),
-        b"/sys/fs/cgroup/child-\xff/cpu.stat.local"
-      );
+      let encoded = assert_ok!(assert_ok!(py.import("os")).call_method1("fsencode", (path,)));
+      assert_eq!(assert_ok!(encoded.cast::<PyBytes>()).as_bytes(), b"/sys/fs/cgroup/child-\xff/cpu.stat.local");
     });
   }
 }

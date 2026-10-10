@@ -20,10 +20,7 @@ use super::{
 };
 use crate::error::Error;
 
-const DIRECTORY_FLAGS: OFlags = OFlags::RDONLY
-  .union(OFlags::CLOEXEC)
-  .union(OFlags::NOFOLLOW)
-  .union(OFlags::DIRECTORY);
+const DIRECTORY_FLAGS: OFlags = OFlags::RDONLY.union(OFlags::CLOEXEC).union(OFlags::NOFOLLOW).union(OFlags::DIRECTORY);
 
 // Linux UAPI linux/magic.h; rustix does not export this constant.
 const CGROUP2_SUPER_MAGIC: fs::FsWord = 0x6367_7270;
@@ -40,36 +37,21 @@ pub struct Cgroup {
 
 impl Cgroup {
   /// Discovers this process's cgroup through its visible cgroup2 mounts.
-  pub fn from_current_process() -> Result<Self, Error> {
-    Self::from_pid(std::process::id())
-  }
+  pub fn from_current_process() -> Result<Self, Error> { Self::from_pid(std::process::id()) }
 
   /// Resolves a process's membership using the caller's mount namespace.
   pub fn from_pid(pid: u32) -> Result<Self, Error> {
-    let pid =
-      i32::try_from(pid)
-        .ok()
-        .filter(|pid| *pid > 0)
-        .ok_or_else(|| {
-          io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "PID must be positive and fit i32",
-          )
-        })?;
+    let pid = i32::try_from(pid)
+      .ok()
+      .filter(|pid| *pid > 0)
+      .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "PID must be positive and fit i32"))?;
     let process = Process::new(pid).map_err(io::Error::other)?;
     let caller = Process::myself().map_err(io::Error::other)?;
-    let candidates = CgroupPath::candidates(&process, &caller).map_err(
-      |error| match error {
-        | CgroupPathError::Procfs(source) => {
-          Error::Io(io::Error::other(source))
-        },
-        | CgroupPathError::DeletedCgroup { path } => {
-          Error::DeletedCgroup { path }
-        },
-        | CgroupPathError::UnifiedHierarchyNotFound
-        | CgroupPathError::UnifiedMountNotFound => Error::NotCgroupV2,
-      },
-    )?;
+    let candidates = CgroupPath::candidates(&process, &caller).map_err(|error| match error {
+      | CgroupPathError::Procfs(source) => Error::Io(io::Error::other(source)),
+      | CgroupPathError::DeletedCgroup { path } => Error::DeletedCgroup { path },
+      | CgroupPathError::UnifiedHierarchyNotFound | CgroupPathError::UnifiedMountNotFound => Error::NotCgroupV2,
+    })?;
     Self::open_candidates(candidates, Self::from_path)
   }
 
@@ -91,14 +73,10 @@ impl Cgroup {
   /// Symlinks and parent traversal are rejected, including on old kernels.
   pub fn from_path(path: &Path) -> Result<Self, Error> {
     let (base, relative) = match path.is_absolute() {
-      | true => (
-        Path::new("/"),
-        path.strip_prefix("/").map_err(io::Error::other)?,
-      ),
+      | true => (Path::new("/"), path.strip_prefix("/").map_err(io::Error::other)?),
       | false => (Path::new("."), path),
     };
-    let base = fs::open(base, DIRECTORY_FLAGS, Mode::empty())
-      .map_err(io::Error::from)?;
+    let base = fs::open(base, DIRECTORY_FLAGS, Mode::empty()).map_err(io::Error::from)?;
     let directory = Self::open_directory(&base, relative)?;
     Self::verified(directory, path.to_owned())
   }
@@ -110,21 +88,9 @@ impl Cgroup {
     }
   }
 
-  fn open_directory(
-    base: impl AsFd,
-    relative: &Path,
-  ) -> Result<OwnedFd, Error> {
-    if relative
-      .components()
-      .any(|part| !matches!(part, Component::Normal(_) | Component::CurDir))
-    {
-      return Err(
-        io::Error::new(
-          io::ErrorKind::InvalidInput,
-          "cgroup path must remain beneath its directory",
-        )
-        .into(),
-      );
+  fn open_directory(base: impl AsFd, relative: &Path) -> Result<OwnedFd, Error> {
+    if relative.components().any(|part| !matches!(part, Component::Normal(_) | Component::CurDir)) {
+      return Err(io::Error::new(io::ErrorKind::InvalidInput, "cgroup path must remain beneath its directory").into());
     }
     let relative = match relative.as_os_str().is_empty() {
       | true => Path::new("."),
@@ -143,38 +109,19 @@ impl Cgroup {
     }
   }
 
-  fn open_components(
-    base: impl AsFd,
-    relative: &Path,
-  ) -> Result<OwnedFd, Error> {
-    let start = fs::openat(base, ".", DIRECTORY_FLAGS, Mode::empty())
-      .map_err(io::Error::from)?;
+  fn open_components(base: impl AsFd, relative: &Path) -> Result<OwnedFd, Error> {
+    let start = fs::openat(base, ".", DIRECTORY_FLAGS, Mode::empty()).map_err(io::Error::from)?;
     relative.components().try_fold(start, |directory, part| {
-      fs::openat(&directory, part.as_os_str(), DIRECTORY_FLAGS, Mode::empty())
-        .map_err(|error| Error::Io(error.into()))
+      fs::openat(&directory, part.as_os_str(), DIRECTORY_FLAGS, Mode::empty()).map_err(|error| Error::Io(error.into()))
     })
   }
 
   /// Opens one child by name; names containing slashes or traversal are invalid.
   pub fn child(&self, name: &OsStr) -> Result<Self, Error> {
-    if name.as_bytes().contains(&b'/')
-      || !matches!(
-        Path::new(name).components().next(),
-        Some(Component::Normal(_))
-      )
-    {
-      return Err(
-        io::Error::new(
-          io::ErrorKind::InvalidInput,
-          "child must be a single name",
-        )
-        .into(),
-      );
+    if name.as_bytes().contains(&b'/') || !matches!(Path::new(name).components().next(), Some(Component::Normal(_))) {
+      return Err(io::Error::new(io::ErrorKind::InvalidInput, "child must be a single name").into());
     }
-    Self::verified(
-      Self::open_directory(&self.directory, Path::new(name))?,
-      self.path.join(name),
-    )
+    Self::verified(Self::open_directory(&self.directory, Path::new(name))?, self.path.join(name))
   }
 
   /// Lists directories, including child names that resemble interface files.
@@ -185,15 +132,10 @@ impl Cgroup {
       .filter_map(|entry| match entry {
         | Err(error) => Some(Err(Error::Io(error.into()))),
         | Ok(entry)
-          if entry.file_type() == FileType::Directory
-            && !matches!(entry.file_name().to_bytes(), b"." | b"..") =>
+          if entry.file_type() == FileType::Directory && !matches!(entry.file_name().to_bytes(), b"." | b"..") =>
         {
           match self.child(OsStr::from_bytes(entry.file_name().to_bytes())) {
-            | Err(Error::Io(error))
-              if error.kind() == io::ErrorKind::NotFound =>
-            {
-              None
-            },
+            | Err(Error::Io(error)) if error.kind() == io::ErrorKind::NotFound => None,
             | result => Some(result),
           }
         },
@@ -203,43 +145,28 @@ impl Cgroup {
   }
 
   /// The path used to open the handle; it is diagnostic and may become stale.
-  pub fn path(&self) -> &Path {
-    &self.path
-  }
+  pub fn path(&self) -> &Path { &self.path }
 
   /// Borrows this handle to read CPU controller interfaces.
-  pub fn cpu(&self) -> Cpu<'_> {
-    Cpu { cgroup: self }
-  }
+  pub fn cpu(&self) -> Cpu<'_> { Cpu { cgroup: self } }
 
   /// Borrows this handle to read memory controller interfaces.
-  pub fn memory(&self) -> Memory<'_> {
-    Memory { cgroup: self }
-  }
+  pub fn memory(&self) -> Memory<'_> { Memory { cgroup: self } }
 
   /// Borrows this handle to read core cgroup interfaces.
-  pub fn core(&self) -> Core<'_> {
-    Core { cgroup: self }
-  }
+  pub fn core(&self) -> Core<'_> { Core { cgroup: self } }
 
   pub(crate) fn read(&self, file: &'static str) -> Result<String, Error> {
-    super::io::read_file(&self.directory, file)
-      .map_err(|error| Error::read(self.path.join(file), error))
+    super::io::read_file(&self.directory, file).map_err(|error| Error::read(self.path.join(file), error))
   }
 
-  pub(crate) fn parse<T: FromStr>(
-    &self,
-    file: &'static str,
-  ) -> Result<T, Error>
+  pub(crate) fn parse<T: FromStr>(&self, file: &'static str) -> Result<T, Error>
   where
     T::Err: std::error::Error + Send + Sync + 'static, {
     self
       .read(file)?
       .parse()
-      .map_err(|error: T::Err| Error::Parse {
-        path: self.path.join(file),
-        source: Box::new(error),
-      })
+      .map_err(|error: T::Err| Error::Parse { path: self.path.join(file), source: Box::new(error) })
   }
 }
 
@@ -256,37 +183,21 @@ mod tests {
     v2::{
       core::CgroupType,
       cpu::{CpuIdle, CpuStatLocal},
-      memory::{
-        MemoryCurrent, MemoryHigh, MemoryLow, MemoryMax, MemoryMin, MemoryPeak,
-        MemoryStat,
-      },
+      memory::{MemoryCurrent, MemoryHigh, MemoryLow, MemoryMax, MemoryMin, MemoryPeak, MemoryStat},
     },
   };
 
   #[test]
   fn parse_failure_keeps_path_and_typed_source() {
-    let path =
-      PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/src/cgroup/v2"));
-    let cgroup = Cgroup {
-      directory: assert_ok!(fs::open(&path, DIRECTORY_FLAGS, Mode::empty())),
-      path: path.clone(),
-    };
+    let path = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/src/cgroup/v2"));
+    let cgroup = Cgroup { directory: assert_ok!(fs::open(&path, DIRECTORY_FLAGS, Mode::empty())), path: path.clone() };
     let error = assert_err!(cgroup.parse::<CpuIdle>("mod.rs"));
-    let Error::Parse {
-      path: actual,
-      source,
-    } = &error
-    else {
+    let Error::Parse { path: actual, source } = &error else {
       panic!("expected parse failure, got {error:?}");
     };
     assert_eq!(actual, &path.join("mod.rs"));
-    let parsed = source
-      .downcast_ref::<ParseError<ParseValueError>>()
-      .expect("original parse error");
-    assert_eq!(
-      error.source().map(ToString::to_string),
-      Some(parsed.to_string())
-    );
+    let parsed = source.downcast_ref::<ParseError<ParseValueError>>().expect("original parse error");
+    assert_eq!(error.source().map(ToString::to_string), Some(parsed.to_string()));
     assert!(matches!(parsed, ParseError::Invalid { field: "idle", .. }));
     assert!(parsed.source().is_some());
     assert!(error.to_string().contains("failed to parse"));
@@ -295,60 +206,36 @@ mod tests {
 
   #[test]
   fn cgroup_type_failure_keeps_raw_input_and_strum_source() {
-    let path = PathBuf::from(concat!(
-      env!("CARGO_MANIFEST_DIR"),
-      "/src/cgroup/v2/fixtures/invalid_type"
-    ));
-    let cgroup = Cgroup {
-      directory: assert_ok!(fs::open(&path, DIRECTORY_FLAGS, Mode::empty())),
-      path: path.clone(),
-    };
+    let path = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/src/cgroup/v2/fixtures/invalid_type"));
+    let cgroup = Cgroup { directory: assert_ok!(fs::open(&path, DIRECTORY_FLAGS, Mode::empty())), path: path.clone() };
     let error = assert_err!(cgroup.core().kind());
     let Error::Parse { path: actual, .. } = &error else {
       panic!("expected parse failure, got {error:?}");
     };
     assert_eq!(actual, &path.join(CgroupType::FILE_NAME));
     assert!(error.to_string().contains("\"unknown\\n\""));
-    let reason = error
-      .source()
-      .and_then(std::error::Error::source)
-      .expect("strum parse reason");
+    let reason = error.source().and_then(std::error::Error::source).expect("strum parse reason");
     assert!(error.to_string().contains(&reason.to_string()));
   }
 
   #[test]
   fn missing_interfaces_keep_their_path() {
-    let path =
-      PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/src/cgroup/v2"));
+    let path = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/src/cgroup/v2"));
     // Internal fixture only: public constructors always verify filesystem magic.
-    let cgroup = Cgroup {
-      directory: assert_ok!(fs::open(&path, DIRECTORY_FLAGS, Mode::empty())),
-      path: path.clone(),
-    };
+    let cgroup = Cgroup { directory: assert_ok!(fs::open(&path, DIRECTORY_FLAGS, Mode::empty())), path: path.clone() };
     for (result, name) in [
-      (
-        cgroup.cpu().stat_local().map(|_| ()),
-        CpuStatLocal::FILE_NAME,
-      ),
+      (cgroup.cpu().stat_local().map(|_| ()), CpuStatLocal::FILE_NAME),
       (cgroup.core().kind().map(|_| ()), CgroupType::FILE_NAME),
-      (
-        cgroup.memory().current().map(|_| ()),
-        MemoryCurrent::FILE_NAME,
-      ),
+      (cgroup.memory().current().map(|_| ()), MemoryCurrent::FILE_NAME),
       (cgroup.memory().max().map(|_| ()), MemoryMax::FILE_NAME),
       (cgroup.memory().high().map(|_| ()), MemoryHigh::FILE_NAME),
       (cgroup.memory().low().map(|_| ()), MemoryLow::FILE_NAME),
       (cgroup.memory().min().map(|_| ()), MemoryMin::FILE_NAME),
       (cgroup.memory().peak().map(|_| ()), MemoryPeak::FILE_NAME),
       (cgroup.memory().stat().map(|_| ()), MemoryStat::FILE_NAME),
-      (
-        cgroup.memory().pressure().map(|_| ()),
-        Pressure::MEMORY_FILE_NAME,
-      ),
+      (cgroup.memory().pressure().map(|_| ()), Pressure::MEMORY_FILE_NAME),
     ] {
-      assert!(
-        matches!(result, Err(Error::FileMissing { path: missing }) if missing == path.join(name))
-      );
+      assert!(matches!(result, Err(Error::FileMissing { path: missing }) if missing == path.join(name)));
     }
     for name in ["", ".", "..", "../cpu", "/cpu", "cpu/stat"] {
       assert!(
@@ -356,9 +243,7 @@ mod tests {
       );
     }
     for pid in [0, u32::MAX] {
-      assert!(
-        matches!(Cgroup::from_pid(pid), Err(Error::Io(error)) if error.kind() == io::ErrorKind::InvalidInput)
-      );
+      assert!(matches!(Cgroup::from_pid(pid), Err(Error::Io(error)) if error.kind() == io::ErrorKind::InvalidInput));
     }
   }
 
@@ -375,8 +260,7 @@ mod tests {
 
   #[test]
   fn tries_next_matching_mount_after_open_failure() {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-      .join("src/cgroup/v2/fixtures/multiple_mounts/1");
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/cgroup/v2/fixtures/multiple_mounts/1");
     let process = assert_ok!(Process::new_with_root(root));
     let candidates = assert_ok!(CgroupPath::candidates(&process, &process));
     let mut attempted = Vec::new();

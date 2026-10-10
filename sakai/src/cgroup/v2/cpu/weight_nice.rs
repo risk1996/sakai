@@ -39,81 +39,34 @@ impl ParseCgroup<ParseNice> for Nice {
   type Error = ParseValueError;
 
   fn parse_cgroup(value: &str) -> Result<Self, Self::Error> {
-    Self::try_new(value.parse::<i8>()?)
-      .map_err(|_error| ParseValueError::OutOfRange)
+    Self::try_new(value.parse::<i8>()?).map_err(|_error| ParseValueError::OutOfRange)
   }
 }
 
 #[cfg(test)]
 mod tests {
-  use assertables::{assert_err, assert_ok};
+  use assertables::assert_ok;
 
   use super::*;
+  use crate::parse::tests::{
+    Cases,
+    Failure::{Excess, Invalid, Missing},
+  };
 
   #[test]
   fn parses_cpu_weight_nice() {
-    struct TestCase {
-      input: &'static str,
-      expected: Result<Nice, &'static str>,
-    }
-
     let nice_minus_20 = assert_ok!(Nice::try_new(-20));
     let nice_0 = assert_ok!(Nice::try_new(0));
     let nice_19 = assert_ok!(Nice::try_new(19));
-    let cases = [
-      TestCase {
-        input: "-20\n",
-        expected: Ok(nice_minus_20),
-      },
-      TestCase {
-        input: "0\n",
-        expected: Ok(nice_0),
-      },
-      TestCase {
-        input: "19",
-        expected: Ok(nice_19),
-      },
-      TestCase {
-        input: "",
-        expected: Err("cgroup content \"\" has missing field \"nice\""),
-      },
-      TestCase {
-        input: "0 1",
-        expected: Err("cgroup content \"0 1\" has excess field \"additional\""),
-      },
-      TestCase {
-        input: "-21",
-        expected: Err(
-          "cgroup content \"-21\" has an invalid field \"nice\" value \"-21\"",
-        ),
-      },
-      TestCase {
-        input: "20",
-        expected: Err(
-          "cgroup content \"20\" has an invalid field \"nice\" value \"20\"",
-        ),
-      },
-      TestCase {
-        input: "neutral",
-        expected: Err(
-          "cgroup content \"neutral\" has an invalid field \"nice\" value \
-           \"neutral\"",
-        ),
-      },
-    ];
-
-    for case in cases {
-      let actual = case.input.parse::<Nice>();
-      match case.expected {
-        | Ok(expected) => {
-          let actual = assert_ok!(actual, "input: {:?}", case.input);
-          assert_eq!(actual, expected, "input: {:?}", case.input);
-        },
-        | Err(message) => {
-          let actual = assert_err!(actual, "input: {:?}", case.input);
-          assert_eq!(actual.to_string(), message, "input: {:?}", case.input);
-        },
-      }
-    }
+    Cases::<Nice>::check([
+      ("-20\n", Ok(nice_minus_20)),
+      ("0\n", Ok(nice_0)),
+      ("19", Ok(nice_19)),
+      ("", Err(Missing("nice"))),
+      ("0 1", Err(Excess)),
+      ("-21", Err(Invalid("nice", "-21"))),
+      ("20", Err(Invalid("nice", "20"))),
+      ("neutral", Err(Invalid("nice", "neutral"))),
+    ]);
   }
 }

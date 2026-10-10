@@ -1,7 +1,6 @@
 use nutype::nutype;
 use uom::si::{
-  amount_of_substance::mole, electric_current::ampere, length::meter,
-  luminous_intensity::candela, mass::kilogram,
+  amount_of_substance::mole, electric_current::ampere, length::meter, luminous_intensity::candela, mass::kilogram,
   thermodynamic_temperature::kelvin, time::nanosecond,
 };
 
@@ -58,8 +57,7 @@ type Dimensionless<Kind> = uom::si::ISQ<
 /// Construct with `Count { value: 42, ..Default::default() }`.
 /// `Count / Time` yields [`EventRate`]. Integer arithmetic truncates: convert
 /// operands to fractional storage before computing sub-unit rates.
-pub type Count =
-  uom::si::Quantity<Dimensionless<dyn CountKind>, BaseUnits, u64>;
+pub type Count = uom::si::Quantity<Dimensionless<dyn CountKind>, BaseUnits, u64>;
 const _: () = {
   assert!(size_of::<Count>() == size_of::<u64>());
   assert!(align_of::<Count>() == align_of::<u64>());
@@ -109,26 +107,16 @@ mod tests {
 
   #[test]
   fn count_has_dimensionally_typed_rates() {
-    let count = Count {
-      value: 2_000_000_000,
-      ..Default::default()
-    };
+    let count = Count { value: 2_000_000_000, ..Default::default() };
     let rate: EventRate = count / Time::new::<second>(1);
     assert_eq!(rate.get::<uom::si::frequency::hertz>(), 2_000_000_000);
   }
 
   #[test]
   fn fractional_ratios_preserve_kernel_percentages() {
-    for (input, expected) in
-      [("12.34", 0.1234), ("0.01", 0.0001), ("100.00", 1.0)]
-    {
-      let parsed =
-        assert_ok!(<Ratio as ParseCgroup<ParsePercent>>::parse_cgroup(input));
-      assert_in_delta!(
-        parsed.get::<uom::si::ratio::ratio>(),
-        expected,
-        f64::EPSILON
-      );
+    for (input, expected) in [("12.34", 0.1234), ("0.01", 0.0001), ("100.00", 1.0)] {
+      let parsed = assert_ok!(<Ratio as ParseCgroup<ParsePercent>>::parse_cgroup(input));
+      assert_in_delta!(parsed.get::<uom::si::ratio::ratio>(), expected, f64::EPSILON);
     }
   }
 

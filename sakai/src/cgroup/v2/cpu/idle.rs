@@ -21,86 +21,23 @@ impl CpuIdle {
 
   /// Returns whether idle scheduling is enabled.
   #[must_use]
-  pub const fn value(self) -> bool {
-    self.value
-  }
+  pub const fn value(self) -> bool { self.value }
 }
 
 impl FromStr for CpuIdle {
   type Err = ParseError<ParseValueError>;
 
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    Parser::parse(contents, |parser| {
-      Ok(Self {
-        value: parser.next_field::<ParseBoolean, _>("idle")?,
-      })
-    })
+    let value = Parser::single::<ParseBoolean, _>(contents, "idle")?;
+    Ok(Self { value })
   }
 }
 
 #[cfg(test)]
 mod tests {
-  use assertables::{assert_err, assert_ok};
-
   use super::*;
+  use crate::parse::tests::Cases;
 
   #[test]
-  fn parses_cpu_idle() {
-    struct TestCase {
-      input: &'static str,
-      expected: Result<CpuIdle, &'static str>,
-    }
-
-    let cases = [
-      TestCase {
-        input: "0\n",
-        expected: Ok(CpuIdle { value: false }),
-      },
-      TestCase {
-        input: "1",
-        expected: Ok(CpuIdle { value: true }),
-      },
-      TestCase {
-        input: "",
-        expected: Err("cgroup content \"\" has missing field \"idle\""),
-      },
-      TestCase {
-        input: "1 0",
-        expected: Err("cgroup content \"1 0\" has excess field \"additional\""),
-      },
-      TestCase {
-        input: "2",
-        expected: Err(
-          "cgroup content \"2\" has an invalid field \"idle\" value \"2\"",
-        ),
-      },
-      TestCase {
-        input: "-1",
-        expected: Err(
-          "cgroup content \"-1\" has an invalid field \"idle\" value \"-1\"",
-        ),
-      },
-      TestCase {
-        input: "true",
-        expected: Err(
-          "cgroup content \"true\" has an invalid field \"idle\" value \
-           \"true\"",
-        ),
-      },
-    ];
-
-    for case in cases {
-      let actual = case.input.parse::<CpuIdle>();
-      match case.expected {
-        | Ok(expected) => {
-          let actual = assert_ok!(actual, "input: {:?}", case.input);
-          assert_eq!(actual, expected, "input: {:?}", case.input);
-        },
-        | Err(message) => {
-          let actual = assert_err!(actual, "input: {:?}", case.input);
-          assert_eq!(actual.to_string(), message, "input: {:?}", case.input);
-        },
-      }
-    }
-  }
+  fn parses_cpu_idle() { Cases::<CpuIdle>::boolean("idle", |value| CpuIdle { value }); }
 }

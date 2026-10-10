@@ -60,9 +60,7 @@ pub enum ParseError<E> {
   },
 
   /// A field's value could not be parsed.
-  #[error(
-    "cgroup content {raw:?} has an invalid field {field:?} value {value:?}"
-  )]
+  #[error("cgroup content {raw:?} has an invalid field {field:?} value {value:?}")]
   Invalid {
     /// Verbatim input passed to the parser.
     raw: Box<str>,
@@ -80,37 +78,19 @@ impl<E> ParseError<E> {
   /// Creates an error for a required field that is absent.
   #[must_use]
   pub(crate) fn missing(raw: &str, field: &'static str) -> Self {
-    Self::Field {
-      kind: FieldKind::Missing,
-      raw: raw.into(),
-      field,
-    }
+    Self::Field { kind: FieldKind::Missing, raw: raw.into(), field }
   }
 
   /// Creates an error for an unexpected field after the expected content.
   #[must_use]
   pub(crate) fn excess(raw: &str) -> Self {
-    Self::Field {
-      kind: FieldKind::Excess,
-      raw: raw.into(),
-      field: "additional",
-    }
+    Self::Field { kind: FieldKind::Excess, raw: raw.into(), field: "additional" }
   }
 
   /// Creates an error for a field with an invalid value.
   #[must_use]
-  pub(crate) fn invalid(
-    raw: &str,
-    field: &'static str,
-    value: &str,
-    source: E,
-  ) -> Self {
-    Self::Invalid {
-      raw: raw.into(),
-      field,
-      value: value.into(),
-      source,
-    }
+  pub(crate) fn invalid(raw: &str, field: &'static str, value: &str, source: E) -> Self {
+    Self::Invalid { raw: raw.into(), field, value: value.into(), source }
   }
 }
 

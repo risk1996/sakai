@@ -12,22 +12,14 @@ pub struct CgroupPath {
 
 impl CgroupPath {
   /// Discovers the current process's cgroup v2 directory from procfs.
-  pub fn current() -> Result<Self, CgroupPathError> {
-    Self::of_process(&Process::myself()?)
-  }
+  pub fn current() -> Result<Self, CgroupPathError> { Self::of_process(&Process::myself()?) }
 
   fn of_process(process: &Process) -> Result<Self, CgroupPathError> {
-    Self::candidates(process, process)?
-      .into_iter()
-      .next()
-      .ok_or(CgroupPathError::UnifiedMountNotFound)
+    Self::candidates(process, process)?.into_iter().next().ok_or(CgroupPathError::UnifiedMountNotFound)
   }
 
   /// Resolves a target membership against mounts visible to the caller.
-  pub(super) fn candidates(
-    target: &Process,
-    caller: &Process,
-  ) -> Result<Vec<Self>, CgroupPathError> {
+  pub(super) fn candidates(target: &Process, caller: &Process) -> Result<Vec<Self>, CgroupPathError> {
     let membership = target
       .cgroups()?
       .0
@@ -63,20 +55,14 @@ impl CgroupPath {
   }
 
   /// Returns the cgroup2 mount point that exposes this cgroup.
-  pub fn mount_point(&self) -> &Path {
-    &self.mount_point
-  }
+  pub fn mount_point(&self) -> &Path { &self.mount_point }
 
   /// Returns whether the process sees the cgroup2 mount as read-only.
-  pub const fn is_read_only(&self) -> bool {
-    self.read_only
-  }
+  pub const fn is_read_only(&self) -> bool { self.read_only }
 }
 
 impl AsRef<Path> for CgroupPath {
-  fn as_ref(&self) -> &Path {
-    &self.path
-  }
+  fn as_ref(&self) -> &Path { &self.path }
 }
 
 /// An error discovering a process's cgroup v2 directory.
@@ -126,20 +112,12 @@ mod tests {
         read_only: false,
       }),
     ] {
-      let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("src/cgroup/v2/fixtures")
-        .join(fixture)
-        .join("1");
+      let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/cgroup/v2/fixtures").join(fixture).join("1");
       let process = assert_ok!(Process::new_with_root(root));
 
-      assert_eq!(
-        assert_ok!(CgroupPath::of_process(&process)),
-        expected,
-        "fixture: {fixture}"
-      );
+      assert_eq!(assert_ok!(CgroupPath::of_process(&process)), expected, "fixture: {fixture}");
     }
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-      .join("src/cgroup/v2/fixtures/deleted/1");
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/cgroup/v2/fixtures/deleted/1");
     let process = assert_ok!(Process::new_with_root(root));
     assert!(matches!(
       CgroupPath::of_process(&process),
@@ -149,8 +127,7 @@ mod tests {
 
   #[test]
   fn orders_matching_mounts_for_fallback() {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-      .join("src/cgroup/v2/fixtures/multiple_mounts/1");
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/cgroup/v2/fixtures/multiple_mounts/1");
     let process = assert_ok!(Process::new_with_root(root));
     let candidates = assert_ok!(CgroupPath::candidates(&process, &process));
     assert_eq!(candidates, [
@@ -159,11 +136,7 @@ mod tests {
         mount_point: "/run/delegated".into(),
         read_only: false,
       },
-      CgroupPath {
-        path: "/run/parent/pod-1/process.scope".into(),
-        mount_point: "/run/parent".into(),
-        read_only: true,
-      },
+      CgroupPath { path: "/run/parent/pod-1/process.scope".into(), mount_point: "/run/parent".into(), read_only: true },
       CgroupPath {
         path: "/sys/fs/cgroup/kubepods.slice/pod-1/process.scope".into(),
         mount_point: "/sys/fs/cgroup".into(),
@@ -174,15 +147,10 @@ mod tests {
 
   #[test]
   fn resolves_target_membership_in_callers_mount_namespace() {
-    let fixtures =
-      Path::new(env!("CARGO_MANIFEST_DIR")).join("src/cgroup/v2/fixtures");
-    let target =
-      assert_ok!(Process::new_with_root(fixtures.join("bind_mount/1")));
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/cgroup/v2/fixtures");
+    let target = assert_ok!(Process::new_with_root(fixtures.join("bind_mount/1")));
     let caller = assert_ok!(Process::new_with_root(fixtures.join("unified/1")));
     let candidates = assert_ok!(CgroupPath::candidates(&target, &caller));
-    assert_eq!(
-      candidates[0].as_ref(),
-      Path::new("/sys/fs/cgroup/kubepods.slice/pod-1/process.scope")
-    );
+    assert_eq!(candidates[0].as_ref(), Path::new("/sys/fs/cgroup/kubepods.slice/pod-1/process.scope"));
   }
 }
