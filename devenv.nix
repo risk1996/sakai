@@ -24,7 +24,7 @@
   };
 
   packages = [
-    (pkgs.callPackage ./tools/coderabbit.nix { })
+    inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}.coderabbit-cli
     pkgs.cargo-nextest
     pkgs.coreutils
     pkgs.curl
@@ -44,6 +44,8 @@
   # Container tooling follows the resolved devenv toolchain and input URL.
   env.SAKAI_VMTEST_RUST_VERSION = config.languages.rust.toolchain.rustc.version;
   env.SAKAI_VMTEST_URL = (builtins.fromJSON (builtins.readFile ./devenv.lock)).nodes.vmtest.locked.url;
+  # Nix manages the CodeRabbit version through devenv.lock.
+  env.CODERABBIT_CLI_DISABLE_AUTO_UPDATE = "true";
 
   # Run together with `devenv test`, or individually with `devenv tasks run check:fmt`.
   tasks = {

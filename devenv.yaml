@@ -1,8 +1,10 @@
 # See https://devenv.sh/reference/yaml-options/
-nixpkgs:
-  permitted_unfree_packages:
-    - coderabbit-cli
 inputs:
+  llm-agents:
+    url: github:numtide/llm-agents.nix
+    inputs:
+      nixpkgs:
+        follows: nixpkgs
   nixpkgs:
     url: github:NixOS/nixpkgs/nixpkgs-unstable
   rust-overlay:
