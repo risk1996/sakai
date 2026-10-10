@@ -52,3 +52,31 @@ On Linux this also runs an unprivileged read of the current cgroup.
 `devenv shell -- rtk cargo xtask vmtest` runs the isolated Linux VM suite;
 only its explicit delegated-cgroup fixture writes test configuration.
 CI tests macOS and Linux, plus multiple Linux kernel versions.
+
+## Dependency security
+
+Run `devenv tasks run check:security` to audit `Cargo.lock` against the current
+[RustSec advisory database](https://rustsec.org/) and check the dependency policy
+in `deny.toml`. Run `check:audit` or `check:deny` individually for either check.
+These checks require network access and are separate from `devenv test`.
+CI runs both on pull requests, pushes to `main`, manual runs, and every Monday
+at 03:17 UTC (12:17 JST), including when dependencies have not changed.
+
+Vulnerabilities, unsoundness, maintenance notices, unmaintained crates, and yanked
+versions fail the security checks, including transitive and test dependencies.
+Dependency licenses must be explicitly allowed, and dependency sources must be
+crates.io. Duplicate crate versions produce warnings for review.
+
+Upgrade affected dependencies first. If an advisory cannot be fixed immediately,
+document why it does not affect Sakai and when the exception will be reviewed
+before adding a specific advisory ID to `.cargo/audit.toml` and `deny.toml`.
+Do not suppress a class of advisories or lower the severity threshold.
+Dependabot already checks Cargo dependencies and GitHub Actions weekly;
+repository administrators should also enable its security alerts and security
+updates in GitHub's repository settings.
+
+For production executables that use Sakai, RustSec recommends embedding the
+dependency tree with `cargo auditable build --release --locked`, then scanning
+the resulting executable with `cargo audit bin <path>`. Both tools are available
+in the development shell. Sakai itself ships a Rust library and Python extension,
+so it has no production executable build to wrap with `cargo auditable`.

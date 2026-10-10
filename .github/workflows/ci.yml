@@ -12,6 +12,7 @@ on:
         type: boolean
         default: false
   schedule:
+    # Weekly on Monday at 03:17 UTC, including the RustSec security checks.
     - cron: '17 3 * * 1'
 
 permissions:
@@ -22,6 +23,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  security:
+    name: RustSec and dependency policy
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@v31
+      - uses: cachix/cachix-action@v17
+        with:
+          name: devenv
+          skipPush: true
+      - name: Install devenv from the locked nixpkgs revision
+        run: |
+          nixpkgs_rev=$(jq -r '.nodes.nixpkgs.locked.rev' devenv.lock)
+          nix profile add "github:NixOS/nixpkgs/$nixpkgs_rev#devenv"
+      - name: Audit the lockfile and check dependency policy
+        run: devenv tasks run check:security
+
   kubernetes:
     name: Kubernetes resources through Python
     runs-on: ubuntu-26.04
