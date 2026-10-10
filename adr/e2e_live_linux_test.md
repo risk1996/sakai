@@ -15,11 +15,12 @@ VM runtime of our own.
 
 ## Decision Drivers
 
-- Test real, pinned Linux kernels and a writable cgroup v2 hierarchy.
+- Test real, version-selected Linux kernels and a writable cgroup v2 hierarchy.
 - Keep the guest small: no Cargo build or package installation inside it.
 - Share one developer entry point with CI and keep the kernel matrix bounded.
-- Pin and verify `vmtest` and kernel downloads; record the test executable's
-  build provenance.
+- Select `vmtest` and kernel versions and record the test executable's build
+  provenance. The original checksum-verification requirement was superseded by
+  the 2026-10-10 implementation update below.
 
 ## Considered Options
 
@@ -32,7 +33,8 @@ VM runtime of our own.
 Use the upstream `vmtest` CLI through `cargo xtask vmtest`. BoxLite required
 additional OCI, jailer, namespace, and kernel-adaptation work that the cgroup
 test does not need. The GitHub Action adds another wrapper and package-install
-path; invoking the pinned CLI directly keeps local and CI behavior aligned.
+path; invoking the version-selected CLI directly keeps local and CI behavior
+aligned.
 
 `xtask` builds `sakai-core`'s `linux_live` test executable on the Linux runner
 (inside a container on macOS), identifies it from Cargo's JSON artifact
@@ -43,10 +45,12 @@ cgroup fixture; it also exercises cgroup discovery rather than assuming one
 mount point. No repository guest shell script or guest Cargo build is needed.
 
 The x86-64 kernel fixtures are `5.15`, `6.1`, `6.6`, `6.12`, and `6.18`.
-`xtask/src/vmtest/kernel.rs` owns their URLs, SHA-256 digests, and smoke/full
-selection. Downloads are locked, checksum-verified, and staged before rename
-under `tests/.cache/sakai-vmtest`. The upstream `vmtest` version is pinned to
-`v0.18.0` in devenv and the macOS container definition.
+Originally, `xtask/src/vmtest/kernel.rs` owned their URLs, SHA-256 digests, and
+smoke/full selection. Downloads were locked, checksum-verified, and staged
+before rename under `tests/.cache/sakai-vmtest`. The upstream `vmtest` version
+was pinned to `v0.18.0` in both devenv and the macOS container definition.
+These artifact-pinning and verification details are historical and superseded
+by the 2026-10-10 implementation update below.
 
 On x86-64 Linux, the wrapper runs `vmtest` directly, using KVM when available.
 On macOS, it builds an amd64 image from `tools/vmtest/Containerfile` and runs
@@ -84,6 +88,13 @@ its matrix from `cargo xtask kernel-matrix`. Container tooling derives its Rust
 version and vmtest URL from devenv. Manually maintained image and download
 checksum pins were removed; generated lockfiles, download file locks, atomic
 rename, and commit provenance remain.
+
+Kernel downloads and the container's `vmtest` download are not independently
+checksum- or signature-verified. Cached kernel images are reused without
+revalidation. HTTPS protects transport; file locks and atomic rename protect
+download publication, not artifact authenticity. This development and CI
+tooling trusts upstream releases and local cache contents, accepting the risk
+that tampering with either can cause altered code to execute.
 
 ## References
 

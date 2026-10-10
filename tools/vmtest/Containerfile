@@ -1,4 +1,5 @@
-ARG RUST_IMAGE=rust:bookworm
+# Supplied by xtask from devenv's resolved Rust toolchain.
+ARG RUST_IMAGE
 FROM ${RUST_IMAGE}
 
 RUN apt-get update \

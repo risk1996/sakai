@@ -17,9 +17,10 @@ On macOS, start Apple Container, Podman, or Docker first. The wrapper uses the
 first running engine in that order; set `SAKAI_CONTAINER_ENGINE` to choose one
 explicitly. `--test-binary` is Linux-only because a macOS executable cannot
 run in the guest. The wrapper passes devenv's resolved Rust version and vmtest
-download URL as build arguments to `tools/vmtest/Containerfile`. Enter the
-devenv shell before invoking the wrapper. Cargo downloads and build outputs
-stay under `tests/.cache/sakai-vmtest`.
+download URL as required build arguments to `tools/vmtest/Containerfile`; direct
+builds must also supply `RUST_IMAGE` and `VMTEST_URL`. Enter the devenv shell
+before invoking the wrapper. Cargo downloads and build outputs stay under
+`tests/.cache/sakai-vmtest`.
 
 The kernel versions and smoke selection are in `xtask/src/vmtest/kernel.rs`.
 Fixtures and the staged executable are stored under
@@ -29,6 +30,10 @@ resolved in `devenv.lock`, on both platforms. QEMU comes from devenv on Linux
 and the container's Debian packages on macOS. Container images and kernel
 downloads have no manually maintained checksum pins. Kernel downloads use
 a file lock and atomic rename; remove a cached image to download it again.
+Kernel images (including cache hits) and the container's vmtest executable
+are not independently checksum- or signature-verified. These paths trust
+upstream releases and local cache contents; locks and atomic rename do not
+establish artifact authenticity.
 
 GitHub Actions builds the test executable and wrapper once, uploads them as a
 short-lived artifact, and runs a separate job for each kernel. The matrix comes
