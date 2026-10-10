@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sakai-resource-test
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  containers:
+    - name: test
+      image: sakai-resource-test:local
+      imagePullPolicy: Never
+      resources:
+        requests:
+          cpu: 250m
+          memory: 64Mi
+        limits:
+          cpu: 750m
+          memory: 192Mi
+      env:
+        - name: SAKAI_KUBERNETES_TEST
+          value: "1"
+        - name: CPU_REQUEST_MILLICORES
+          valueFrom:
+            resourceFieldRef:
+              resource: requests.cpu
+              divisor: 1m
+        - name: CPU_LIMIT_MILLICORES
+          valueFrom:
+            resourceFieldRef:
+              resource: limits.cpu
+              divisor: 1m
+        - name: MEMORY_REQUEST_BYTES
+          valueFrom:
+            resourceFieldRef:
+              resource: requests.memory
+              divisor: "1"
+        - name: MEMORY_LIMIT_BYTES
+          valueFrom:
+            resourceFieldRef:
+              resource: limits.memory
+              divisor: "1"
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        runAsNonRoot: true
+        runAsUser: 65532
+        capabilities:
+          drop: [ALL]
+        seccompProfile:
+          type: RuntimeDefault

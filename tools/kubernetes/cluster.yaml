@@ -1,0 +1,21 @@
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+metadata:
+  name: sakai-resource-test
+servers: 1
+agents: 0
+image: rancher/k3s:v1.32.0-k3s1@sha256:b7a31cc883051a89334a7865a7e75ef0bfcec5a5d13aba228b37388160a0be75
+options:
+  k3d:
+    disableLoadbalancer: true
+    wait: true
+    timeout: 120s
+  kubeconfig:
+    updateDefaultKubeconfig: false
+    switchCurrentContext: false
+  k3s:
+    extraArgs:
+      - arg: --disable=traefik,servicelb,metrics-server
+        nodeFilters: [server:*]
+      - arg: --kubelet-arg=feature-gates=MemoryQoS=true
+        nodeFilters: [server:*]
