@@ -68,11 +68,11 @@ files. Treat that as `FileMissing`, not a parse failure or panic.
 
 ## P3 — I/O
 
-- [ ] `io.stat` — per-device byte and operation counters keyed by `major:minor`.
-- [ ] `io.pressure` — shared PSI `some`/`full` averages and total stall time.
-- [ ] `io.weight` — default and per-device weights.
-- [ ] `io.max` — per-device bandwidth and IOPS limits.
-- [ ] `io.latency` — per-device latency targets where supported.
+- [x] `io.stat` — per-device byte and operation counters keyed by `major:minor`.
+- [x] `io.pressure` — shared PSI `some`/`full` averages and total stall time.
+- [x] `io.weight` — default and per-device weights.
+- [x] `io.max` — per-device bandwidth and IOPS limits.
+- [x] `io.latency` — per-device latency targets where supported.
 
 ## P4 — CPU and memory placement
 

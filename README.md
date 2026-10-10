@@ -36,6 +36,18 @@ and dying subsystem counts keyed by controller. Older kernels may omit those
 maps; absent counters do not imply zero. These states and counts are volatile.
 The interfaces follow the [kernel cgroup v2 documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html).
 
+`cgroup.io()` reads per-device byte and operation counters (`stat`), shared PSI
+(`pressure`), default and per-device weights (`weight`), bandwidth and IOPS
+limits (`max`), and optional latency protection targets (`latency`). Device maps
+use `v2::io::Device` major/minor keys and can be empty. Missing stat counters
+remain `None`, including older-kernel discard counters and debug-only rows;
+unknown nested keys are ignored. Configuration values are snapshots too.
+Bandwidth uses `BytesPerSecond`, IOPS uses `OperationsPerSecond`, and latency
+targets use `NonZeroTime` converted from kernel microseconds. Disabled latency
+targets are omitted by the kernel. Weight, maximum, and latency files are absent
+at the root; older kernels can also omit root I/O statistics. PSI reads never
+write triggers.
+
 Times use `u64` nanoseconds with checked conversion from kernel microseconds.
 Counts have a separate `uom` kind. Ratios use `f64` to preserve fractional
 percentages. Integer quantity arithmetic truncates; use fractional operands
