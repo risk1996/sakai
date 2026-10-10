@@ -40,10 +40,19 @@ because the workspace also contains `xtask` and `sakai-python`.
   README that the packaged crate cannot render correctly by itself.
   [Cargo manifest reference](https://doc.rust-lang.org/cargo/reference/manifest.html),
   [Rust API Guidelines on metadata](https://rust-lang.github.io/api-guidelines/documentation.html).
-- [ ] Choose and document the minimum supported Rust version (MSRV), then set
+- [x] Choose and document the minimum supported Rust version (MSRV), then set
   `rust-version` and test it. Edition 2024 requires at least Rust 1.85; a newer
   language feature or dependency may raise the actual floor. State whether
   the policy is fixed or tracks stable Rust.
+  `sakai` inherits `rust-version = "1.88.0"` from workspace metadata;
+  the [README](../README.md) documents a fixed Rust 1.88 minimum. The
+  existing `nutype` 0.8 dependency uses let chains, stabilized in
+  [Rust 1.88](https://blog.rust-lang.org/2025/06/26/Rust-1.88.0/).
+  On 2026-10-10, Rust 1.88.0 passed all 32 crate unit tests and both doctests
+  on macOS, plus an all-targets, all-features cross-check for
+  `x86_64-unknown-linux-gnu`, using the locked dependencies. `devenv test`
+  also passed. CI now tests Rust 1.88.0 and stable on Linux and macOS;
+  execution of that matrix and the broader release checks remain gates below.
   [Rust 1.85 release](https://blog.rust-lang.org/2025/02/20/Rust-1.85.0.html),
   [Cargo rust-version guidance](https://doc.rust-lang.org/cargo/reference/rust-version.html).
 - [ ] Review the version number and SemVer promise, including changes to
