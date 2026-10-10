@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-  "sakai-core",
+  "sakai",
   "sakai-python",
   "xtask",
 ]
@@ -9,6 +9,7 @@ members = [
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
+license = "MIT"
 
 [workspace.dependencies]
 assertables = "10.1.0"

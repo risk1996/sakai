@@ -42,7 +42,7 @@ not justified by the evidence gathered here.
 The review covered:
 
 - Workspace and crate manifests, shared lints, and project coding guidance.
-- `sakai-core` units, errors, parser primitives, CPU/memory/PSI snapshots,
+- `sakai` units, errors, parser primitives, CPU/memory/PSI snapshots,
   Linux discovery, directory traversal, and interface reads.
 - `sakai-python` ownership, conversion, exception mapping, exports, stubs,
   and contract tests.
@@ -108,8 +108,8 @@ explicitly unfinished publication plan.
 
 ### Portable parsing and Linux access have separate responsibilities
 
-[The crate root](../sakai-core/src/lib.rs) and
-[v2 module](../sakai-core/src/cgroup/v2/mod.rs) expose parsed values on every
+[The crate root](../sakai/src/lib.rs) and
+[v2 module](../sakai/src/cgroup/v2/mod.rs) expose parsed values on every
 platform while gating kernel handles on Linux. The parser layer does not
 perform I/O. Controller readers connect a known interface filename to its
 typed parser through one shared handle.
@@ -120,7 +120,7 @@ pattern: portable values and parsers, then a small Linux reader view.
 
 ### Handle ownership matches the kernel interface
 
-[`Cgroup`](../sakai-core/src/cgroup/v2/handle.rs) owns an `OwnedFd` for an open
+[`Cgroup`](../sakai/src/cgroup/v2/handle.rs) owns an `OwnedFd` for an open
 directory. Reads use that descriptor rather than reopening the diagnostic
 path. Constructors verify cgroup2 filesystem magic, and path handling rejects
 parent traversal and symlinks. The `openat2` path has a component-wise fallback
@@ -134,7 +134,7 @@ the language boundary.
 
 ### Types capture useful distinctions
 
-[`MaxOr<T>`](../sakai-core/src/limit.rs) distinguishes an unlimited value from
+[`MaxOr<T>`](../sakai/src/limit.rs) distinguishes an unlimited value from
 a concrete value. Optional counters distinguish a successful read with an
 absent field from a counter containing zero. Validated `Weight`, `Nice`, and
 `NonZeroTime` values constrain inputs. The unit system separates time, bytes,
@@ -176,7 +176,7 @@ not run during this audit.
 
 Priority: Medium. Evidence: Reproduced. Address before stabilizing the rate API.
 
-[`unit.rs`](../sakai-core/src/unit.rs) defines `Count` and `Time` with `u64`
+[`unit.rs`](../sakai/src/unit.rs) defines `Count` and `Time` with `u64`
 storage and defines `EventRate` as an integer frequency with nanoseconds as
 the base time unit. Dividing these quantities performs integer division in
 the base units.
@@ -184,7 +184,7 @@ the base units.
 The following probe was compiled against the local crate and executed:
 
 ```rust
-use sakai_core::{Count, EventRate, Time};
+use sakai::{Count, EventRate, Time};
 
 fn main() {
   let count = Count {
@@ -231,9 +231,9 @@ Acceptance criteria:
 Priority: Medium. Evidence: Observed. Address before the first public contract.
 
 The known-controller variants in
-[`CgroupController`](../sakai-core/src/cgroup/v2/core.rs), the field selectors in
-[`memory/stat.rs`](../sakai-core/src/cgroup/v2/memory/stat.rs), and the variants
-in [`error.rs`](../sakai-core/src/error.rs) are public and exhaustive. A consumer
+[`CgroupController`](../sakai/src/cgroup/v2/core.rs), the field selectors in
+[`memory/stat.rs`](../sakai/src/cgroup/v2/memory/stat.rs), and the variants
+in [`error.rs`](../sakai/src/error.rs) are public and exhaustive. A consumer
 can match all existing variants without a fallback arm. Adding a newly
 recognized controller, metric, or error category can then break compilation.
 
@@ -243,7 +243,7 @@ matches. Cargo's SemVer guidance identifies new variants in an exhaustive
 enum as a breaking change.
 [Cargo SemVer guidance](https://doc.rust-lang.org/cargo/reference/semver.html#major-adding-new-enum-variants-without-non_exhaustive).
 
-[`CpuStatField`](../sakai-core/src/cgroup/v2/cpu/stat.rs) and its
+[`CpuStatField`](../sakai/src/cgroup/v2/cpu/stat.rs) and its
 `bandwidth_fields`/`bandwidth_burst_fields` methods also expose parser schema
 details publicly. Their public status expands the compatibility surface
 without an evident consumer requirement.
@@ -332,12 +332,12 @@ Acceptance criteria:
 
 Priority: Medium. Evidence: Observed.
 
-[`Error::read`](../sakai-core/src/error.rs) preserves the interface path for
+[`Error::read`](../sakai/src/error.rs) preserves the interface path for
 missing files. For other I/O errors it returns `Io(io::Error)` and drops the
 path. Mapping an unsupported operation to the fieldless `NotSupported` variant
 drops both the original I/O error and the interface path.
 
-[`Cgroup::from_pid`](../sakai-core/src/cgroup/v2/handle.rs) wraps procfs errors
+[`Cgroup::from_pid`](../sakai/src/cgroup/v2/handle.rs) wraps procfs errors
 with `io::Error::other`. This retains an error source but does not expose the
 original OS errno directly through the outer `io::Error::raw_os_error`.
 [Python exception conversion](../sakai-python/src/linux.rs) consults that
@@ -423,9 +423,9 @@ Acceptance criteria:
 
 Priority: Low. Evidence: Observed. Recommendation: consolidate stable repetition.
 
-At the audited snapshot, [`memory.rs`](../sakai-core/src/cgroup/v2/memory.rs),
-`sakai-core/src/cgroup/v2/memory/swap.rs`,
-`sakai-core/src/cgroup/v2/memory/zswap.rs`, and the simple CPU parsers repeatedly
+At the audited snapshot, [`memory.rs`](../sakai/src/cgroup/v2/memory.rs),
+`sakai/src/cgroup/v2/memory/swap.rs`,
+`sakai/src/cgroup/v2/memory/zswap.rs`, and the simple CPU parsers repeatedly
 defined a private value field, derived traits, a
 `value()` accessor, a small `FromStr` implementation, and similar boundary
 tests. The domain distinctions are valuable, but much of their implementation
@@ -461,15 +461,15 @@ Acceptance criteria:
 
 Priority: Low. Evidence: Observed. Recommendation: make the commitment deliberate.
 
-The public aliases in [`unit.rs`](../sakai-core/src/unit.rs) expose `uom`
+The public aliases in [`unit.rs`](../sakai/src/unit.rs) expose `uom`
 quantities directly. `Count` and `Pages` examples construct the quantity's
 public `value` field. `BaseUnits`, `CountKind`, and `PageKind` are also public.
 Consumers can consequently depend on the unit library's exact type and trait
 relationships.
 
 The statistics accessors in
-[`memory/stat.rs`](../sakai-core/src/cgroup/v2/memory/stat.rs) and the audited
-`sakai-core/src/cgroup/v2/memory/numa_stat.rs` expose references to concrete
+[`memory/stat.rs`](../sakai/src/cgroup/v2/memory/stat.rs) and the audited
+`sakai/src/cgroup/v2/memory/numa_stat.rs` expose references to concrete
 `BTreeMap` types. This provides convenient, deterministic
 iteration, but makes replacing that storage with another representation an
 API change.
@@ -540,7 +540,7 @@ Acceptance criteria:
 
 Priority: Medium before publication. Evidence: Observed; partly already tracked.
 
-[`sakai-core/Cargo.toml`](../sakai-core/Cargo.toml) has no declared
+[`sakai/Cargo.toml`](../sakai/Cargo.toml) has no declared
 `rust-version`, license, description, repository, or README metadata. The
 project already identifies publication preparation in
 [project-direction.md](project-direction.md) and the

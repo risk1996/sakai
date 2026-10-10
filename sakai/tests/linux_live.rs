@@ -3,7 +3,7 @@
 use std::{fmt::Debug, fs, io, path::PathBuf, process::Command, str::FromStr};
 
 use assertables::assert_ok;
-use sakai_core::{
+use sakai::{
   Bytes, Cgroup, Error, MaxOr, Pressure,
   error::{ParseError, ParseValueError},
   v2::{

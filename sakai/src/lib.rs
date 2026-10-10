@@ -2,9 +2,9 @@
 //!
 //! ```no_run
 //! # #[cfg(target_os = "linux")]
-//! use sakai_core::Cgroup;
+//! use sakai::Cgroup;
 //! # #[cfg(target_os = "linux")]
-//! # fn example() -> Result<(), sakai_core::Error> {
+//! # fn example() -> Result<(), sakai::Error> {
 //! let cgroup = Cgroup::from_current_process()?;
 //! let usage = cgroup.cpu().stat()?.time().usage();
 //! let quota = cgroup.cpu().max()?;

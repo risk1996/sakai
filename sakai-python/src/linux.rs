@@ -8,7 +8,7 @@ use pyo3::{
   prelude::*,
   types::{PyDict, PyMappingProxy, PyModule},
 };
-use sakai_core::{
+use sakai::{
   Bytes, Error, MaxOr as CoreMaxOr, NonZeroTime, Pressure as CorePressure,
   PressureLine as CorePressureLine, Ratio,
   v2::{
@@ -131,8 +131,8 @@ impl PythonError {
 
   fn read<T: Send + 'static>(
     py: Python<'_>,
-    owner: &Arc<sakai_core::Cgroup>,
-    read: impl FnOnce(&sakai_core::Cgroup) -> Result<T, Error> + Send + 'static,
+    owner: &Arc<sakai::Cgroup>,
+    read: impl FnOnce(&sakai::Cgroup) -> Result<T, Error> + Send + 'static,
   ) -> PyResult<T> {
     let owner = Arc::clone(owner);
     Self::result(py, py.detach(move || read(&owner)))
@@ -146,11 +146,11 @@ impl PythonError {
 /// separate calls do not form an atomic snapshot.
 #[pyclass(frozen, module = "sakai._sakai")]
 struct Cgroup {
-  owner: Arc<sakai_core::Cgroup>,
+  owner: Arc<sakai::Cgroup>,
 }
 
-impl From<sakai_core::Cgroup> for Cgroup {
-  fn from(owner: sakai_core::Cgroup) -> Self {
+impl From<sakai::Cgroup> for Cgroup {
+  fn from(owner: sakai::Cgroup) -> Self {
     Self {
       owner: Arc::new(owner),
     }
@@ -162,7 +162,7 @@ impl Cgroup {
   /// Open the cgroup containing the current process.
   #[staticmethod]
   fn current(py: Python<'_>) -> PyResult<Self> {
-    PythonError::result(py, py.detach(sakai_core::Cgroup::from_current_process))
+    PythonError::result(py, py.detach(sakai::Cgroup::from_current_process))
       .map(Into::into)
   }
 
@@ -170,11 +170,8 @@ impl Cgroup {
   #[staticmethod]
   fn from_pid(py: Python<'_>, pid: i64) -> PyResult<Self> {
     let pid = u32::try_from(pid)?;
-    PythonError::result(
-      py,
-      py.detach(move || sakai_core::Cgroup::from_pid(pid)),
-    )
-    .map(Into::into)
+    PythonError::result(py, py.detach(move || sakai::Cgroup::from_pid(pid)))
+      .map(Into::into)
   }
 
   /// Open a cgroup v2 directory by its filesystem path.
@@ -185,11 +182,8 @@ impl Cgroup {
     py: Python<'_>,
     #[pyo3(from_py_with = PythonPath::extract)] path: PathBuf,
   ) -> PyResult<Self> {
-    PythonError::result(
-      py,
-      py.detach(move || sakai_core::Cgroup::from_path(&path)),
-    )
-    .map(Into::into)
+    PythonError::result(py, py.detach(move || sakai::Cgroup::from_path(&path)))
+      .map(Into::into)
   }
 
   /// Diagnostic filesystem path; it may become stale after a rename.
@@ -212,7 +206,7 @@ impl Cgroup {
 
   /// Return separate pinned handles for the current direct children.
   fn children(&self, py: Python<'_>) -> PyResult<Vec<Self>> {
-    PythonError::read(py, &self.owner, sakai_core::Cgroup::children)
+    PythonError::read(py, &self.owner, sakai::Cgroup::children)
       .map(|children| children.into_iter().map(Into::into).collect())
   }
 
@@ -329,7 +323,7 @@ impl MaxOr {
 /// Fresh reads of CPU controller files for one pinned cgroup.
 #[pyclass(frozen, module = "sakai._sakai")]
 struct CpuReader {
-  owner: Arc<sakai_core::Cgroup>,
+  owner: Arc<sakai::Cgroup>,
 }
 
 #[pymethods]
@@ -622,7 +616,7 @@ impl From<CorePressureLine> for PressureLine {
 /// Fresh reads of memory controller files for one pinned cgroup.
 #[pyclass(frozen, module = "sakai._sakai")]
 struct MemoryReader {
-  owner: Arc<sakai_core::Cgroup>,
+  owner: Arc<sakai::Cgroup>,
 }
 
 #[pymethods]
@@ -699,7 +693,7 @@ impl MemoryReader {
 /// Fresh reads of swap usage, limits, and events for one pinned cgroup.
 #[pyclass(frozen, module = "sakai._sakai")]
 struct SwapReader {
-  owner: Arc<sakai_core::Cgroup>,
+  owner: Arc<sakai::Cgroup>,
 }
 
 #[pymethods]
@@ -763,7 +757,7 @@ impl From<CoreSwapEvents> for SwapEvents {
 /// Fresh reads of compressed swap usage and settings for one pinned cgroup.
 #[pyclass(frozen, module = "sakai._sakai")]
 struct ZswapReader {
-  owner: Arc<sakai_core::Cgroup>,
+  owner: Arc<sakai::Cgroup>,
 }
 
 #[pymethods]
@@ -957,7 +951,7 @@ impl MemoryNumaStat {
 /// Fresh reads of cgroup topology and controller files.
 #[pyclass(frozen, module = "sakai._sakai")]
 struct CoreReader {
-  owner: Arc<sakai_core::Cgroup>,
+  owner: Arc<sakai::Cgroup>,
 }
 
 #[pymethods]
@@ -981,7 +975,7 @@ impl CoreReader {
   }
 }
 
-/// Read-only Linux cgroup v2 bindings backed by sakai-core.
+/// Read-only Linux cgroup v2 bindings backed by sakai.
 #[pymodule]
 fn _sakai(module: &Bound<'_, PyModule>) -> PyResult<()> {
   module.add("SakaiError", module.py().get_type::<SakaiError>())?;

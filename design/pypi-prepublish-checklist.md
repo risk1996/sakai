@@ -2,10 +2,9 @@
 
 Research checked on 2026-09-30. Use this **after implementing** the bindings
 described in [pyo3-bindings.md](pyo3-bindings.md) and **before uploading a
-release to production PyPI**. Every item is deliberately unchecked: this
-repository does not yet have a Python extension or release artifacts. A
-successful local import is not the release gate; test the actual archives that
-will be uploaded.
+release to production PyPI**. Checked boxes record completed preparation;
+unchecked items remain release gates. A successful local import is not the
+release gate; test the actual archives that will be uploaded.
 
 First release target: Linux CPython, Python 3.11 minimum,
 `abi3-py311`, package import `sakai`, built with Maturin. Do not silently add
@@ -22,10 +21,17 @@ sources are linked below.
   Publisher configuration. A pending publisher does **not** reserve the name.
   [PyPI project creation](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/),
   [name rules](https://packaging.python.org/en/latest/guides/writing-pyproject-toml/).
-- [ ] Choose and add a license for the Rust and Python code; include the actual
+- [x] Choose and add a license for the Rust and Python code; include the actual
   license file(s) in both wheel and sdist. Record a valid SPDX expression and
-  `license-files` in Python metadata; make `sakai-core` metadata consistent.
-  This is unfinished in [project-direction.md](project-direction.md).
+  `license-files` in Python metadata; make `sakai` metadata consistent.
+  MIT covers both languages through the root [LICENSE](../LICENSE),
+  package-local symlinks, Cargo workspace metadata, and Python's
+  `license = "MIT"` / `license-files = ["LICENSE"]`. On 2026-10-10, Maturin
+  1.15.0 built a wheel and sdist from an isolated working-tree snapshot;
+  both archives had `License-Expression: MIT`, `License-File: LICENSE`, and
+  the exact license text in regular files (the symlinks were dereferenced).
+  The macOS wheel was only a local packaging check;
+  the intended Linux release archives still require the checks below.
   [Python metadata specification](https://packaging.python.org/en/latest/specifications/pyproject-toml/).
 - [ ] Freeze and review the initial Python surface: class and method names,
   unit suffixes, `None` for a successful `max` reading, optional older-kernel
@@ -101,7 +107,7 @@ sources are linked below.
   [Maturin layout](https://www.maturin.rs/project_layout),
   [PyO3 modules](https://pyo3.rs/main/module).
 - [ ] Inspect the sdist for the nested workspace path dependency: it must
-  include `sakai-python`, `sakai-core`, relevant workspace manifests/lockfile,
+  include `sakai-python`, `sakai`, relevant workspace manifests/lockfile,
   Python source, README, and licenses. In an isolated Linux environment with
   no checkout, build a wheel **from that sdist**, install it, and rerun the
   smoke/contract suite. [Maturin sdist guidance](https://www.maturin.rs/distribution),

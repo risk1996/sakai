@@ -122,7 +122,7 @@ impl Vmtest {
       .ancestors()
       .find(|path| {
         path.join("xtask/Cargo.toml").is_file()
-          && path.join("sakai-core/Cargo.toml").is_file()
+          && path.join("sakai/Cargo.toml").is_file()
       })
       .context("run vmtest from inside the Sakai repository")?
       .canonicalize()
@@ -283,7 +283,7 @@ impl Vmtest {
         "test",
         "--locked",
         "--package",
-        "sakai-core",
+        "sakai",
         "--test",
         Self::LIVE_TEST_TARGET,
         "--no-run",
