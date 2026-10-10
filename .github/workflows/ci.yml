@@ -137,6 +137,9 @@ jobs:
             cargo-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('devenv.lock', 'devenv.yaml', '**/*.nix', '.github/workflows/ci.yml') }}-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}-
             cargo-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('devenv.lock', 'devenv.yaml', '**/*.nix', '.github/workflows/ci.yml') }}-
 
+      - name: Check dependency licenses
+        run: devenv tasks run check:licenses
+
       - name: Run Rust and Python checks
         run: devenv --profile python test
 

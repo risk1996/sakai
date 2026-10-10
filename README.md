@@ -49,6 +49,21 @@ include the full interface path and retain the parser error as their source.
 
 Run `devenv test` for formatting, Clippy, parser tests, and doctests.
 On Linux this also runs an unprivileged read of the current cgroup.
+It also checks Rust dependency licenses with `cargo-license`, installed through
+devenv. Run `devenv tasks run check:licenses` for the license check alone.
+The check covers all workspace members and features, including transitive,
+build, dev, and target-specific dependencies. Cargo.lock must remain unchanged.
+
+The dependency policy accepts explicitly reviewed SPDX expressions that offer
+permissive terms: MIT, Apache-2.0 (including LLVM-exception), BSD-3-Clause,
+BSL-1.0, ISC, Zlib, Unlicense, Unicode-3.0, and CDLA-Permissive-2.0.
+For dual licenses with GPL/LGPL alternatives, select the MIT or Apache terms;
+all terms joined by `AND` must be acceptable. The exact reviewed expressions
+are maintained in `xtask/src/licenses.rs`. New expressions, missing license
+metadata (including license-file-only crates), and malformed reports fail CI
+and require review. This checks declared Cargo metadata; distribution must
+still preserve the chosen licenses' notices and other requirements.
+
 `devenv shell -- rtk cargo xtask vmtest` runs the isolated Linux VM suite;
 only its explicit delegated-cgroup fixture writes test configuration.
 CI tests macOS and Linux, plus multiple Linux kernel versions.

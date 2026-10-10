@@ -1,7 +1,9 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use licenses::Licenses;
 use vmtest::{Profile, Vmtest};
 
+mod licenses;
 mod vmtest;
 
 #[derive(Debug, Parser)]
@@ -12,6 +14,8 @@ struct Xtask {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+  /// Check dependency licenses against the reviewed permissive policy.
+  CheckLicenses,
   /// Run live cgroup tests in Linux microVMs.
   Vmtest(Vmtest),
   /// Build and stage the linux_live test executable for CI.
@@ -26,6 +30,7 @@ enum Command {
 #[tokio::main]
 async fn main() -> Result<()> {
   match Xtask::parse().command {
+    | Command::CheckLicenses => Licenses::check(),
     | Command::Vmtest(command) => command.run().await,
     | Command::BuildLiveTest => Vmtest::build_live_test(),
     | Command::KernelMatrix { profile } => Vmtest::kernel_matrix(profile),

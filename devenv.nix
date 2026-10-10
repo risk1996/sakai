@@ -23,6 +23,7 @@
   };
 
   packages = [
+    pkgs.cargo-license
     pkgs.cargo-nextest
     pkgs.coreutils
     pkgs.curl
@@ -51,12 +52,16 @@
       "check:clippy"
       "check:test"
       "check:doc"
+      "check:licenses"
     ];
     "check:fmt".exec = "cargo fmt --all -- --check";
     "check:clippy".exec = "cargo clippy --workspace --all-targets --all-features --locked -- -D warnings";
     "check:test".exec = "cargo nextest run --workspace --all-targets --all-features --locked";
     # nextest does not execute documentation tests.
     "check:doc".exec = "cargo test --workspace --all-features --doc --locked";
+    # Fetch every target's metadata before cargo-license runs offline, since it
+    # does not expose --locked. The xtask rejects unreviewed license expressions.
+    "check:licenses".exec = "cargo fetch --locked && cargo run --locked --package xtask -- check-licenses";
     # Explicit opt-in: this integration check requires a running Docker daemon.
     "check:kubernetes".exec = ''
       set -euo pipefail
