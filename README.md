@@ -3,6 +3,13 @@
 A _read-only_ Rust cgroup v2 library. While kernel reads require Linux, the
 parsers are OS-independent. Python bindings are work in progress.
 
+The `sakai` crate supports Rust 1.88 and newer. This is a fixed minimum,
+not a policy that tracks the latest stable release. Raising it requires an
+explicit, documented change. Development tools and Python bindings use their
+own toolchain requirements. The Ubuntu CI job checks and tests all crate
+targets and features and runs doctests on the minimum Rust version.
+Repository tests and lints use the development toolchain.
+
 ```rust,no_run
 use sakai::{Cgroup, Error};
 
@@ -51,7 +58,7 @@ Run `devenv test` for formatting, Clippy, parser tests, and doctests.
 On Linux this also runs an unprivileged read of the current cgroup.
 `devenv shell -- rtk cargo xtask vmtest` runs the isolated Linux VM suite;
 only its explicit delegated-cgroup fixture writes test configuration.
-CI tests macOS and Linux, plus multiple Linux kernel versions.
+CI tests on Linux, including multiple Linux kernel versions.
 
 ## Dependency security
 

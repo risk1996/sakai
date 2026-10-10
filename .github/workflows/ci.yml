@@ -161,6 +161,31 @@ jobs:
       - name: Run Rust and Python checks
         run: devenv --profile python test
 
+      - name: Read the crate's minimum Rust version
+        id: msrv
+        run: |
+          version=$(cargo metadata --no-deps --format-version 1 | python3 -c 'import json, sys; print(next(p for p in json.load(sys.stdin)["packages"] if p["name"] == "sakai")["rust_version"])')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Install minimum Rust toolchain
+        env:
+          RUST_VERSION: ${{ steps.msrv.outputs.version }}
+        run: |
+          rustup toolchain install "$RUST_VERSION" --profile minimal
+          echo "RUSTC=$(rustup which --toolchain "$RUST_VERSION" rustc)" >> "$GITHUB_ENV"
+          echo "RUSTDOC=$(rustup which --toolchain "$RUST_VERSION" rustdoc)" >> "$GITHUB_ENV"
+      - name: Check all crate targets and features on MSRV
+        env:
+          RUST_VERSION: ${{ steps.msrv.outputs.version }}
+        run: rustup run "$RUST_VERSION" cargo check -p sakai --all-targets --all-features --locked
+      - name: Test all crate targets and features on MSRV
+        env:
+          RUST_VERSION: ${{ steps.msrv.outputs.version }}
+        run: rustup run "$RUST_VERSION" cargo test -p sakai --all-targets --all-features --locked
+      - name: Test crate documentation on MSRV
+        env:
+          RUST_VERSION: ${{ steps.msrv.outputs.version }}
+        run: rustup run "$RUST_VERSION" cargo test -p sakai --doc --all-features --locked
+
   build-live-test:
     name: Build Linux live test
     runs-on: ubuntu-26.04
