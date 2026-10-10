@@ -114,8 +114,13 @@ mod tests {
   fn parses_numa_stat_groups_and_ignores_unknowns() {
     for (input, expected) in [
       (
-        indoc! {"file N2=2048 N0=1024\nfuture_metric N0=nope\nworkingset_refault_file N2=3 N0=1\n\
-        anon N0=4096 N2=8192\npgdemote_direct N2=5 N0=0\n"},
+        indoc! {"
+          file N2=2048 N0=1024
+          future_metric N0=nope
+          workingset_refault_file N2=3 N0=1
+          anon N0=4096 N2=8192
+          pgdemote_direct N2=5 N0=0
+        "},
         MemoryNumaStat {
           bytes: BTreeMap::from([
             (Anon, BTreeMap::from([(0, Bytes::new::<byte>(4096)), (2, Bytes::new::<byte>(8192))])),

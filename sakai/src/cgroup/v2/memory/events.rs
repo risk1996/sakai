@@ -133,8 +133,16 @@ mod tests {
     let count = |value| Count { value, ..Default::default() };
     for (input, expected) in [
       (
-        indoc! {"oom_kill 5\nfuture_counter nope\nhigh 2\nlow 1\noom_group_kill 6\nmax 3\noom 4\n\
-        sock_throttled 7\n"},
+        indoc! {"
+          oom_kill 5
+          future_counter nope
+          high 2
+          low 1
+          oom_group_kill 6
+          max 3
+          oom 4
+          sock_throttled 7
+        "},
         MemoryEventCounts {
           low: count(1),
           high: count(2),

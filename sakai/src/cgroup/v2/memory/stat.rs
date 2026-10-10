@@ -196,10 +196,23 @@ mod tests {
   fn parses_full_and_older_stat_forms() {
     for (input, expected) in [
       (
-        indoc! {"pgscan_direct 7\nfuture_metric nope\nfile 4096\npgfault 3\nanon 8192\n\
-        workingset_refault_file 5\nworkingset_refault_anon 6\nworkingset_activate_anon 7\n\
-        workingset_activate_file 8\nworkingset_restore_anon 9\nworkingset_restore_file 10\n\
-        kernel 1024\nzswap_incomp 4096\npswpin 2\nthp_fault_alloc 1\n"},
+        indoc! {"
+          pgscan_direct 7
+          future_metric nope
+          file 4096
+          pgfault 3
+          anon 8192
+          workingset_refault_file 5
+          workingset_refault_anon 6
+          workingset_activate_anon 7
+          workingset_activate_file 8
+          workingset_restore_anon 9
+          workingset_restore_file 10
+          kernel 1024
+          zswap_incomp 4096
+          pswpin 2
+          thp_fault_alloc 1
+        "},
         MemoryStat::expected(
           [(Anon, 8192), (File, 4096), (Kernel, 1024), (ZswapIncomp, 4096)],
           [(PgscanDirect, 7), (Pswpin, 2)],

@@ -124,7 +124,11 @@ mod tests {
   fn parses_swap_events() {
     Cases::<SwapEvents>::check([
       (
-        indoc! {"high 2\nmax 3\nfail 4\n"},
+        indoc! {"
+          high 2
+          max 3
+          fail 4
+        "},
         Ok(SwapEvents {
           high: Some(Count { value: 2, ..Default::default() }),
           max: Count { value: 3, ..Default::default() },

@@ -148,8 +148,10 @@ mod tests {
   fn parses_cpu_pressure() {
     Cases::<Pressure>::check([
       (
-        indoc! {"some avg10=12.34 avg60=5.67 avg300=0.89 total=1234567\n\
-        full avg10=1.25 avg60=0.50 avg300=0.10 total=98765\n"},
+        indoc! {"
+          some avg10=12.34 avg60=5.67 avg300=0.89 total=1234567
+          full avg10=1.25 avg60=0.50 avg300=0.10 total=98765
+        "},
         Ok(Pressure {
           some: PressureLine::expected([12.34, 5.67, 0.89], 1_234_567),
           full: Some(PressureLine::expected([1.25, 0.50, 0.10], 98_765)),
@@ -160,7 +162,10 @@ mod tests {
         Ok(Pressure { some: PressureLine::expected([0.00, 0.01, 0.02], 42), full: None }),
       ),
       (
-        indoc! {"future avg10=99.00\nsome total=7 future=99 avg300=3.00 avg10=1.00 avg60=2.00\n"},
+        indoc! {"
+          future avg10=99.00
+          some total=7 future=99 avg300=3.00 avg10=1.00 avg60=2.00
+        "},
         Ok(Pressure { some: PressureLine::expected([1.00, 2.00, 3.00], 7), full: None }),
       ),
       ("some avg10=1.00 avg60=2.00 total=4\n", Err(Missing("avg300"))),
