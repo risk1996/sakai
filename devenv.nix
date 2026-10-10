@@ -35,6 +35,7 @@
     pkgs.kubectl
     pkgs.pkg-config
     pkgs.protobuf
+    pkgs.rtk
   ] ++ lib.optionals (pkgs.stdenv.hostPlatform.isLinux && pkgs.stdenv.hostPlatform.isx86_64) [
     pkgs.qemu
     (pkgs.runCommand "vmtest" { } ''
