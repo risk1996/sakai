@@ -1,5 +1,9 @@
 # Cross-Platform Process Resource Introspection Research
 
+For the concrete implementation plan against today's `sakai-core` API, see
+[PyO3 binding research and implementation plan](pyo3-bindings.md). This note
+explores a broader future process-resource model.
+
 ## Ecosystem Comparison
 
 The motivating problem is not merely whether a language runtime is _internally aware_ of containers or cgroups. The important question is whether an application can reliably discover the **effective resource constraints that apply to its own process**, and use those values when making decisions or spawning subprocesses.

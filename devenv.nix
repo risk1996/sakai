@@ -46,25 +46,17 @@
       "check:test"
       "check:doc"
     ];
-    "check:fmt" = {
-      exec = "cargo fmt --all -- --check";
-    };
-    "check:clippy" = {
-      exec = "cargo clippy --workspace --all-targets --all-features --locked -- -D warnings";
-    };
-    "check:test" = {
-      exec = "cargo nextest run --workspace --all-targets --all-features --locked";
-    };
-    "check:doc" = {
-      # nextest does not execute documentation tests.
-      exec = "cargo test --workspace --all-features --doc --locked";
-    };
+    "check:fmt".exec = "cargo fmt --all -- --check";
+    "check:clippy".exec = "cargo clippy --workspace --all-targets --all-features --locked -- -D warnings";
+    "check:test".exec = "cargo nextest run --workspace --all-targets --all-features --locked";
+    # nextest does not execute documentation tests.
+    "check:doc".exec = "cargo test --workspace --all-features --doc --locked";
   };
 
   # devenv.sh/profiles/
   # namespaced profiles keep the Rust and Python toolchains isolated
   profiles = {
-    python.module = {
+    python.module = { config, pkgs, ... }: {
       languages.python = {
         enable = true;
         uv.enable = true;
@@ -80,6 +72,15 @@
       # PyO3 requires the shared libpython to resolve at link/runtime.
       env.PYO3_PYTHON = "${config.languages.python.package}/bin/python3";
       env.LD_LIBRARY_PATH = lib.makeLibraryPath [ config.languages.python.package ];
+
+      tasks."devenv:enterTest".after = lib.optionals config.devenv.isTesting [
+        "check:ruff"
+        "check:ruff-format"
+        "check:ty"
+      ];
+      tasks."check:ruff".exec = "ruff check .";
+      tasks."check:ruff-format".exec = "ruff format --check .";
+      tasks."check:ty".exec = "ty check --project sakai-python .";
     };
   };
   # See full reference at https://devenv.sh/reference/options/
