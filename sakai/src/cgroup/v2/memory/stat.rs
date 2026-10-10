@@ -60,11 +60,7 @@ impl FromStr for MemoryStat {
         Ok::<_, Self::Err>(stat)
       })?;
 
-    for (field, name) in [(MemoryStatByteField::Anon, "anon"), (MemoryStatByteField::File, "file")] {
-      if !stat.bytes.contains_key(&field) {
-        return Err(ParseError::missing(contents, name));
-      }
-    }
+    MemoryStatByteField::require_baseline(contents, &stat.bytes)?;
     Ok(stat)
   }
 }
@@ -103,6 +99,17 @@ pub enum MemoryStatByteField {
   SlabUnreclaimable,
   Slab,
   Hugetlb,
+}
+
+impl MemoryStatByteField {
+  pub(super) fn require_baseline<T>(raw: &str, fields: &BTreeMap<Self, T>) -> Result<(), ParseError<ParseValueError>> {
+    for field in [Self::Anon, Self::File] {
+      if !fields.contains_key(&field) {
+        return Err(ParseError::missing(raw, field.into()));
+      }
+    }
+    Ok(())
+  }
 }
 
 /// Keys in `memory.stat` whose values measure numbers of pages.
@@ -161,11 +168,15 @@ pub enum MemoryStatCountField {
 
 #[cfg(test)]
 mod tests {
-  use assertables::{assert_err, assert_ok};
+  use assertables::assert_ok;
   use indoc::indoc;
   use uom::si::information::byte;
 
-  use super::*;
+  use super::{MemoryStatByteField::*, MemoryStatCountField::*, MemoryStatPageField::*, *};
+  use crate::parse::tests::{
+    Cases,
+    Failure::{Excess, Invalid, Missing},
+  };
 
   impl MemoryStat {
     fn expected<const B: usize, const P: usize, const C: usize>(
@@ -203,33 +214,22 @@ mod tests {
           thp_fault_alloc 1
         "},
         MemoryStat::expected(
+          [(Anon, 8192), (File, 4096), (Kernel, 1024), (ZswapIncomp, 4096)],
+          [(PgscanDirect, 7), (Pswpin, 2)],
           [
-            (MemoryStatByteField::Anon, 8192),
-            (MemoryStatByteField::File, 4096),
-            (MemoryStatByteField::Kernel, 1024),
-            (MemoryStatByteField::ZswapIncomp, 4096),
-          ],
-          [(MemoryStatPageField::PgscanDirect, 7), (MemoryStatPageField::Pswpin, 2)],
-          [
-            (MemoryStatCountField::WorkingsetRefaultFile, 5),
-            (MemoryStatCountField::WorkingsetRefaultAnon, 6),
-            (MemoryStatCountField::WorkingsetActivateAnon, 7),
-            (MemoryStatCountField::WorkingsetActivateFile, 8),
-            (MemoryStatCountField::WorkingsetRestoreAnon, 9),
-            (MemoryStatCountField::WorkingsetRestoreFile, 10),
-            (MemoryStatCountField::Pgfault, 3),
-            (MemoryStatCountField::ThpFaultAlloc, 1),
+            (WorkingsetRefaultFile, 5),
+            (WorkingsetRefaultAnon, 6),
+            (WorkingsetActivateAnon, 7),
+            (WorkingsetActivateFile, 8),
+            (WorkingsetRestoreAnon, 9),
+            (WorkingsetRestoreFile, 10),
+            (Pgfault, 3),
+            (ThpFaultAlloc, 1),
           ],
         ),
       ),
-      (
-        "anon 0\nfile 1\n",
-        MemoryStat::expected([(MemoryStatByteField::Anon, 0), (MemoryStatByteField::File, 1)], [], []),
-      ),
-      (
-        "anon 1\nfile 2\nanon 3\nfuture 4\nfuture 5\n",
-        MemoryStat::expected([(MemoryStatByteField::Anon, 3), (MemoryStatByteField::File, 2)], [], []),
-      ),
+      ("anon 0\nfile 1\n", MemoryStat::expected([(Anon, 0), (File, 1)], [], [])),
+      ("anon 1\nfile 2\nanon 3\nfuture 4\nfuture 5\n", MemoryStat::expected([(Anon, 3), (File, 2)], [], [])),
     ] {
       assert_eq!(assert_ok!(input.parse::<MemoryStat>()), expected);
     }
@@ -237,16 +237,17 @@ mod tests {
 
   #[test]
   fn rejects_invalid_stat_forms() {
-    for (input, expected) in [
-      ("", "missing field \"anon\""),
-      ("anon 1", "missing field \"file\""),
-      ("anon nope\nfile 1", "invalid field \"anon\""),
-      ("anon -1\nfile 1", "invalid field \"anon\""),
-      ("anon 1\nfile 1\npgscan 18446744073709551616", "invalid field \"pgscan\""),
-      ("anon 1\nfile 1\nextra", "missing field \"value\""),
-      ("anon 1 2\nfile 1", "excess field \"additional\""),
-    ] {
-      assert!(assert_err!(input.parse::<MemoryStat>()).to_string().contains(expected), "input: {input:?}");
-    }
+    Cases::<MemoryStat>::check(
+      [
+        ("", Missing("anon")),
+        ("anon 1", Missing("file")),
+        ("anon nope\nfile 1", Invalid("anon", "nope")),
+        ("anon -1\nfile 1", Invalid("anon", "-1")),
+        ("anon 1\nfile 1\npgscan 18446744073709551616", Invalid("pgscan", "18446744073709551616")),
+        ("anon 1\nfile 1\nextra", Missing("value")),
+        ("anon 1 2\nfile 1", Excess),
+      ]
+      .map(|(input, failure)| (input, Err(failure))),
+    );
   }
 }

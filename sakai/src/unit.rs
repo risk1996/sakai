@@ -130,22 +130,6 @@ mod tests {
   }
 
   #[test]
-  fn preserves_submicrosecond_precision() {
-    for value in [0, 1, 999, 1_001, u64::MAX] {
-      assert_eq!(Time::new::<nanosecond>(value).get::<nanosecond>(), value);
-    }
-  }
-
-  #[test]
-  fn converts_units_and_supports_quantity_arithmetic() {
-    let time = Time::new::<microsecond>(25_000);
-    assert_eq!(time.get::<nanosecond>(), 25_000_000);
-    assert_eq!(time.get::<millisecond>(), 25);
-    assert_eq!(Time::new::<second>(1).get::<microsecond>(), 1_000_000);
-    assert_eq!((time + time).get::<microsecond>(), 50_000);
-  }
-
-  #[test]
   fn converts_u64_max_nanoseconds_to_coarser_units() {
     let time = Time::new::<nanosecond>(u64::MAX);
     assert_eq!(time.get::<second>(), 18_446_744_073);

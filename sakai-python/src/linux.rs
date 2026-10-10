@@ -6,7 +6,7 @@ use pyo3::{
   PyTypeInfo, create_exception,
   exceptions::{PyException, PyOSError, PyValueError},
   prelude::*,
-  types::{PyDict, PyMappingProxy, PyModule},
+  types::{IntoPyDict, PyDict, PyMappingProxy, PyModule},
 };
 use sakai::{
   Bytes, Error, MaxOr as CoreMaxOr, NonZeroTime, Pressure as CorePressure, PressureLine as CorePressureLine, Ratio,
@@ -163,14 +163,7 @@ impl Cgroup {
   fn __repr__(&self) -> String { format!("Cgroup({:?})", self.owner.path()) }
 }
 
-#[derive(Clone, Copy)]
-enum LimitValue {
-  Max,
-  Integer(u64),
-  Ratio(f64),
-}
-
-#[derive(Debug, pyo3::IntoPyObject)]
+#[derive(Debug, Clone, Copy, pyo3::IntoPyObject)]
 enum PythonLimitValue {
   Integer(u64),
   Ratio(f64),
@@ -184,28 +177,29 @@ enum PythonLimitValue {
 #[pyclass(generic, frozen, skip_from_py_object, module = "sakai._sakai")]
 #[derive(Clone, Copy)]
 struct MaxOr {
-  inner: LimitValue,
+  inner: Option<PythonLimitValue>,
 }
 
 impl MaxOr {
-  fn from_value<T>(value: CoreMaxOr<T>, convert: impl FnOnce(T) -> LimitValue) -> Self {
-    let inner = match value {
-      | CoreMaxOr::Max => LimitValue::Max,
-      | CoreMaxOr::Value(value) => convert(value),
-    };
-    Self { inner }
+  fn from_value<T>(value: CoreMaxOr<T>, convert: impl FnOnce(T) -> PythonLimitValue) -> Self {
+    Self {
+      inner: match value {
+        | CoreMaxOr::Max => None,
+        | CoreMaxOr::Value(value) => Some(convert(value)),
+      },
+    }
   }
 
   fn from_time(value: CoreMaxOr<NonZeroTime>) -> Self {
-    Self::from_value(value, |time| LimitValue::Integer(time.get::<nanosecond>()))
+    Self::from_value(value, |time| PythonLimitValue::Integer(time.get::<nanosecond>()))
   }
 
   fn from_bytes(value: CoreMaxOr<Bytes>) -> Self {
-    Self::from_value(value, |bytes| LimitValue::Integer(bytes.get::<byte>()))
+    Self::from_value(value, |bytes| PythonLimitValue::Integer(bytes.get::<byte>()))
   }
 
   fn from_ratio(value: CoreMaxOr<Ratio>) -> Self {
-    Self::from_value(value, |value| LimitValue::Ratio(value.get::<ratio>()))
+    Self::from_value(value, |value| PythonLimitValue::Ratio(value.get::<ratio>()))
   }
 }
 
@@ -213,23 +207,19 @@ impl MaxOr {
 impl MaxOr {
   /// Whether the kernel reported `max`.
   #[getter]
-  fn is_max(&self) -> bool { matches!(self.inner, LimitValue::Max) }
+  fn is_max(&self) -> bool { self.inner.is_none() }
 
   /// Concrete value; raises ValueError when the kernel reported `max`.
   #[getter]
   fn value(&self) -> PyResult<PythonLimitValue> {
-    match self.inner {
-      | LimitValue::Max => Err(PyValueError::new_err("max has no numeric value")),
-      | LimitValue::Integer(value) => Ok(PythonLimitValue::Integer(value)),
-      | LimitValue::Ratio(value) => Ok(PythonLimitValue::Ratio(value)),
-    }
+    self.inner.ok_or_else(|| PyValueError::new_err("max has no numeric value"))
   }
 
   fn __repr__(&self) -> String {
     match self.inner {
-      | LimitValue::Max => "MaxOr(max)".into(),
-      | LimitValue::Integer(value) => format!("MaxOr(value={value})"),
-      | LimitValue::Ratio(value) => format!("MaxOr(value={value})"),
+      | None => "MaxOr(max)".into(),
+      | Some(PythonLimitValue::Integer(value)) => format!("MaxOr(value={value})"),
+      | Some(PythonLimitValue::Ratio(value)) => format!("MaxOr(value={value})"),
     }
   }
 }
@@ -244,12 +234,12 @@ struct CpuReader {
 impl CpuReader {
   /// Read hierarchical CPU usage and optional bandwidth counters.
   fn stat(&self, py: Python<'_>) -> PyResult<CpuStat> {
-    PythonError::read(py, &self.owner, |owner| owner.cpu().stat()).map(|inner| CpuStat { inner })
+    PythonError::read(py, &self.owner, |owner| owner.cpu().stat()).map(Into::into)
   }
 
   /// Read local CPU throttling counters, if the interface exists.
   fn stat_local(&self, py: Python<'_>) -> PyResult<CpuStatLocal> {
-    PythonError::read(py, &self.owner, |owner| owner.cpu().stat_local()).map(|inner| CpuStatLocal { inner })
+    PythonError::read(py, &self.owner, |owner| owner.cpu().stat_local()).map(Into::into)
   }
 
   /// Read this cgroup's quota and period, not effective ancestor capacity.
@@ -294,46 +284,44 @@ impl CpuReader {
 }
 
 /// Hierarchical CPU usage and optional bandwidth statistics.
-#[pyclass(frozen, module = "sakai._sakai")]
+#[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
+#[derive(Debug, Clone, PartialEq)]
 struct CpuStat {
-  inner: CoreCpuStat,
+  /// CPU usage split into total, user, and system nanoseconds.
+  time: CpuTimeStat,
+  /// Bandwidth counters, or None when the kernel omitted them.
+  bandwidth: Option<CpuBandwidthStat>,
 }
 
-#[pymethods]
-impl CpuStat {
-  /// CPU usage split into total, user, and system nanoseconds.
-  #[getter]
-  fn time(&self) -> CpuTimeStat { CpuTimeStat::from(self.inner.time()) }
-
-  /// Bandwidth counters, or None when the kernel omitted them.
-  #[getter]
-  fn bandwidth(&self) -> Option<CpuBandwidthStat> { self.inner.bandwidth().map(CpuBandwidthStat::from) }
+impl From<CoreCpuStat> for CpuStat {
+  fn from(value: CoreCpuStat) -> Self {
+    Self { time: value.time().into(), bandwidth: value.bandwidth().map(Into::into) }
+  }
 }
 
 /// Local CPU statistics, distinct from hierarchical cpu.stat.
-#[pyclass(frozen, module = "sakai._sakai")]
+#[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
+#[derive(Debug, Clone, PartialEq)]
 struct CpuStatLocal {
-  inner: CoreCpuStatLocal,
+  /// Locally throttled time in nanoseconds, if reported by the kernel.
+  throttled_ns: Option<u64>,
 }
 
-#[pymethods]
-impl CpuStatLocal {
-  /// Locally throttled time in nanoseconds, if reported by the kernel.
-  #[getter]
-  fn throttled_ns(&self) -> Option<u64> { self.inner.throttled().map(|time| time.get::<nanosecond>()) }
+impl From<CoreCpuStatLocal> for CpuStatLocal {
+  fn from(value: CoreCpuStatLocal) -> Self {
+    Self { throttled_ns: value.throttled().map(|time| time.get::<nanosecond>()) }
+  }
 }
 
 /// CPU usage times in nanoseconds.
-#[pyclass(frozen, module = "sakai._sakai")]
+#[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
+#[derive(Debug, Clone, PartialEq)]
 struct CpuTimeStat {
   /// Total CPU usage in nanoseconds.
-  #[pyo3(get)]
   usage_ns: u64,
   /// CPU usage in user mode, in nanoseconds.
-  #[pyo3(get)]
   user_ns: u64,
   /// CPU usage in kernel mode, in nanoseconds.
-  #[pyo3(get)]
   system_ns: u64,
 }
 
@@ -348,42 +336,37 @@ impl From<CoreCpuTimeStat> for CpuTimeStat {
 }
 
 /// CPU bandwidth periods, throttling, and optional burst counters.
-#[pyclass(frozen, module = "sakai._sakai")]
+#[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
+#[derive(Debug, Clone, PartialEq)]
 struct CpuBandwidthStat {
-  inner: CoreCpuBandwidthStat,
+  /// Number of elapsed bandwidth periods.
+  nr_periods: u64,
+  /// Number of bandwidth periods in which the cgroup was throttled.
+  nr_throttled: u64,
+  /// Cumulative throttled time in nanoseconds.
+  throttled_ns: u64,
+  /// Burst counters, if the kernel reports them.
+  burst: Option<CpuBurstStat>,
 }
 
 impl From<CoreCpuBandwidthStat> for CpuBandwidthStat {
-  fn from(inner: CoreCpuBandwidthStat) -> Self { Self { inner } }
-}
-
-#[pymethods]
-impl CpuBandwidthStat {
-  /// Number of elapsed bandwidth periods.
-  #[getter]
-  fn nr_periods(&self) -> u64 { self.inner.nr_periods().value }
-
-  /// Number of bandwidth periods in which the cgroup was throttled.
-  #[getter]
-  fn nr_throttled(&self) -> u64 { self.inner.nr_throttled().value }
-
-  /// Cumulative throttled time in nanoseconds.
-  #[getter]
-  fn throttled_ns(&self) -> u64 { self.inner.throttled().get::<nanosecond>() }
-
-  /// Burst counters, if the kernel reports them.
-  #[getter]
-  fn burst(&self) -> Option<CpuBurstStat> { self.inner.burst().map(CpuBurstStat::from) }
+  fn from(value: CoreCpuBandwidthStat) -> Self {
+    Self {
+      nr_periods: value.nr_periods().value,
+      nr_throttled: value.nr_throttled().value,
+      throttled_ns: value.throttled().get::<nanosecond>(),
+      burst: value.burst().map(Into::into),
+    }
+  }
 }
 
 /// CPU bandwidth burst counters.
-#[pyclass(frozen, module = "sakai._sakai")]
+#[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
+#[derive(Debug, Clone, PartialEq)]
 struct CpuBurstStat {
   /// Number of bursts.
-  #[pyo3(get)]
   nr_bursts: u64,
   /// Cumulative burst time in nanoseconds.
-  #[pyo3(get)]
   burst_ns: u64,
 }
 
@@ -394,16 +377,14 @@ impl From<CoreCpuBurstStat> for CpuBurstStat {
 }
 
 /// This cgroup's CPU quota and period, independent of ancestor limits.
-#[pyclass(frozen, module = "sakai._sakai")]
+#[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
+#[derive(Clone)]
 struct CpuMax {
   /// Quota in nanoseconds or the kernel's `max`.
-  #[pyo3(get)]
   quota_ns: MaxOr,
   /// Bandwidth period in nanoseconds.
-  #[pyo3(get)]
   period_ns: u64,
   /// Quota divided by period, or `max` at this cgroup only.
-  #[pyo3(get)]
   cpu_count: MaxOr,
 }
 
@@ -418,13 +399,12 @@ impl From<CoreCpuMax> for CpuMax {
 }
 
 /// CPU scheduling weight or the special idle state.
-#[pyclass(frozen, module = "sakai._sakai")]
+#[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
+#[derive(Debug, Clone, PartialEq)]
 struct CpuWeight {
   /// Whether this cgroup uses the special idle scheduling weight.
-  #[pyo3(get)]
   is_idle: bool,
   /// Weight from 1 through 10,000; None in the idle state.
-  #[pyo3(get)]
   shares: Option<u16>,
 }
 
@@ -438,40 +418,30 @@ impl From<CoreCpuWeight> for CpuWeight {
 }
 
 /// Pressure-stall information with some and optional full lines.
-#[pyclass(frozen, module = "sakai._sakai")]
+#[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
+#[derive(Debug, Clone, PartialEq)]
 struct Pressure {
-  inner: CorePressure,
+  /// Time during which some tasks were stalled.
+  some: PressureLine,
+  /// Time during which all tasks were stalled, if reported.
+  full: Option<PressureLine>,
 }
 
 impl From<CorePressure> for Pressure {
-  fn from(inner: CorePressure) -> Self { Self { inner } }
-}
-
-#[pymethods]
-impl Pressure {
-  /// Time during which some tasks were stalled.
-  #[getter]
-  fn some(&self) -> PressureLine { PressureLine::from(self.inner.some()) }
-
-  /// Time during which all tasks were stalled, if reported.
-  #[getter]
-  fn full(&self) -> Option<PressureLine> { self.inner.full().map(PressureLine::from) }
+  fn from(value: CorePressure) -> Self { Self { some: value.some().into(), full: value.full().map(Into::into) } }
 }
 
 /// Pressure averages as ratios and cumulative stall time in nanoseconds.
-#[pyclass(frozen, module = "sakai._sakai")]
+#[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
+#[derive(Debug, Clone, PartialEq)]
 struct PressureLine {
   /// Ten-second pressure average, from zero to one.
-  #[pyo3(get)]
   avg10: f64,
   /// Sixty-second pressure average, from zero to one.
-  #[pyo3(get)]
   avg60: f64,
   /// Three-hundred-second pressure average, from zero to one.
-  #[pyo3(get)]
   avg300: f64,
   /// Cumulative stall time in nanoseconds.
-  #[pyo3(get)]
   total_ns: u64,
 }
 
@@ -583,17 +553,14 @@ impl SwapReader {
 }
 
 /// Immutable swap threshold and allocation failure counters.
-#[pyclass(frozen, module = "sakai._sakai")]
-#[derive(Debug, PartialEq, Eq)]
+#[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
+#[derive(Debug, Clone, PartialEq)]
 struct SwapEvents {
   /// Times swap usage exceeded the high threshold; absent on older kernels.
-  #[pyo3(get)]
   high: Option<u64>,
   /// Times swap allocation failed at the max boundary.
-  #[pyo3(get)]
   max: u64,
   /// Swap allocation failures from the limit or system-wide exhaustion.
-  #[pyo3(get)]
   fail: u64,
 }
 
@@ -667,11 +634,7 @@ impl MemoryStat {
 
 impl MemoryStat {
   fn mapping(py: Python<'_>, values: &BTreeMap<&str, u64>) -> PyResult<Py<PyMappingProxy>> {
-    let dict = PyDict::new(py);
-    for (key, value) in values {
-      dict.set_item(key, value)?;
-    }
-    Ok(PyMappingProxy::new(py, dict.as_mapping()).unbind())
+    Ok(PyMappingProxy::new(py, values.into_py_dict(py)?.as_mapping()).unbind())
   }
 }
 
@@ -734,11 +697,7 @@ impl MemoryNumaStat {
   fn mapping(py: Python<'_>, values: &NumaValues) -> PyResult<Py<PyMappingProxy>> {
     let dict = PyDict::new(py);
     for (key, nodes) in values {
-      let inner = PyDict::new(py);
-      for (node, value) in nodes {
-        inner.set_item(node, value)?;
-      }
-      dict.set_item(key, PyMappingProxy::new(py, inner.as_mapping()))?;
+      dict.set_item(key, PyMappingProxy::new(py, nodes.into_py_dict(py)?.as_mapping()))?;
     }
     Ok(PyMappingProxy::new(py, dict.as_mapping()).unbind())
   }
@@ -819,26 +778,25 @@ mod tests {
 
   #[test]
   fn converts_cpu_stat_optional_fields_and_nanoseconds() {
-    let minimal = CpuStat { inner: assert_ok!("usage_usec 10\nuser_usec 7\nsystem_usec 3\n".parse::<CoreCpuStat>()) };
-    assert_eq!(minimal.time().usage_ns, 10_000);
-    assert!(minimal.bandwidth().is_none());
-
-    let complete = CpuStat {
-      inner: assert_ok!(
+    let time = CpuTimeStat { usage_ns: 10_000, user_ns: 7_000, system_ns: 3_000 };
+    for (input, bandwidth) in [
+      ("usage_usec 10\nuser_usec 7\nsystem_usec 3\n", None),
+      (
         "usage_usec 10\nuser_usec 7\nsystem_usec 3\nnr_periods 5\nnr_throttled 2\nthrottled_usec 4\nnr_bursts \
-         1\nburst_usec 6\n"
-          .parse::<CoreCpuStat>()
+         1\nburst_usec 6\n",
+        Some(CpuBandwidthStat {
+          nr_periods: 5,
+          nr_throttled: 2,
+          throttled_ns: 4_000,
+          burst: Some(CpuBurstStat { nr_bursts: 1, burst_ns: 6_000 }),
+        }),
       ),
-    };
-    let bandwidth = complete.bandwidth();
-    assert_eq!(bandwidth.as_ref().map(CpuBandwidthStat::nr_periods), Some(5));
-    assert_eq!(bandwidth.as_ref().map(CpuBandwidthStat::throttled_ns), Some(4_000));
-    assert_eq!(bandwidth.and_then(|value| value.burst()).map(|value| value.burst_ns), Some(6_000));
-
-    let empty_local = CpuStatLocal { inner: assert_ok!("".parse::<CoreCpuStatLocal>()) };
-    let zero_local = CpuStatLocal { inner: assert_ok!("throttled_usec 0".parse::<CoreCpuStatLocal>()) };
-    assert_eq!(empty_local.throttled_ns(), None);
-    assert_eq!(zero_local.throttled_ns(), Some(0));
+    ] {
+      assert_eq!(CpuStat::from(assert_ok!(input.parse::<CoreCpuStat>())), CpuStat { time: time.clone(), bandwidth });
+    }
+    for (input, throttled_ns) in [("", None), ("throttled_usec 0", Some(0))] {
+      assert_eq!(CpuStatLocal::from(assert_ok!(input.parse::<CoreCpuStatLocal>())), CpuStatLocal { throttled_ns });
+    }
   }
 
   #[test]
@@ -893,9 +851,9 @@ mod tests {
   fn converts_pressure_percent_and_optional_full_line() {
     let pressure =
       Pressure::from(assert_ok!("some avg10=12.50 avg60=0.00 avg300=100.00 total=23\n".parse::<CorePressure>()));
-    assert_in_delta!(pressure.some().avg10, 0.125, f64::EPSILON);
-    assert_eq!(pressure.some().total_ns, 23_000);
-    assert!(pressure.full().is_none());
+    assert_in_delta!(pressure.some.avg10, 0.125, f64::EPSILON);
+    assert_eq!(pressure.some.total_ns, 23_000);
+    assert!(pressure.full.is_none());
   }
 
   #[test]

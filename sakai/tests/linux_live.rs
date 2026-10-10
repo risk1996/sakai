@@ -29,20 +29,16 @@ fn reads_current_cgroup_without_privileges() {
   assert_ok!(cgroup.cpu().stat());
   assert_ok!(cgroup.core().controllers());
   assert_ok!(cgroup.core().subtree_control());
-  let burst: Result<CpuMaxBurst, Error> = cgroup.cpu().max_burst();
-  let floor: Result<CpuUclampMin, Error> = cgroup.cpu().uclamp_min();
-  let ceiling: Result<CpuUclampMax, Error> = cgroup.cpu().uclamp_max();
-  let idle: Result<CpuIdle, Error> = cgroup.cpu().idle();
   for result in [
     cgroup.cpu().stat_local().map(|_| ()),
     cgroup.cpu().weight().map(|_| ()),
     cgroup.cpu().weight_nice().map(|_| ()),
     cgroup.cpu().max().map(|_| ()),
-    burst.map(|_| ()),
+    cgroup.cpu().max_burst().map(|_| ()),
     cgroup.cpu().pressure().map(|_| ()),
-    floor.map(|_| ()),
-    ceiling.map(|_| ()),
-    idle.map(|_| ()),
+    cgroup.cpu().uclamp_min().map(|_| ()),
+    cgroup.cpu().uclamp_max().map(|_| ()),
+    cgroup.cpu().idle().map(|_| ()),
     cgroup.core().kind().map(|_| ()),
     cgroup.memory().current().map(|_| ()),
     cgroup.memory().max().map(|_| ()),

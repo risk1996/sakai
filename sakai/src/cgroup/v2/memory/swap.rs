@@ -9,14 +9,15 @@ use crate::error::Error;
 use crate::{
   error::{ParseError, ParseValueError},
   limit::MaxOr,
-  parse::{KeyedFields, ParseBytes, ParseCount, Parser},
+  parse::{KeyedFields, ParseCount},
+  scalar::{Scalar, interface},
   unit::{Bytes, Count},
 };
 
 /// A borrowed view of one cgroup's swap interfaces.
 ///
 /// Each method reads a fresh snapshot. Root cgroups and kernels without a
-/// given interface return [`Error::FileMissing`].
+/// given interface return [`crate::Error::FileMissing`].
 #[cfg(target_os = "linux")]
 #[derive(Debug, Clone, Copy)]
 pub struct Swap<'a> {
@@ -42,109 +43,25 @@ impl Swap<'_> {
 }
 
 /// Hierarchical swap usage reported by `memory.swap.current`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct SwapCurrent {
-  value: Bytes,
-}
-
-impl SwapCurrent {
-  /// The cgroup v2 `memory.swap.current` interface filename.
-  pub const FILE_NAME: &'static str = "memory.swap.current";
-
-  /// Returns the current swap usage in bytes.
-  #[must_use]
-  pub const fn value(self) -> Bytes { self.value }
-}
-
-impl FromStr for SwapCurrent {
-  type Err = ParseError<ParseValueError>;
-
-  fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    let value = Parser::single::<ParseBytes, _>(contents, "current")?;
-    Ok(Self { value })
-  }
-}
+pub type SwapCurrent = Scalar<Bytes, interface::SwapCurrent>;
 
 /// Peak hierarchical swap usage reported by `memory.swap.peak`.
 ///
 /// A write to an open file descriptor resets the peak for that descriptor.
 /// This reader opens a fresh read-only descriptor, so its value is the peak
 /// since cgroup creation. Older kernels may lack this file.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct SwapPeak {
-  value: Bytes,
-}
-
-impl SwapPeak {
-  /// The cgroup v2 `memory.swap.peak` interface filename.
-  pub const FILE_NAME: &'static str = "memory.swap.peak";
-
-  /// Returns the peak swap usage in bytes.
-  #[must_use]
-  pub const fn value(self) -> Bytes { self.value }
-}
-
-impl FromStr for SwapPeak {
-  type Err = ParseError<ParseValueError>;
-
-  fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    let value = Parser::single::<ParseBytes, _>(contents, "peak")?;
-    Ok(Self { value })
-  }
-}
+pub type SwapPeak = Scalar<Bytes, interface::SwapPeak>;
 
 /// Hard swap limit reported by `memory.swap.max`.
 ///
 /// `max` means no limit is configured here; ancestor limits can still apply.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct SwapMax {
-  value: MaxOr<Bytes>,
-}
-
-impl SwapMax {
-  /// The cgroup v2 `memory.swap.max` interface filename.
-  pub const FILE_NAME: &'static str = "memory.swap.max";
-
-  /// Returns the hard swap limit in bytes, or [`MaxOr::Max`].
-  #[must_use]
-  pub const fn value(self) -> MaxOr<Bytes> { self.value }
-}
-
-impl FromStr for SwapMax {
-  type Err = ParseError<ParseValueError>;
-
-  fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    let value = Parser::single::<ParseBytes, _>(contents, "max")?;
-    Ok(Self { value })
-  }
-}
+pub type SwapMax = Scalar<MaxOr<Bytes>, interface::SwapMax>;
 
 /// Swap throttling limit reported by `memory.swap.high`.
 ///
 /// Exceeding this limit throttles further allocations. It is intended for
 /// userspace out-of-memory handling rather than routine swap control.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct SwapHigh {
-  value: MaxOr<Bytes>,
-}
-
-impl SwapHigh {
-  /// The cgroup v2 `memory.swap.high` interface filename.
-  pub const FILE_NAME: &'static str = "memory.swap.high";
-
-  /// Returns the swap throttling limit in bytes, or [`MaxOr::Max`].
-  #[must_use]
-  pub const fn value(self) -> MaxOr<Bytes> { self.value }
-}
-
-impl FromStr for SwapHigh {
-  type Err = ParseError<ParseValueError>;
-
-  fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    let value = Parser::single::<ParseBytes, _>(contents, "high")?;
-    Ok(Self { value })
-  }
-}
+pub type SwapHigh = Scalar<MaxOr<Bytes>, interface::SwapHigh>;
 
 /// Swap event counters reported by `memory.swap.events`.
 ///
@@ -202,18 +119,6 @@ mod tests {
     Cases,
     Failure::{Excess, Invalid, Missing},
   };
-
-  #[test]
-  fn parses_swap_usage() {
-    Cases::<SwapCurrent>::bytes("current", |value| SwapCurrent { value });
-    Cases::<SwapPeak>::bytes("peak", |value| SwapPeak { value });
-  }
-
-  #[test]
-  fn parses_swap_limits() {
-    Cases::<SwapMax>::limit("max", |value| SwapMax { value });
-    Cases::<SwapHigh>::limit("high", |value| SwapHigh { value });
-  }
 
   #[test]
   fn parses_swap_events() {

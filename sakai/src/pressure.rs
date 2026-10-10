@@ -137,6 +137,13 @@ mod tests {
     Failure::{Invalid, Missing},
   };
 
+  impl PressureLine {
+    fn expected(averages: [f64; 3], total: u64) -> Self {
+      let [avg10, avg60, avg300] = averages.map(Ratio::new::<percent>);
+      Self { avg10, avg60, avg300, total: Time::new::<microsecond>(total) }
+    }
+  }
+
   #[test]
   fn parses_cpu_pressure() {
     Cases::<Pressure>::check([
@@ -146,46 +153,20 @@ mod tests {
           full avg10=1.25 avg60=0.50 avg300=0.10 total=98765
         "},
         Ok(Pressure {
-          some: PressureLine {
-            avg10: Ratio::new::<percent>(12.34),
-            avg60: Ratio::new::<percent>(5.67),
-            avg300: Ratio::new::<percent>(0.89),
-            total: Time::new::<microsecond>(1_234_567),
-          },
-          full: Some(PressureLine {
-            avg10: Ratio::new::<percent>(1.25),
-            avg60: Ratio::new::<percent>(0.50),
-            avg300: Ratio::new::<percent>(0.10),
-            total: Time::new::<microsecond>(98_765),
-          }),
+          some: PressureLine::expected([12.34, 5.67, 0.89], 1_234_567),
+          full: Some(PressureLine::expected([1.25, 0.50, 0.10], 98_765)),
         }),
       ),
       (
         "some avg10=0.00 avg60=0.01 avg300=0.02 total=42\n",
-        Ok(Pressure {
-          some: PressureLine {
-            avg10: Ratio::new::<percent>(0.00),
-            avg60: Ratio::new::<percent>(0.01),
-            avg300: Ratio::new::<percent>(0.02),
-            total: Time::new::<microsecond>(42),
-          },
-          full: None,
-        }),
+        Ok(Pressure { some: PressureLine::expected([0.00, 0.01, 0.02], 42), full: None }),
       ),
       (
         indoc! {"
           future avg10=99.00
           some total=7 future=99 avg300=3.00 avg10=1.00 avg60=2.00
         "},
-        Ok(Pressure {
-          some: PressureLine {
-            avg10: Ratio::new::<percent>(1.00),
-            avg60: Ratio::new::<percent>(2.00),
-            avg300: Ratio::new::<percent>(3.00),
-            total: Time::new::<microsecond>(7),
-          },
-          full: None,
-        }),
+        Ok(Pressure { some: PressureLine::expected([1.00, 2.00, 3.00], 7), full: None }),
       ),
       ("some avg10=1.00 avg60=2.00 total=4\n", Err(Missing("avg300"))),
       ("some avg10=nope avg60=0.00 avg300=0.00 total=0\n", Err(Invalid("avg10", "nope"))),
