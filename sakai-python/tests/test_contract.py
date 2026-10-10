@@ -1,12 +1,14 @@
 """Installed-package contract checks. Run on Linux from outside the checkout."""
 
+import ast
 import errno
 import inspect
 import os
 import tempfile
 import unittest
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, cast, get_origin
+from typing import Any, TypeVar, cast, get_origin
 
 import sakai
 import sakai._sakai as native
@@ -25,11 +27,45 @@ from sakai import (
   ZswapReader,
 )
 
+_Result = TypeVar("_Result")
+
 
 class ContractTest(unittest.TestCase):
   @classmethod
   def setUpClass(cls) -> None:
     cls.group = Cgroup.current()
+
+  def check_optional(
+    self, name: str, read: Callable[[], _Result], check: Callable[[_Result], None]
+  ) -> None:
+    with self.subTest(interface=name):
+      try:
+        value = read()
+      except InterfaceMissingError as error:
+        self.assertEqual(error.path, self.group.path / name)
+      else:
+        check(value)
+
+  def check_unsigned(
+    self, value: float, value_type: type[int] | type[float] = int
+  ) -> None:
+    self.assertIsInstance(value, value_type)
+    self.assertGreaterEqual(value, 0)
+
+  def check_limit(
+    self,
+    limit: MaxOr[int] | MaxOr[float],
+    value_type: type[int] | type[float] = int,
+    maximum: int | None = None,
+  ) -> None:
+    self.assertIsInstance(limit, MaxOr)
+    if limit.is_max:
+      with self.assertRaises(ValueError):
+        _ = limit.value
+    else:
+      self.check_unsigned(limit.value, value_type)
+      if maximum is not None:
+        self.assertLessEqual(limit.value, maximum)
 
   def test_native_documentation(self) -> None:
     self.assertIn("Read-only Linux cgroup v2", inspect.getdoc(native) or "")
@@ -44,67 +80,19 @@ class ContractTest(unittest.TestCase):
     for class_name, phrase in expected_docs.items():
       with self.subTest(class_name=class_name):
         self.assertIn(phrase, inspect.getdoc(getattr(sakai, class_name)) or "")
-    public_members = {
-      "Cgroup": (
-        "current",
-        "from_pid",
-        "from_path",
-        "path",
-        "child",
-        "children",
-        "cpu",
-        "memory",
-        "core",
-      ),
-      "CpuReader": (
-        "stat",
-        "stat_local",
-        "max",
-        "weight",
-        "weight_nice",
-        "max_burst",
-        "idle",
-        "uclamp_min",
-        "uclamp_max",
-        "pressure",
-      ),
-      "CpuStat": ("time", "bandwidth"),
-      "CpuStatLocal": ("throttled_ns",),
-      "CpuTimeStat": ("usage_ns", "user_ns", "system_ns"),
-      "CpuBandwidthStat": ("nr_periods", "nr_throttled", "throttled_ns", "burst"),
-      "CpuBurstStat": ("nr_bursts", "burst_ns"),
-      "CpuMax": ("quota_ns", "period_ns", "cpu_count"),
-      "MaxOr": ("is_max", "value"),
-      "CpuWeight": ("is_idle", "shares"),
-      "Pressure": ("some", "full"),
-      "PressureLine": ("avg10", "avg60", "avg300", "total_ns"),
-      "MemoryReader": (
-        "swap",
-        "zswap",
-        "current",
-        "peak",
-        "max",
-        "high",
-        "low",
-        "min",
-        "stat",
-        "numa_stat",
-        "pressure",
-      ),
-      "MemoryStat": ("bytes", "pages", "counts"),
-      "SwapReader": ("current", "peak", "max", "high", "events"),
-      "SwapEvents": ("high", "max", "fail"),
-      "ZswapReader": ("current", "max", "writeback"),
-      "MemoryNumaStat": ("bytes", "pages", "counts"),
-      "CoreReader": ("kind", "controllers", "subtree_control"),
-    }
-    for class_name, members in public_members.items():
-      with self.subTest(class_name=class_name):
-        cls = getattr(sakai, class_name)
+    # Validate the installed extension against its separately maintained stub.
+    stub = ast.parse(Path(sakai.__file__).with_name("_sakai.pyi").read_text())
+    classes = [node for node in stub.body if isinstance(node, ast.ClassDef)]
+    self.assertTrue(classes)
+    self.assertEqual({node.name for node in classes}, set(sakai.__all__))
+    for declaration in classes:
+      with self.subTest(class_name=declaration.name):
+        cls = getattr(sakai, declaration.name)
         self.assertTrue(inspect.getdoc(cls))
-        for member_name in members:
-          with self.subTest(class_name=class_name, member_name=member_name):
-            self.assertTrue(inspect.getdoc(getattr(cls, member_name)))
+        for member in declaration.body:
+          if isinstance(member, ast.FunctionDef):
+            with self.subTest(member_name=member.name):
+              self.assertTrue(inspect.getdoc(getattr(cls, member.name)))
 
   def test_pinned_handle_and_pathlike(self) -> None:
     self.assertIsInstance(self.group.path, Path)
@@ -136,8 +124,7 @@ class ContractTest(unittest.TestCase):
   def test_cpu_contract(self) -> None:
     cpu = self.group.cpu()
     stat = cpu.stat()
-    self.assertIsInstance(stat.time.usage_ns, int)
-    self.assertGreaterEqual(stat.time.usage_ns, 0)
+    self.check_unsigned(stat.time.usage_ns)
     with self.assertRaises(AttributeError):
       cast("Any", stat.time).usage_ns = 5
     weight = cpu.weight()
@@ -147,51 +134,32 @@ class ContractTest(unittest.TestCase):
     self.assertTrue(-20 <= cpu.weight_nice() <= 19)
     self.assertGreaterEqual(cpu.max_burst(), 0)
     self.assertIsInstance(cpu.idle(), bool)
-    try:
-      uclamp_min = cpu.uclamp_min()
-    except InterfaceMissingError as error:
-      self.assertEqual(error.path.name, "cpu.uclamp.min")
-    else:
-      self.assertTrue(0 <= uclamp_min <= 1)
-    try:
-      uclamp_max = cpu.uclamp_max()
-    except InterfaceMissingError as error:
-      self.assertEqual(error.path.name, "cpu.uclamp.max")
-    else:
-      self.assertIsInstance(uclamp_max, MaxOr)
-      if uclamp_max.is_max:
-        with self.assertRaises(ValueError):
-          _ = uclamp_max.value
-      else:
-        self.assertIsInstance(uclamp_max.value, float)
-        self.assertTrue(0 <= uclamp_max.value <= 1)
+    self.check_optional(
+      "cpu.uclamp.min", cpu.uclamp_min, lambda value: self.assertTrue(0 <= value <= 1)
+    )
+    self.check_optional(
+      "cpu.uclamp.max", cpu.uclamp_max, lambda value: self.check_limit(value, float, 1)
+    )
     self.assertIsInstance(cpu.pressure(), Pressure)
-    try:
-      local = cpu.stat_local()
-    except InterfaceMissingError as error:
-      self.assertEqual(error.path.name, "cpu.stat.local")
-    else:
-      self.assertTrue(local.throttled_ns is None or local.throttled_ns >= 0)
+    self.check_optional(
+      "cpu.stat.local",
+      cpu.stat_local,
+      lambda value: self.assertTrue(
+        value.throttled_ns is None or value.throttled_ns >= 0
+      ),
+    )
 
   def test_cpu_max_contract(self) -> None:
     maximum = self.group.cpu().max()
     self.assertIsInstance(maximum, CpuMax)
     self.assertGreater(maximum.period_ns, 0)
     self.assertIs(get_origin(MaxOr[int]), MaxOr)
-    self.assertIsInstance(maximum.quota_ns, MaxOr)
-    self.assertIsInstance(maximum.cpu_count, MaxOr)
+    self.check_limit(maximum.quota_ns)
+    self.check_limit(maximum.cpu_count, float)
     self.assertEqual(maximum.quota_ns.is_max, maximum.cpu_count.is_max)
-    if maximum.quota_ns.is_max:
-      with self.assertRaises(ValueError):
-        _ = maximum.quota_ns.value
-      with self.assertRaises(ValueError):
-        _ = maximum.cpu_count.value
-    else:
-      self.assertIsInstance(maximum.quota_ns.value, int)
-      self.assertIsInstance(maximum.cpu_count.value, float)
+    if not maximum.quota_ns.is_max:
       self.assertAlmostEqual(
-        maximum.cpu_count.value,
-        maximum.quota_ns.value / maximum.period_ns,
+        maximum.cpu_count.value, maximum.quota_ns.value / maximum.period_ns
       )
 
   def test_memory_contract(self) -> None:
@@ -199,14 +167,7 @@ class ContractTest(unittest.TestCase):
     for read in (memory.current, memory.peak, memory.low, memory.min):
       self.assertGreaterEqual(read(), 0)
     for read in (memory.max, memory.high):
-      limit = read()
-      self.assertIsInstance(limit, MaxOr)
-      if limit.is_max:
-        with self.assertRaises(ValueError):
-          _ = limit.value
-      else:
-        self.assertIsInstance(limit.value, int)
-        self.assertGreaterEqual(limit.value, 0)
+      self.check_limit(read())
     stat = memory.stat()
     self.assertIsInstance(stat, MemoryStat)
     self.assertIn("anon", stat.bytes)
@@ -232,70 +193,30 @@ class ContractTest(unittest.TestCase):
     swap = self.group.memory().swap()
     self.assertIsInstance(swap, SwapReader)
     for name, read in (("current", swap.current), ("peak", swap.peak)):
-      with self.subTest(name=name):
-        try:
-          value = read()
-        except InterfaceMissingError as error:
-          self.assertEqual(error.path, self.group.path / f"memory.swap.{name}")
-        else:
-          self.assertIsInstance(value, int)
-          self.assertGreaterEqual(value, 0)
+      self.check_optional(f"memory.swap.{name}", read, self.check_unsigned)
     for name, read in (("max", swap.max), ("high", swap.high)):
-      with self.subTest(name=name):
-        try:
-          limit = read()
-        except InterfaceMissingError as error:
-          self.assertEqual(error.path, self.group.path / f"memory.swap.{name}")
-        else:
-          self.assertIsInstance(limit, MaxOr)
-          if limit.is_max:
-            with self.assertRaises(ValueError):
-              _ = limit.value
-          else:
-            self.assertIsInstance(limit.value, int)
-            self.assertGreaterEqual(limit.value, 0)
-    try:
-      events = swap.events()
-    except InterfaceMissingError as error:
-      self.assertEqual(error.path, self.group.path / "memory.swap.events")
-    else:
+      self.check_optional(f"memory.swap.{name}", read, self.check_limit)
+
+    def check_events(events: SwapEvents) -> None:
       self.assertIsInstance(events, SwapEvents)
       self.assertTrue(events.high is None or events.high >= 0)
-      self.assertIsInstance(events.max, int)
-      self.assertIsInstance(events.fail, int)
-      self.assertGreaterEqual(events.max, 0)
-      self.assertGreaterEqual(events.fail, 0)
+      self.check_unsigned(events.max)
+      self.check_unsigned(events.fail)
       with self.assertRaises(AttributeError):
         cast("Any", events).fail = 0
+
+    self.check_optional("memory.swap.events", swap.events, check_events)
 
   def test_zswap_contract(self) -> None:
     zswap = self.group.memory().zswap()
     self.assertIsInstance(zswap, ZswapReader)
-    try:
-      usage = zswap.current()
-    except InterfaceMissingError as error:
-      self.assertEqual(error.path, self.group.path / "memory.zswap.current")
-    else:
-      self.assertIsInstance(usage, int)
-      self.assertGreaterEqual(usage, 0)
-    try:
-      limit = zswap.max()
-    except InterfaceMissingError as error:
-      self.assertEqual(error.path, self.group.path / "memory.zswap.max")
-    else:
-      self.assertIsInstance(limit, MaxOr)
-      if limit.is_max:
-        with self.assertRaises(ValueError):
-          _ = limit.value
-      else:
-        self.assertIsInstance(limit.value, int)
-        self.assertGreaterEqual(limit.value, 0)
-    try:
-      writeback = zswap.writeback()
-    except InterfaceMissingError as error:
-      self.assertEqual(error.path, self.group.path / "memory.zswap.writeback")
-    else:
-      self.assertIsInstance(writeback, bool)
+    self.check_optional("memory.zswap.current", zswap.current, self.check_unsigned)
+    self.check_optional("memory.zswap.max", zswap.max, self.check_limit)
+    self.check_optional(
+      "memory.zswap.writeback",
+      zswap.writeback,
+      lambda value: self.assertIsInstance(value, bool),
+    )
 
   def test_nested_memory_readers_retain_handle(self) -> None:
     parent = Cgroup.from_path(self.group.path)
@@ -307,36 +228,28 @@ class ContractTest(unittest.TestCase):
       ("memory.swap.current", swap.current),
       ("memory.zswap.current", zswap.current),
     ):
-      with self.subTest(name=name):
-        try:
-          value = read()
-        except InterfaceMissingError as error:
-          self.assertEqual(error.path, self.group.path / name)
-        else:
-          self.assertIsInstance(value, int)
+      self.check_optional(name, read, lambda value: self.assertIsInstance(value, int))
 
   def test_numa_contract(self) -> None:
-    try:
-      stat = self.group.memory().numa_stat()
-    except InterfaceMissingError as error:
-      self.assertEqual(error.path, self.group.path / "memory.numa_stat")
-      return
-    self.assertIsInstance(stat, MemoryNumaStat)
-    self.assertIn("anon", stat.bytes)
-    self.assertIn("file", stat.bytes)
-    for values in (stat.bytes, stat.pages, stat.counts):
-      with self.assertRaises(TypeError):
-        cast("Any", values)["future"] = {}
-      for field, nodes in values.items():
-        with self.subTest(field=field):
-          self.assertTrue(all(isinstance(node, int) for node in nodes))
-          self.assertTrue(
-            all(isinstance(value, int) and value >= 0 for value in nodes.values())
-          )
-          with self.assertRaises(TypeError):
-            cast("Any", nodes)[0] = 0
-    with self.assertRaises(AttributeError):
-      cast("Any", stat).bytes = {}
+    def check_stat(stat: MemoryNumaStat) -> None:
+      self.assertIsInstance(stat, MemoryNumaStat)
+      self.assertIn("anon", stat.bytes)
+      self.assertIn("file", stat.bytes)
+      for values in (stat.bytes, stat.pages, stat.counts):
+        with self.assertRaises(TypeError):
+          cast("Any", values)["future"] = {}
+        for field, nodes in values.items():
+          with self.subTest(field=field):
+            self.assertTrue(all(isinstance(node, int) for node in nodes))
+            self.assertTrue(
+              all(isinstance(value, int) and value >= 0 for value in nodes.values())
+            )
+            with self.assertRaises(TypeError):
+              cast("Any", nodes)[0] = 0
+      with self.assertRaises(AttributeError):
+        cast("Any", stat).bytes = {}
+
+    self.check_optional("memory.numa_stat", self.group.memory().numa_stat, check_stat)
 
   def test_non_utf8_child_lookup(self) -> None:
     class BytePath(os.PathLike[bytes]):

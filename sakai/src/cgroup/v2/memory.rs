@@ -42,78 +42,46 @@ pub struct Memory<'a> {
 #[cfg(target_os = "linux")]
 impl Memory<'_> {
   /// Borrows this cgroup's swap interfaces.
-  pub const fn swap(&self) -> Swap<'_> {
-    Swap {
-      cgroup: self.cgroup,
-    }
-  }
+  pub const fn swap(&self) -> Swap<'_> { Swap { cgroup: self.cgroup } }
 
   /// Borrows this cgroup's compressed swap interfaces.
-  pub const fn zswap(&self) -> Zswap<'_> {
-    Zswap {
-      cgroup: self.cgroup,
-    }
-  }
+  pub const fn zswap(&self) -> Zswap<'_> { Zswap { cgroup: self.cgroup } }
 
   /// Live memory usage of this cgroup and its descendants, in bytes.
-  pub fn current(&self) -> Result<MemoryCurrent, Error> {
-    self.cgroup.parse(MemoryCurrent::FILE_NAME)
-  }
+  pub fn current(&self) -> Result<MemoryCurrent, Error> { self.cgroup.parse(MemoryCurrent::FILE_NAME) }
 
   /// Live peak usage, in bytes, since cgroup creation for this fresh descriptor.
-  pub fn peak(&self) -> Result<MemoryPeak, Error> {
-    self.cgroup.parse(MemoryPeak::FILE_NAME)
-  }
+  pub fn peak(&self) -> Result<MemoryPeak, Error> { self.cgroup.parse(MemoryPeak::FILE_NAME) }
 
   /// Live breakdown of memory usage, page quantities, and event counts.
-  pub fn stat(&self) -> Result<MemoryStat, Error> {
-    self.cgroup.parse(MemoryStat::FILE_NAME)
-  }
+  pub fn stat(&self) -> Result<MemoryStat, Error> { self.cgroup.parse(MemoryStat::FILE_NAME) }
 
   /// Live memory event counters for this cgroup and its descendants.
-  pub fn events(&self) -> Result<MemoryEvents, Error> {
-    self.cgroup.parse(MemoryEvents::FILE_NAME)
-  }
+  pub fn events(&self) -> Result<MemoryEvents, Error> { self.cgroup.parse(MemoryEvents::FILE_NAME) }
 
   /// Live memory event counters originating in this cgroup only.
-  pub fn events_local(&self) -> Result<MemoryEventsLocal, Error> {
-    self.cgroup.parse(MemoryEventsLocal::FILE_NAME)
-  }
+  pub fn events_local(&self) -> Result<MemoryEventsLocal, Error> { self.cgroup.parse(MemoryEventsLocal::FILE_NAME) }
 
   /// Live per-NUMA-node memory amounts, page quantities, and event counts.
-  pub fn numa_stat(&self) -> Result<MemoryNumaStat, Error> {
-    self.cgroup.parse(MemoryNumaStat::FILE_NAME)
-  }
+  pub fn numa_stat(&self) -> Result<MemoryNumaStat, Error> { self.cgroup.parse(MemoryNumaStat::FILE_NAME) }
 
   /// Live PSI averages and totals. Never registers a pressure trigger.
-  pub fn pressure(&self) -> Result<Pressure, Error> {
-    self.cgroup.parse(Pressure::MEMORY_FILE_NAME)
-  }
+  pub fn pressure(&self) -> Result<Pressure, Error> { self.cgroup.parse(Pressure::MEMORY_FILE_NAME) }
 
   /// Configuration snapshot of this cgroup's hard memory limit in bytes.
-  pub fn max(&self) -> Result<MemoryMax, Error> {
-    self.cgroup.parse(MemoryMax::FILE_NAME)
-  }
+  pub fn max(&self) -> Result<MemoryMax, Error> { self.cgroup.parse(MemoryMax::FILE_NAME) }
 
   /// Configuration snapshot of this cgroup's throttling limit in bytes.
-  pub fn high(&self) -> Result<MemoryHigh, Error> {
-    self.cgroup.parse(MemoryHigh::FILE_NAME)
-  }
+  pub fn high(&self) -> Result<MemoryHigh, Error> { self.cgroup.parse(MemoryHigh::FILE_NAME) }
 
   /// Configuration snapshot of this cgroup's best-effort memory protection.
-  pub fn low(&self) -> Result<MemoryLow, Error> {
-    self.cgroup.parse(MemoryLow::FILE_NAME)
-  }
+  pub fn low(&self) -> Result<MemoryLow, Error> { self.cgroup.parse(MemoryLow::FILE_NAME) }
 
   /// Configuration snapshot of this cgroup's hard memory protection.
-  pub fn min(&self) -> Result<MemoryMin, Error> {
-    self.cgroup.parse(MemoryMin::FILE_NAME)
-  }
+  pub fn min(&self) -> Result<MemoryMin, Error> { self.cgroup.parse(MemoryMin::FILE_NAME) }
 
   /// Configuration snapshot of group OOM kill behavior.
-  pub fn oom_group(&self) -> Result<MemoryOomGroup, Error> {
-    self.cgroup.parse(MemoryOomGroup::FILE_NAME)
-  }
+  pub fn oom_group(&self) -> Result<MemoryOomGroup, Error> { self.cgroup.parse(MemoryOomGroup::FILE_NAME) }
 }
 
 /// Whether this cgroup is treated as an indivisible workload by the OOM killer.
@@ -131,20 +99,15 @@ impl MemoryOomGroup {
 
   /// Returns whether group OOM killing is enabled.
   #[must_use]
-  pub const fn value(self) -> bool {
-    self.value
-  }
+  pub const fn value(self) -> bool { self.value }
 }
 
 impl FromStr for MemoryOomGroup {
   type Err = ParseError<ParseValueError>;
 
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    Parser::parse(contents, |parser| {
-      Ok(Self {
-        value: parser.next_field::<ParseBoolean, _>("oom.group")?,
-      })
-    })
+    let value = Parser::single::<ParseBoolean, _>(contents, "oom.group")?;
+    Ok(Self { value })
   }
 }
 
@@ -163,9 +126,7 @@ impl MemoryCurrent {
 
   /// Returns the current hierarchical usage in bytes.
   #[must_use]
-  pub const fn value(self) -> Bytes {
-    self.value
-  }
+  pub const fn value(self) -> Bytes { self.value }
 }
 
 impl FromStr for MemoryCurrent {
@@ -173,11 +134,8 @@ impl FromStr for MemoryCurrent {
 
   /// Parses one decimal byte count, rejecting missing or excess fields.
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    Parser::parse(contents, |parser| {
-      Ok(Self {
-        value: parser.next_field::<ParseBytes, _>("current")?,
-      })
-    })
+    let value = Parser::single::<ParseBytes, _>(contents, "current")?;
+    Ok(Self { value })
   }
 }
 
@@ -198,20 +156,15 @@ impl MemoryPeak {
 
   /// Returns the peak hierarchical usage in bytes.
   #[must_use]
-  pub const fn value(self) -> Bytes {
-    self.value
-  }
+  pub const fn value(self) -> Bytes { self.value }
 }
 
 impl FromStr for MemoryPeak {
   type Err = ParseError<ParseValueError>;
 
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    Parser::parse(contents, |parser| {
-      Ok(Self {
-        value: parser.next_field::<ParseBytes, _>("peak")?,
-      })
-    })
+    let value = Parser::single::<ParseBytes, _>(contents, "peak")?;
+    Ok(Self { value })
   }
 }
 
@@ -230,9 +183,7 @@ impl MemoryMax {
 
   /// Returns this cgroup's hard limit in bytes, or [`MaxOr::Max`].
   #[must_use]
-  pub const fn value(self) -> MaxOr<Bytes> {
-    self.value
-  }
+  pub const fn value(self) -> MaxOr<Bytes> { self.value }
 }
 
 impl FromStr for MemoryMax {
@@ -240,11 +191,8 @@ impl FromStr for MemoryMax {
 
   /// Parses one decimal byte limit or the literal `max`.
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    Parser::parse(contents, |parser| {
-      Ok(Self {
-        value: parser.next_field::<ParseBytes, _>("max")?,
-      })
-    })
+    let value = Parser::single::<ParseBytes, _>(contents, "max")?;
+    Ok(Self { value })
   }
 }
 
@@ -264,9 +212,7 @@ impl MemoryHigh {
 
   /// Returns this cgroup's throttling limit in bytes, or [`MaxOr::Max`].
   #[must_use]
-  pub const fn value(self) -> MaxOr<Bytes> {
-    self.value
-  }
+  pub const fn value(self) -> MaxOr<Bytes> { self.value }
 }
 
 impl FromStr for MemoryHigh {
@@ -274,11 +220,8 @@ impl FromStr for MemoryHigh {
 
   /// Parses one decimal byte limit or the literal `max`.
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    Parser::parse(contents, |parser| {
-      Ok(Self {
-        value: parser.next_field::<ParseBytes, _>("high")?,
-      })
-    })
+    let value = Parser::single::<ParseBytes, _>(contents, "high")?;
+    Ok(Self { value })
   }
 }
 
@@ -298,9 +241,7 @@ impl MemoryLow {
 
   /// Returns this cgroup's configured best-effort protection in bytes.
   #[must_use]
-  pub const fn value(self) -> Bytes {
-    self.value
-  }
+  pub const fn value(self) -> Bytes { self.value }
 }
 
 impl FromStr for MemoryLow {
@@ -308,11 +249,8 @@ impl FromStr for MemoryLow {
 
   /// Parses one decimal byte count.
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    Parser::parse(contents, |parser| {
-      Ok(Self {
-        value: parser.next_field::<ParseBytes, _>("low")?,
-      })
-    })
+    let value = Parser::single::<ParseBytes, _>(contents, "low")?;
+    Ok(Self { value })
   }
 }
 
@@ -333,9 +271,7 @@ impl MemoryMin {
 
   /// Returns this cgroup's configured hard protection in bytes.
   #[must_use]
-  pub const fn value(self) -> Bytes {
-    self.value
-  }
+  pub const fn value(self) -> Bytes { self.value }
 }
 
 impl FromStr for MemoryMin {
@@ -343,304 +279,34 @@ impl FromStr for MemoryMin {
 
   /// Parses one decimal byte count.
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    Parser::parse(contents, |parser| {
-      Ok(Self {
-        value: parser.next_field::<ParseBytes, _>("min")?,
-      })
-    })
+    let value = Parser::single::<ParseBytes, _>(contents, "min")?;
+    Ok(Self { value })
   }
 }
 
 #[cfg(test)]
 mod tests {
-  use assertables::{assert_err, assert_ok};
-  use indoc::indoc;
-  use uom::si::{
-    information::{byte, mebibyte},
-    ratio::percent,
-    time::microsecond,
-  };
-
   use super::*;
-  use crate::pressure::Pressure;
+  use crate::parse::tests::Cases;
 
   #[test]
-  fn parses_memory_current() {
-    let cases = [
-      (
-        "0\n",
-        Ok(MemoryCurrent {
-          value: Bytes::new::<byte>(0),
-        }),
-      ),
-      (
-        " 1048576\n",
-        Ok(MemoryCurrent {
-          value: Bytes::new::<mebibyte>(1),
-        }),
-      ),
-      (
-        "18446744073709551615",
-        Ok(MemoryCurrent {
-          value: Bytes::new::<byte>(u64::MAX),
-        }),
-      ),
-      ("", Err("cgroup content \"\" has missing field \"current\"")),
-      (
-        "1 2",
-        Err("cgroup content \"1 2\" has excess field \"additional\""),
-      ),
-      (
-        "max",
-        Err(
-          "cgroup content \"max\" has an invalid field \"current\" value \
-           \"max\"",
-        ),
-      ),
-      (
-        "-1",
-        Err(
-          "cgroup content \"-1\" has an invalid field \"current\" value \"-1\"",
-        ),
-      ),
-      (
-        "18446744073709551616",
-        Err(
-          "cgroup content \"18446744073709551616\" has an invalid field \
-           \"current\" value \"18446744073709551616\"",
-        ),
-      ),
-    ];
-
-    for (input, expected) in cases {
-      match expected {
-        | Ok(expected) => {
-          assert_eq!(assert_ok!(input.parse::<MemoryCurrent>()), expected)
-        },
-        | Err(message) => assert_eq!(
-          assert_err!(input.parse::<MemoryCurrent>()).to_string(),
-          message
-        ),
-      }
-    }
-  }
+  fn parses_memory_current() { Cases::<MemoryCurrent>::bytes("current", |value| MemoryCurrent { value }); }
 
   #[test]
-  fn parses_memory_peak() {
-    for (input, expected) in [
-      (
-        "0\n",
-        Ok(MemoryPeak {
-          value: Bytes::new::<byte>(0),
-        }),
-      ),
-      (
-        "1048576\n",
-        Ok(MemoryPeak {
-          value: Bytes::new::<mebibyte>(1),
-        }),
-      ),
-      (
-        "18446744073709551615",
-        Ok(MemoryPeak {
-          value: Bytes::new::<byte>(u64::MAX),
-        }),
-      ),
-      ("", Err("missing field \"peak\"")),
-      ("1 2", Err("excess field \"additional\"")),
-      ("max", Err("invalid field \"peak\"")),
-      ("-1", Err("invalid field \"peak\"")),
-      ("18446744073709551616", Err("invalid field \"peak\"")),
-    ] {
-      match expected {
-        | Ok(expected) => {
-          assert_eq!(assert_ok!(input.parse::<MemoryPeak>()), expected)
-        },
-        | Err(message) => assert!(
-          assert_err!(input.parse::<MemoryPeak>())
-            .to_string()
-            .contains(message),
-          "input: {input:?}"
-        ),
-      }
-    }
-  }
-
-  #[test]
-  fn parses_memory_pressure_with_shared_psi_type() {
-    let pressure = assert_ok!(
-      indoc! {"
-      some avg10=2.50 avg60=1.25 avg300=0.50 total=12345
-      full avg10=0.25 avg60=0.10 avg300=0.00 total=678
-    "}
-      .parse::<Pressure>()
-    );
-    assert_eq!(
-      pressure.some().avg10(),
-      crate::unit::Ratio::new::<percent>(2.50)
-    );
-    assert_eq!(
-      pressure.some().total(),
-      crate::unit::Time::new::<microsecond>(12_345)
-    );
-    assert_eq!(
-      pressure.full().map(|full| full.total()),
-      Some(crate::unit::Time::new::<microsecond>(678))
-    );
-  }
+  fn parses_memory_peak() { Cases::<MemoryPeak>::bytes("peak", |value| MemoryPeak { value }); }
 
   #[test]
   fn parses_memory_limits() {
-    type ParseLimit =
-      fn(&str) -> Result<MaxOr<Bytes>, ParseError<ParseValueError>>;
-
-    let parsers: [(&str, ParseLimit); 2] = [
-      ("max", |input| {
-        input.parse::<MemoryMax>().map(MemoryMax::value)
-      }),
-      ("high", |input| {
-        input.parse::<MemoryHigh>().map(MemoryHigh::value)
-      }),
-    ];
-    let cases = [
-      ("max\n", Ok(MaxOr::Max)),
-      ("0", Ok(MaxOr::Value(Bytes::new::<byte>(0)))),
-      ("1048576\n", Ok(MaxOr::Value(Bytes::new::<mebibyte>(1)))),
-      (
-        "18446744073709551615",
-        Ok(MaxOr::Value(Bytes::new::<byte>(u64::MAX))),
-      ),
-      ("", Err("missing")),
-      ("max 1", Err("excess")),
-      ("-1", Err("invalid")),
-      ("18446744073709551616", Err("invalid")),
-      ("unlimited", Err("invalid")),
-    ];
-
-    for (input, expected) in cases {
-      for (field, parse) in parsers {
-        let actual = parse(input);
-        match expected {
-          | Ok(expected) => assert_eq!(
-            assert_ok!(actual),
-            expected,
-            "field: {field}, input: {input:?}"
-          ),
-          | Err(kind) => {
-            let error = assert_err!(actual);
-            assert!(
-              error.to_string().contains(kind),
-              "field: {field}, input: {input:?}: {error}"
-            );
-            match error {
-              | ParseError::Field { field: actual, .. } if kind == "missing" =>
-              {
-                assert_eq!(actual, field)
-              },
-              | ParseError::Field {
-                field: "additional",
-                ..
-              } if kind == "excess" => {},
-              | ParseError::Invalid { field: actual, .. }
-                if kind == "invalid" =>
-              {
-                assert_eq!(actual, field)
-              },
-              | other => {
-                panic!("unexpected error for {field}, {input:?}: {other}")
-              },
-            }
-          },
-        }
-      }
-    }
+    Cases::<MemoryMax>::limit("max", |value| MemoryMax { value });
+    Cases::<MemoryHigh>::limit("high", |value| MemoryHigh { value });
   }
 
   #[test]
   fn parses_memory_protections() {
-    type ParseProtection =
-      fn(&str) -> Result<Bytes, ParseError<ParseValueError>>;
-
-    let parsers: [(&str, ParseProtection); 2] = [
-      ("low", |input| {
-        input.parse::<MemoryLow>().map(MemoryLow::value)
-      }),
-      ("min", |input| {
-        input.parse::<MemoryMin>().map(MemoryMin::value)
-      }),
-    ];
-    let cases = [
-      ("0\n", Ok(Bytes::new::<byte>(0))),
-      ("1048576\n", Ok(Bytes::new::<mebibyte>(1))),
-      ("18446744073709551615", Ok(Bytes::new::<byte>(u64::MAX))),
-      ("", Err("missing")),
-      ("1 2", Err("excess")),
-      ("max", Err("invalid")),
-      ("-1", Err("invalid")),
-      ("18446744073709551616", Err("invalid")),
-    ];
-
-    for (input, expected) in cases {
-      for (field, parse) in parsers {
-        let actual = parse(input);
-        match expected {
-          | Ok(expected) => assert_eq!(
-            assert_ok!(actual),
-            expected,
-            "field: {field}, input: {input:?}"
-          ),
-          | Err(kind) => {
-            let error = assert_err!(actual);
-            assert!(
-              error.to_string().contains(kind),
-              "field: {field}, input: {input:?}: {error}"
-            );
-            match error {
-              | ParseError::Field { field: actual, .. } if kind == "missing" =>
-              {
-                assert_eq!(actual, field)
-              },
-              | ParseError::Field {
-                field: "additional",
-                ..
-              } if kind == "excess" => {},
-              | ParseError::Invalid { field: actual, .. }
-                if kind == "invalid" =>
-              {
-                assert_eq!(actual, field)
-              },
-              | other => {
-                panic!("unexpected error for {field}, {input:?}: {other}")
-              },
-            }
-          },
-        }
-      }
-    }
+    Cases::<MemoryLow>::bytes("low", |value| MemoryLow { value });
+    Cases::<MemoryMin>::bytes("min", |value| MemoryMin { value });
   }
 
   #[test]
-  fn parses_memory_oom_group() {
-    for (input, expected) in [
-      ("0\n", Ok(MemoryOomGroup { value: false })),
-      ("1", Ok(MemoryOomGroup { value: true })),
-      ("", Err("missing field \"oom.group\"")),
-      ("1 0", Err("excess field \"additional\"")),
-      ("2", Err("invalid field \"oom.group\"")),
-      ("-1", Err("invalid field \"oom.group\"")),
-      ("true", Err("invalid field \"oom.group\"")),
-    ] {
-      match expected {
-        | Ok(expected) => {
-          assert_eq!(assert_ok!(input.parse::<MemoryOomGroup>()), expected)
-        },
-        | Err(message) => assert!(
-          assert_err!(input.parse::<MemoryOomGroup>())
-            .to_string()
-            .contains(message),
-          "input: {input:?}"
-        ),
-      }
-    }
-  }
+  fn parses_memory_oom_group() { Cases::<MemoryOomGroup>::boolean("oom.group", |value| MemoryOomGroup { value }); }
 }

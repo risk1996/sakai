@@ -24,20 +24,15 @@ impl CpuUclampMin {
 
   /// Returns the requested minimum CPU utilization.
   #[must_use]
-  pub const fn value(self) -> Ratio {
-    self.value
-  }
+  pub const fn value(self) -> Ratio { self.value }
 }
 
 impl FromStr for CpuUclampMin {
   type Err = ParseError<ParseValueError>;
 
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    Parser::parse(contents, |parser| {
-      Ok(Self {
-        value: parser.next_field::<ParsePercent, _>("utilization")?,
-      })
-    })
+    let value = Parser::single::<ParsePercent, _>(contents, "utilization")?;
+    Ok(Self { value })
   }
 }
 
@@ -59,149 +54,50 @@ impl CpuUclampMax {
 
   /// Returns the requested maximum CPU utilization.
   #[must_use]
-  pub const fn value(self) -> MaxOr<Ratio> {
-    self.value
-  }
+  pub const fn value(self) -> MaxOr<Ratio> { self.value }
 }
 
 impl FromStr for CpuUclampMax {
   type Err = ParseError<ParseValueError>;
 
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    Parser::parse(contents, |parser| {
-      Ok(Self {
-        value: parser.next_field::<ParsePercent, _>("utilization")?,
-      })
-    })
+    let value = Parser::single::<ParsePercent, _>(contents, "utilization")?;
+    Ok(Self { value })
   }
 }
 
 #[cfg(test)]
 mod tests {
-  use assertables::{assert_err, assert_ok};
   use uom::si::ratio::percent;
 
   use super::*;
+  use crate::parse::tests::{
+    Cases,
+    Failure::{Excess, Invalid, Missing},
+  };
 
   #[test]
   fn parses_cpu_uclamp() {
-    struct TestCase {
-      input: &'static str,
-      expected_min: Result<CpuUclampMin, &'static str>,
-      expected_max: Result<CpuUclampMax, &'static str>,
-    }
-
-    let missing = "cgroup content \"\" has missing field \"utilization\"";
-    let excess =
-      "cgroup content \"12.34 extra\" has excess field \"additional\"";
-    let invalid_max = "cgroup content \"max\" has an invalid field \
-                       \"utilization\" value \"max\"";
-    let invalid_unlimited = "cgroup content \"unlimited\" has an invalid \
-                             field \"utilization\" value \"unlimited\"";
-    let invalid_negative = "cgroup content \"-0.01\" has an invalid field \
-                            \"utilization\" value \"-0.01\"";
-    let invalid_excess = "cgroup content \"100.01\" has an invalid field \
-                          \"utilization\" value \"100.01\"";
-    let invalid_nan = "cgroup content \"NaN\" has an invalid field \
-                       \"utilization\" value \"NaN\"";
     let cases = [
-      TestCase {
-        input: "0.00\n",
-        expected_min: Ok(CpuUclampMin {
-          value: Ratio::new::<percent>(0.00),
-        }),
-        expected_max: Ok(CpuUclampMax {
-          value: MaxOr::Value(Ratio::new::<percent>(0.00)),
-        }),
-      },
-      TestCase {
-        input: "12.34\n",
-        expected_min: Ok(CpuUclampMin {
-          value: Ratio::new::<percent>(12.34),
-        }),
-        expected_max: Ok(CpuUclampMax {
-          value: MaxOr::Value(Ratio::new::<percent>(12.34)),
-        }),
-      },
-      TestCase {
-        input: "98.76\n",
-        expected_min: Ok(CpuUclampMin {
-          value: Ratio::new::<percent>(98.76),
-        }),
-        expected_max: Ok(CpuUclampMax {
-          value: MaxOr::Value(Ratio::new::<percent>(98.76)),
-        }),
-      },
-      TestCase {
-        input: "100.00",
-        expected_min: Ok(CpuUclampMin {
-          value: Ratio::new::<percent>(100.00),
-        }),
-        expected_max: Ok(CpuUclampMax {
-          value: MaxOr::Value(Ratio::new::<percent>(100.00)),
-        }),
-      },
-      TestCase {
-        input: "max",
-        expected_min: Err(invalid_max),
-        expected_max: Ok(CpuUclampMax { value: MaxOr::Max }),
-      },
-      TestCase {
-        input: "",
-        expected_min: Err(missing),
-        expected_max: Err(missing),
-      },
-      TestCase {
-        input: "12.34 extra",
-        expected_min: Err(excess),
-        expected_max: Err(excess),
-      },
-      TestCase {
-        input: "unlimited",
-        expected_min: Err(invalid_unlimited),
-        expected_max: Err(invalid_unlimited),
-      },
-      TestCase {
-        input: "-0.01",
-        expected_min: Err(invalid_negative),
-        expected_max: Err(invalid_negative),
-      },
-      TestCase {
-        input: "100.01",
-        expected_min: Err(invalid_excess),
-        expected_max: Err(invalid_excess),
-      },
-      TestCase {
-        input: "NaN",
-        expected_min: Err(invalid_nan),
-        expected_max: Err(invalid_nan),
-      },
+      ("0.00\n", Ok(Ratio::new::<percent>(0.00))),
+      ("12.34\n", Ok(Ratio::new::<percent>(12.34))),
+      ("98.76\n", Ok(Ratio::new::<percent>(98.76))),
+      ("100.00", Ok(Ratio::new::<percent>(100.00))),
+      ("max", Err(Invalid("utilization", "max"))),
+      ("", Err(Missing("utilization"))),
+      ("12.34 extra", Err(Excess)),
+      ("unlimited", Err(Invalid("utilization", "unlimited"))),
+      ("-0.01", Err(Invalid("utilization", "-0.01"))),
+      ("100.01", Err(Invalid("utilization", "100.01"))),
+      ("NaN", Err(Invalid("utilization", "NaN"))),
     ];
-
-    for case in cases {
-      let actual_min = case.input.parse::<CpuUclampMin>();
-      match case.expected_min {
-        | Ok(expected) => {
-          let actual = assert_ok!(actual_min, "input: {:?}", case.input);
-          assert_eq!(actual, expected, "input: {:?}", case.input);
-        },
-        | Err(message) => {
-          let actual = assert_err!(actual_min, "input: {:?}", case.input);
-          assert_eq!(actual.to_string(), message, "input: {:?}", case.input);
-        },
-      }
-
-      let actual_max = case.input.parse::<CpuUclampMax>();
-      match case.expected_max {
-        | Ok(expected) => {
-          let actual = assert_ok!(actual_max, "input: {:?}", case.input);
-          assert_eq!(actual, expected, "input: {:?}", case.input);
-        },
-        | Err(message) => {
-          let actual = assert_err!(actual_max, "input: {:?}", case.input);
-          assert_eq!(actual.to_string(), message, "input: {:?}", case.input);
-        },
-      }
-    }
+    Cases::<CpuUclampMin>::check(cases.map(|(input, expected)| (input, expected.map(|value| CpuUclampMin { value }))));
+    Cases::<CpuUclampMax>::check(cases.map(|(input, expected)| {
+      let expected = match input {
+        | "max" => Ok(CpuUclampMax { value: MaxOr::Max }),
+        | _ => expected.map(|value| CpuUclampMax { value: MaxOr::Value(value) }),
+      };
+      (input, expected)
+    }));
   }
 }

@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use crate::{
   error::{ParseError, ParseValueError},
-  parse::{KeyedFields, ParseCount, Parser},
+  parse::{KeyedFields, ParseCount},
   unit::Count,
 };
 
@@ -21,19 +21,13 @@ impl MemoryEvents {
 
   /// Returns the event counts, measured as numbers of occurrences.
   #[must_use]
-  pub const fn counts(self) -> MemoryEventCounts {
-    self.counts
-  }
+  pub const fn counts(self) -> MemoryEventCounts { self.counts }
 }
 
 impl FromStr for MemoryEvents {
   type Err = ParseError<ParseValueError>;
 
-  fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    Ok(Self {
-      counts: contents.parse()?,
-    })
-  }
+  fn from_str(contents: &str) -> Result<Self, Self::Err> { Ok(Self { counts: contents.parse()? }) }
 }
 
 /// A point-in-time snapshot of `memory.events.local` counters.
@@ -51,19 +45,13 @@ impl MemoryEventsLocal {
 
   /// Returns the local event counts, measured as numbers of occurrences.
   #[must_use]
-  pub const fn counts(self) -> MemoryEventCounts {
-    self.counts
-  }
+  pub const fn counts(self) -> MemoryEventCounts { self.counts }
 }
 
 impl FromStr for MemoryEventsLocal {
   type Err = ParseError<ParseValueError>;
 
-  fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    Ok(Self {
-      counts: contents.parse()?,
-    })
-  }
+  fn from_str(contents: &str) -> Result<Self, Self::Err> { Ok(Self { counts: contents.parse()? }) }
 }
 
 /// Event counts shared by the hierarchical and local memory event files.
@@ -84,64 +72,38 @@ pub struct MemoryEventCounts {
 impl MemoryEventCounts {
   /// Reclaims despite usage below the effective low boundary.
   #[must_use]
-  pub const fn low(self) -> Count {
-    self.low
-  }
+  pub const fn low(self) -> Count { self.low }
 
   /// Throttling and direct reclaim after crossing the high boundary.
   #[must_use]
-  pub const fn high(self) -> Count {
-    self.high
-  }
+  pub const fn high(self) -> Count { self.high }
 
   /// Attempts to cross the max boundary.
   #[must_use]
-  pub const fn max(self) -> Count {
-    self.max
-  }
+  pub const fn max(self) -> Count { self.max }
 
   /// Allocations about to fail at the memory limit.
   #[must_use]
-  pub const fn oom(self) -> Count {
-    self.oom
-  }
+  pub const fn oom(self) -> Count { self.oom }
 
   /// Processes killed by any OOM killer.
   #[must_use]
-  pub const fn oom_kill(self) -> Count {
-    self.oom_kill
-  }
+  pub const fn oom_kill(self) -> Count { self.oom_kill }
 
   /// Group OOM kills, when reported by the kernel.
   #[must_use]
-  pub const fn oom_group_kill(self) -> Option<Count> {
-    self.oom_group_kill
-  }
+  pub const fn oom_group_kill(self) -> Option<Count> { self.oom_group_kill }
 
   /// Network socket throttling events, when reported by the kernel.
   #[must_use]
-  pub const fn sock_throttled(self) -> Option<Count> {
-    self.sock_throttled
-  }
+  pub const fn sock_throttled(self) -> Option<Count> { self.sock_throttled }
 }
 
 impl FromStr for MemoryEventCounts {
   type Err = ParseError<ParseValueError>;
 
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    let pairs = contents
-      .lines()
-      .filter(|line| !line.trim().is_empty())
-      .map(|line| {
-        Parser::parse_line(contents, line, |parser| {
-          Ok((
-            parser.next_raw_field("key")?,
-            parser.next_raw_field("value")?,
-          ))
-        })
-      })
-      .collect::<Result<Vec<_>, Self::Err>>()?;
-    let fields = KeyedFields::new(contents, pairs);
+    let fields = KeyedFields::parse(contents, |_| "value")?;
 
     Ok(Self {
       low: fields.required::<ParseCount, _>("low")?,
@@ -164,10 +126,7 @@ mod tests {
 
   #[test]
   fn parses_hierarchical_and_local_event_snapshots() {
-    let count = |value| Count {
-      value,
-      ..Default::default()
-    };
+    let count = |value| Count { value, ..Default::default() };
     for (input, expected) in [
       (
         indoc! {"
@@ -190,26 +149,18 @@ mod tests {
           sock_throttled: Some(count(7)),
         },
       ),
-      (
-        "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\n",
-        MemoryEventCounts {
-          low: count(0),
-          high: count(0),
-          max: count(0),
-          oom: count(0),
-          oom_kill: count(0),
-          oom_group_kill: None,
-          sock_throttled: None,
-        },
-      ),
+      ("low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\n", MemoryEventCounts {
+        low: count(0),
+        high: count(0),
+        max: count(0),
+        oom: count(0),
+        oom_kill: count(0),
+        oom_group_kill: None,
+        sock_throttled: None,
+      }),
     ] {
-      assert_eq!(assert_ok!(input.parse::<MemoryEvents>()), MemoryEvents {
-        counts: expected
-      });
-      assert_eq!(
-        assert_ok!(input.parse::<MemoryEventsLocal>()),
-        MemoryEventsLocal { counts: expected }
-      );
+      assert_eq!(assert_ok!(input.parse::<MemoryEvents>()), MemoryEvents { counts: expected });
+      assert_eq!(assert_ok!(input.parse::<MemoryEventsLocal>()), MemoryEventsLocal { counts: expected });
     }
   }
 
@@ -218,17 +169,10 @@ mod tests {
     for (input, expected) in [
       ("", "missing field \"low\""),
       ("low 1\nhigh 2\nmax 3\noom 4", "missing field \"oom_kill\""),
+      ("low -1\nhigh 2\nmax 3\noom 4\noom_kill 5", "invalid field \"low\""),
+      ("low 1\nhigh 2\nmax 3\noom 4\noom_kill 5\noom_group_kill nope", "invalid field \"oom_group_kill\""),
       (
-        "low -1\nhigh 2\nmax 3\noom 4\noom_kill 5",
-        "invalid field \"low\"",
-      ),
-      (
-        "low 1\nhigh 2\nmax 3\noom 4\noom_kill 5\noom_group_kill nope",
-        "invalid field \"oom_group_kill\"",
-      ),
-      (
-        "low 1\nhigh 2\nmax 3\noom 4\noom_kill 5\nsock_throttled \
-         18446744073709551616",
+        "low 1\nhigh 2\nmax 3\noom 4\noom_kill 5\nsock_throttled 18446744073709551616",
         "invalid field \"sock_throttled\"",
       ),
       ("low 1\nhigh", "missing field \"value\""),

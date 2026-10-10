@@ -26,19 +26,13 @@ pub struct Zswap<'a> {
 #[cfg(target_os = "linux")]
 impl Zswap<'_> {
   /// Memory consumed by this cgroup's zswap compression backend.
-  pub fn current(&self) -> Result<ZswapCurrent, Error> {
-    self.cgroup.parse(ZswapCurrent::FILE_NAME)
-  }
+  pub fn current(&self) -> Result<ZswapCurrent, Error> { self.cgroup.parse(ZswapCurrent::FILE_NAME) }
 
   /// Hard limit on this cgroup's compressed swap pool.
-  pub fn max(&self) -> Result<ZswapMax, Error> {
-    self.cgroup.parse(ZswapMax::FILE_NAME)
-  }
+  pub fn max(&self) -> Result<ZswapMax, Error> { self.cgroup.parse(ZswapMax::FILE_NAME) }
 
   /// Whether disk swap writeback is enabled for this cgroup.
-  pub fn writeback(&self) -> Result<ZswapWriteback, Error> {
-    self.cgroup.parse(ZswapWriteback::FILE_NAME)
-  }
+  pub fn writeback(&self) -> Result<ZswapWriteback, Error> { self.cgroup.parse(ZswapWriteback::FILE_NAME) }
 }
 
 /// Memory consumed by the zswap compression backend in bytes.
@@ -53,20 +47,15 @@ impl ZswapCurrent {
 
   /// Returns compressed pool usage in bytes.
   #[must_use]
-  pub const fn value(self) -> Bytes {
-    self.value
-  }
+  pub const fn value(self) -> Bytes { self.value }
 }
 
 impl FromStr for ZswapCurrent {
   type Err = ParseError<ParseValueError>;
 
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    Parser::parse(contents, |parser| {
-      Ok(Self {
-        value: parser.next_field::<ParseBytes, _>("current")?,
-      })
-    })
+    let value = Parser::single::<ParseBytes, _>(contents, "current")?;
+    Ok(Self { value })
   }
 }
 
@@ -84,20 +73,15 @@ impl ZswapMax {
 
   /// Returns the pool limit in bytes, or [`MaxOr::Max`].
   #[must_use]
-  pub const fn value(self) -> MaxOr<Bytes> {
-    self.value
-  }
+  pub const fn value(self) -> MaxOr<Bytes> { self.value }
 }
 
 impl FromStr for ZswapMax {
   type Err = ParseError<ParseValueError>;
 
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    Parser::parse(contents, |parser| {
-      Ok(Self {
-        value: parser.next_field::<ParseBytes, _>("max")?,
-      })
-    })
+    let value = Parser::single::<ParseBytes, _>(contents, "max")?;
+    Ok(Self { value })
   }
 }
 
@@ -116,128 +100,29 @@ impl ZswapWriteback {
 
   /// Returns this cgroup's configured disk swap writeback policy.
   #[must_use]
-  pub const fn value(self) -> bool {
-    self.value
-  }
+  pub const fn value(self) -> bool { self.value }
 }
 
 impl FromStr for ZswapWriteback {
   type Err = ParseError<ParseValueError>;
 
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    Parser::parse(contents, |parser| {
-      Ok(Self {
-        value: parser.next_field::<ParseBoolean, _>("writeback")?,
-      })
-    })
+    let value = Parser::single::<ParseBoolean, _>(contents, "writeback")?;
+    Ok(Self { value })
   }
 }
 
 #[cfg(test)]
 mod tests {
-  use assertables::{assert_err, assert_ok};
-  use uom::si::information::{byte, mebibyte};
-
   use super::*;
+  use crate::parse::tests::Cases;
 
   #[test]
-  fn parses_zswap_current() {
-    for (input, expected) in [
-      (
-        "0\n",
-        Ok(ZswapCurrent {
-          value: Bytes::new::<byte>(0),
-        }),
-      ),
-      (
-        "1048576",
-        Ok(ZswapCurrent {
-          value: Bytes::new::<mebibyte>(1),
-        }),
-      ),
-      (
-        "18446744073709551615",
-        Ok(ZswapCurrent {
-          value: Bytes::new::<byte>(u64::MAX),
-        }),
-      ),
-      ("", Err("missing field \"current\"")),
-      ("1 2", Err("excess field")),
-      ("max", Err("invalid field \"current\"")),
-      ("-1", Err("invalid field \"current\"")),
-      ("18446744073709551616", Err("invalid field \"current\"")),
-    ] {
-      match expected {
-        | Ok(expected) => {
-          assert_eq!(assert_ok!(input.parse::<ZswapCurrent>()), expected)
-        },
-        | Err(message) => assert!(
-          assert_err!(input.parse::<ZswapCurrent>())
-            .to_string()
-            .contains(message),
-          "input: {input:?}"
-        ),
-      }
-    }
-  }
+  fn parses_zswap_current() { Cases::<ZswapCurrent>::bytes("current", |value| ZswapCurrent { value }); }
 
   #[test]
-  fn parses_zswap_max() {
-    for (input, expected) in [
-      ("max\n", Ok(ZswapMax { value: MaxOr::Max })),
-      (
-        "0",
-        Ok(ZswapMax {
-          value: MaxOr::Value(Bytes::new::<byte>(0)),
-        }),
-      ),
-      (
-        "1048576",
-        Ok(ZswapMax {
-          value: MaxOr::Value(Bytes::new::<mebibyte>(1)),
-        }),
-      ),
-      ("", Err("missing field \"max\"")),
-      ("max 1", Err("excess field")),
-      ("-1", Err("invalid field \"max\"")),
-      ("18446744073709551616", Err("invalid field \"max\"")),
-    ] {
-      match expected {
-        | Ok(expected) => {
-          assert_eq!(assert_ok!(input.parse::<ZswapMax>()), expected)
-        },
-        | Err(message) => assert!(
-          assert_err!(input.parse::<ZswapMax>())
-            .to_string()
-            .contains(message),
-          "input: {input:?}"
-        ),
-      }
-    }
-  }
+  fn parses_zswap_max() { Cases::<ZswapMax>::limit("max", |value| ZswapMax { value }); }
 
   #[test]
-  fn parses_zswap_writeback() {
-    for (input, expected) in [
-      ("0\n", Ok(ZswapWriteback { value: false })),
-      ("1", Ok(ZswapWriteback { value: true })),
-      ("", Err("missing field \"writeback\"")),
-      ("1 0", Err("excess field")),
-      ("2", Err("invalid field \"writeback\"")),
-      ("-1", Err("invalid field \"writeback\"")),
-      ("true", Err("invalid field \"writeback\"")),
-    ] {
-      match expected {
-        | Ok(expected) => {
-          assert_eq!(assert_ok!(input.parse::<ZswapWriteback>()), expected)
-        },
-        | Err(message) => assert!(
-          assert_err!(input.parse::<ZswapWriteback>())
-            .to_string()
-            .contains(message),
-          "input: {input:?}"
-        ),
-      }
-    }
-  }
+  fn parses_zswap_writeback() { Cases::<ZswapWriteback>::boolean("writeback", |value| ZswapWriteback { value }); }
 }

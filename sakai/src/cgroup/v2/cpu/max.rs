@@ -25,15 +25,11 @@ impl CpuMax {
 
   /// Returns the configured CPU quota.
   #[must_use]
-  pub const fn quota(self) -> MaxOr<NonZeroTime> {
-    self.quota
-  }
+  pub const fn quota(self) -> MaxOr<NonZeroTime> { self.quota }
 
   /// Returns the quota period.
   #[must_use]
-  pub const fn period(self) -> NonZeroTime {
-    self.period
-  }
+  pub const fn period(self) -> NonZeroTime { self.period }
 
   /// Returns the CPU bandwidth implied by this cgroup's quota and period.
   ///
@@ -44,10 +40,7 @@ impl CpuMax {
   pub fn cpu_count(self) -> MaxOr<Ratio> {
     match self.quota {
       | MaxOr::Max => MaxOr::Max,
-      #[expect(
-        clippy::cast_precision_loss,
-        reason = "the public ratio uses f64; large quotas may lose precision"
-      )]
+      #[expect(clippy::cast_precision_loss, reason = "the public ratio uses f64; large quotas may lose precision")]
       | MaxOr::Value(quota) => {
         let quota = quota.get::<microsecond>() as f64;
         let period = self.period.get::<microsecond>() as f64;
@@ -73,128 +66,39 @@ impl FromStr for CpuMax {
 
 #[cfg(test)]
 mod tests {
-  use assertables::{assert_err, assert_in_delta, assert_ok};
+  use assertables::{assert_in_delta, assert_ok};
   use uom::si::{ratio::ratio, time::microsecond};
 
   use super::*;
-  use crate::unit::Time;
+  use crate::{
+    parse::tests::{
+      Cases,
+      Failure::{Excess, Invalid, Missing},
+    },
+    unit::Time,
+  };
 
   #[test]
   fn parses_cpu_max() {
-    struct TestCase {
-      input: &'static str,
-      expected: Result<CpuMax, &'static str>,
-    }
-
-    let ms_25_000 =
-      assert_ok!(NonZeroTime::try_new(Time::new::<microsecond>(25_000)));
-    let ms_100_000 =
-      assert_ok!(NonZeroTime::try_new(Time::new::<microsecond>(100_000)));
-    let ms_1_500_001 =
-      assert_ok!(NonZeroTime::try_new(Time::new::<microsecond>(1_500_001)));
-    let ms_max = assert_ok!(NonZeroTime::try_new(Time::new::<microsecond>(
-      u64::MAX / 1_000,
-    )));
-    let cases = [
-      TestCase {
-        input: "25000 100000\n",
-        expected: Ok(CpuMax {
-          quota: MaxOr::Value(ms_25_000),
-          period: ms_100_000,
-        }),
-      },
-      TestCase {
-        input: "max 100000\n",
-        expected: Ok(CpuMax {
-          quota: MaxOr::Max,
-          period: ms_100_000,
-        }),
-      },
-      TestCase {
-        input: "1500001 100000\n",
-        expected: Ok(CpuMax {
-          quota: MaxOr::Value(ms_1_500_001),
-          period: ms_100_000,
-        }),
-      },
-      TestCase {
-        input: "18446744073709551 100000\n",
-        expected: Ok(CpuMax {
-          quota: MaxOr::Value(ms_max),
-          period: ms_100_000,
-        }),
-      },
-      TestCase {
-        input: "",
-        expected: Err("cgroup content \"\" has missing field \"quota\""),
-      },
-      TestCase {
-        input: "max",
-        expected: Err("cgroup content \"max\" has missing field \"period\""),
-      },
-      TestCase {
-        input: "max 100000 extra",
-        expected: Err(
-          "cgroup content \"max 100000 extra\" has excess field \"additional\"",
-        ),
-      },
-      TestCase {
-        input: "unlimited 100000",
-        expected: Err(
-          "cgroup content \"unlimited 100000\" has an invalid field \"quota\" \
-           value \"unlimited\"",
-        ),
-      },
-      TestCase {
-        input: "max forever",
-        expected: Err(
-          "cgroup content \"max forever\" has an invalid field \"period\" \
-           value \"forever\"",
-        ),
-      },
-      TestCase {
-        input: "max max",
-        expected: Err(
-          "cgroup content \"max max\" has an invalid field \"period\" value \
-           \"max\"",
-        ),
-      },
-      TestCase {
-        input: "25000 0",
-        expected: Err(
-          "cgroup content \"25000 0\" has an invalid field \"period\" value \
-           \"0\"",
-        ),
-      },
-      TestCase {
-        input: "0 100000",
-        expected: Err(
-          "cgroup content \"0 100000\" has an invalid field \"quota\" value \
-           \"0\"",
-        ),
-      },
-      TestCase {
-        input: " max forever\n",
-        expected: Err(
-          "cgroup content \" max forever\\n\" has an invalid field \"period\" \
-           value \"forever\"",
-        ),
-      },
-    ];
-
-    for case in cases {
-      let actual = case.input.parse::<CpuMax>();
-      match case.expected {
-        | Ok(expected) => {
-          let actual = assert_ok!(actual, "input: {:?}", case.input);
-          assert_eq!(actual, expected, "input: {:?}", case.input);
-        },
-        | Err(message) => {
-          let actual = assert_err!(actual, "input: {:?}", case.input);
-          assert_eq!(actual.to_string(), message, "input: {:?}", case.input);
-        },
-      }
-    }
+    let ms_25_000 = assert_ok!(NonZeroTime::try_new(Time::new::<microsecond>(25_000)));
+    let ms_100_000 = assert_ok!(NonZeroTime::try_new(Time::new::<microsecond>(100_000)));
+    let ms_1_500_001 = assert_ok!(NonZeroTime::try_new(Time::new::<microsecond>(1_500_001)));
+    let ms_max = assert_ok!(NonZeroTime::try_new(Time::new::<microsecond>(u64::MAX / 1_000,)));
+    Cases::<CpuMax>::check([
+      ("25000 100000\n", Ok(CpuMax { quota: MaxOr::Value(ms_25_000), period: ms_100_000 })),
+      ("max 100000\n", Ok(CpuMax { quota: MaxOr::Max, period: ms_100_000 })),
+      ("1500001 100000\n", Ok(CpuMax { quota: MaxOr::Value(ms_1_500_001), period: ms_100_000 })),
+      ("18446744073709551 100000\n", Ok(CpuMax { quota: MaxOr::Value(ms_max), period: ms_100_000 })),
+      ("", Err(Missing("quota"))),
+      ("max", Err(Missing("period"))),
+      ("max 100000 extra", Err(Excess)),
+      ("unlimited 100000", Err(Invalid("quota", "unlimited"))),
+      ("max forever", Err(Invalid("period", "forever"))),
+      ("max max", Err(Invalid("period", "max"))),
+      ("25000 0", Err(Invalid("period", "0"))),
+      ("0 100000", Err(Invalid("quota", "0"))),
+      (" max forever\n", Err(Invalid("period", "forever"))),
+    ]);
   }
 
   #[test]

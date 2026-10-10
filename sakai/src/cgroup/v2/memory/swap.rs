@@ -26,29 +26,19 @@ pub struct Swap<'a> {
 #[cfg(target_os = "linux")]
 impl Swap<'_> {
   /// Current swap usage of this cgroup and its descendants, in bytes.
-  pub fn current(&self) -> Result<SwapCurrent, Error> {
-    self.cgroup.parse(SwapCurrent::FILE_NAME)
-  }
+  pub fn current(&self) -> Result<SwapCurrent, Error> { self.cgroup.parse(SwapCurrent::FILE_NAME) }
 
   /// Peak swap usage since cgroup creation for this fresh descriptor.
-  pub fn peak(&self) -> Result<SwapPeak, Error> {
-    self.cgroup.parse(SwapPeak::FILE_NAME)
-  }
+  pub fn peak(&self) -> Result<SwapPeak, Error> { self.cgroup.parse(SwapPeak::FILE_NAME) }
 
   /// Hard swap limit configured for this cgroup.
-  pub fn max(&self) -> Result<SwapMax, Error> {
-    self.cgroup.parse(SwapMax::FILE_NAME)
-  }
+  pub fn max(&self) -> Result<SwapMax, Error> { self.cgroup.parse(SwapMax::FILE_NAME) }
 
   /// Swap throttling limit configured for this cgroup.
-  pub fn high(&self) -> Result<SwapHigh, Error> {
-    self.cgroup.parse(SwapHigh::FILE_NAME)
-  }
+  pub fn high(&self) -> Result<SwapHigh, Error> { self.cgroup.parse(SwapHigh::FILE_NAME) }
 
   /// Swap high, max, and allocation failure counters.
-  pub fn events(&self) -> Result<SwapEvents, Error> {
-    self.cgroup.parse(SwapEvents::FILE_NAME)
-  }
+  pub fn events(&self) -> Result<SwapEvents, Error> { self.cgroup.parse(SwapEvents::FILE_NAME) }
 }
 
 /// Hierarchical swap usage reported by `memory.swap.current`.
@@ -63,20 +53,15 @@ impl SwapCurrent {
 
   /// Returns the current swap usage in bytes.
   #[must_use]
-  pub const fn value(self) -> Bytes {
-    self.value
-  }
+  pub const fn value(self) -> Bytes { self.value }
 }
 
 impl FromStr for SwapCurrent {
   type Err = ParseError<ParseValueError>;
 
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    Parser::parse(contents, |parser| {
-      Ok(Self {
-        value: parser.next_field::<ParseBytes, _>("current")?,
-      })
-    })
+    let value = Parser::single::<ParseBytes, _>(contents, "current")?;
+    Ok(Self { value })
   }
 }
 
@@ -96,20 +81,15 @@ impl SwapPeak {
 
   /// Returns the peak swap usage in bytes.
   #[must_use]
-  pub const fn value(self) -> Bytes {
-    self.value
-  }
+  pub const fn value(self) -> Bytes { self.value }
 }
 
 impl FromStr for SwapPeak {
   type Err = ParseError<ParseValueError>;
 
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    Parser::parse(contents, |parser| {
-      Ok(Self {
-        value: parser.next_field::<ParseBytes, _>("peak")?,
-      })
-    })
+    let value = Parser::single::<ParseBytes, _>(contents, "peak")?;
+    Ok(Self { value })
   }
 }
 
@@ -127,20 +107,15 @@ impl SwapMax {
 
   /// Returns the hard swap limit in bytes, or [`MaxOr::Max`].
   #[must_use]
-  pub const fn value(self) -> MaxOr<Bytes> {
-    self.value
-  }
+  pub const fn value(self) -> MaxOr<Bytes> { self.value }
 }
 
 impl FromStr for SwapMax {
   type Err = ParseError<ParseValueError>;
 
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    Parser::parse(contents, |parser| {
-      Ok(Self {
-        value: parser.next_field::<ParseBytes, _>("max")?,
-      })
-    })
+    let value = Parser::single::<ParseBytes, _>(contents, "max")?;
+    Ok(Self { value })
   }
 }
 
@@ -159,20 +134,15 @@ impl SwapHigh {
 
   /// Returns the swap throttling limit in bytes, or [`MaxOr::Max`].
   #[must_use]
-  pub const fn value(self) -> MaxOr<Bytes> {
-    self.value
-  }
+  pub const fn value(self) -> MaxOr<Bytes> { self.value }
 }
 
 impl FromStr for SwapHigh {
   type Err = ParseError<ParseValueError>;
 
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    Parser::parse(contents, |parser| {
-      Ok(Self {
-        value: parser.next_field::<ParseBytes, _>("high")?,
-      })
-    })
+    let value = Parser::single::<ParseBytes, _>(contents, "high")?;
+    Ok(Self { value })
   }
 }
 
@@ -193,44 +163,27 @@ impl SwapEvents {
 
   /// Times swap usage exceeded the high threshold, when reported.
   #[must_use]
-  pub const fn high(self) -> Option<Count> {
-    self.high
-  }
+  pub const fn high(self) -> Option<Count> { self.high }
 
   /// Times a swap allocation failed at the max boundary.
   #[must_use]
-  pub const fn max(self) -> Count {
-    self.max
-  }
+  pub const fn max(self) -> Count { self.max }
 
   /// Swap allocation failures from the limit or system-wide exhaustion.
   #[must_use]
-  pub const fn fail(self) -> Count {
-    self.fail
-  }
+  pub const fn fail(self) -> Count { self.fail }
 }
 
 impl FromStr for SwapEvents {
   type Err = ParseError<ParseValueError>;
 
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    let values = contents
-      .lines()
-      .filter(|line| !line.trim().is_empty())
-      .map(|line| {
-        Parser::parse_line(contents, line, |parser| {
-          let key = parser.next_raw_field("key")?;
-          let field = match key {
-            | "high" => "high",
-            | "max" => "max",
-            | "fail" => "fail",
-            | _ => "value",
-          };
-          Ok((key, parser.next_raw_field(field)?))
-        })
-      })
-      .collect::<Result<Vec<_>, _>>()?;
-    let fields = KeyedFields::new(contents, values);
+    let fields = KeyedFields::parse(contents, |key| match key {
+      | "high" => "high",
+      | "max" => "max",
+      | "fail" => "fail",
+      | _ => "value",
+    })?;
 
     Ok(Self {
       high: fields.optional::<ParseCount, _>("high")?,
@@ -242,83 +195,29 @@ impl FromStr for SwapEvents {
 
 #[cfg(test)]
 mod tests {
-  use assertables::{assert_err, assert_ok};
   use indoc::indoc;
-  use uom::si::information::{byte, mebibyte};
 
   use super::*;
+  use crate::parse::tests::{
+    Cases,
+    Failure::{Excess, Invalid, Missing},
+  };
 
   #[test]
   fn parses_swap_usage() {
-    type ParseUsage = fn(&str) -> Result<Bytes, ParseError<ParseValueError>>;
-    let parsers: [(&str, ParseUsage); 2] = [
-      ("current", |input| {
-        input.parse::<SwapCurrent>().map(SwapCurrent::value)
-      }),
-      ("peak", |input| {
-        input.parse::<SwapPeak>().map(SwapPeak::value)
-      }),
-    ];
-    let cases = [
-      ("0\n", Ok(Bytes::new::<byte>(0))),
-      ("1048576\n", Ok(Bytes::new::<mebibyte>(1))),
-      ("18446744073709551615", Ok(Bytes::new::<byte>(u64::MAX))),
-      ("", Err("missing")),
-      ("1 2", Err("excess")),
-      ("max", Err("invalid")),
-      ("-1", Err("invalid")),
-      ("18446744073709551616", Err("invalid")),
-    ];
-
-    for (field, parse) in parsers {
-      for (input, expected) in cases {
-        match expected {
-          | Ok(expected) => assert_eq!(assert_ok!(parse(input)), expected),
-          | Err(kind) => {
-            let error = assert_err!(parse(input));
-            assert!(error.to_string().contains(kind), "{field}: {error}");
-          },
-        }
-      }
-    }
+    Cases::<SwapCurrent>::bytes("current", |value| SwapCurrent { value });
+    Cases::<SwapPeak>::bytes("peak", |value| SwapPeak { value });
   }
 
   #[test]
   fn parses_swap_limits() {
-    type ParseLimit =
-      fn(&str) -> Result<MaxOr<Bytes>, ParseError<ParseValueError>>;
-    let parsers: [(&str, ParseLimit); 2] = [
-      ("max", |input| input.parse::<SwapMax>().map(SwapMax::value)),
-      ("high", |input| {
-        input.parse::<SwapHigh>().map(SwapHigh::value)
-      }),
-    ];
-    let cases = [
-      ("max\n", Ok(MaxOr::Max)),
-      ("0", Ok(MaxOr::Value(Bytes::new::<byte>(0)))),
-      ("1048576", Ok(MaxOr::Value(Bytes::new::<mebibyte>(1)))),
-      ("", Err("missing")),
-      ("max 1", Err("excess")),
-      ("-1", Err("invalid")),
-      ("18446744073709551616", Err("invalid")),
-    ];
-
-    for (field, parse) in parsers {
-      for (input, expected) in cases {
-        match expected {
-          | Ok(expected) => assert_eq!(assert_ok!(parse(input)), expected),
-          | Err(kind) => {
-            let error = assert_err!(parse(input));
-            assert!(error.to_string().contains(kind), "{field}: {error}");
-          },
-        }
-      }
-    }
+    Cases::<SwapMax>::limit("max", |value| SwapMax { value });
+    Cases::<SwapHigh>::limit("high", |value| SwapHigh { value });
   }
 
   #[test]
   fn parses_swap_events() {
-    let cases = [
+    Cases::<SwapEvents>::check([
       (
         indoc! {"
           high 2
@@ -326,54 +225,25 @@ mod tests {
           fail 4
         "},
         Ok(SwapEvents {
-          high: Some(Count {
-            value: 2,
-            ..Default::default()
-          }),
-          max: Count {
-            value: 3,
-            ..Default::default()
-          },
-          fail: Count {
-            value: 4,
-            ..Default::default()
-          },
+          high: Some(Count { value: 2, ..Default::default() }),
+          max: Count { value: 3, ..Default::default() },
+          fail: Count { value: 4, ..Default::default() },
         }),
       ),
       (
         "future nope\nfail 0\nmax 1\n",
         Ok(SwapEvents {
           high: None,
-          max: Count {
-            value: 1,
-            ..Default::default()
-          },
-          fail: Count {
-            value: 0,
-            ..Default::default()
-          },
+          max: Count { value: 1, ..Default::default() },
+          fail: Count { value: 0, ..Default::default() },
         }),
       ),
-      ("", Err("missing field \"max\"")),
-      ("max 1\n", Err("missing field \"fail\"")),
-      ("max nope\nfail 0", Err("invalid field \"max\"")),
-      ("max 1\nfail -1", Err("invalid field \"fail\"")),
-      ("high nope\nmax 1\nfail 0", Err("invalid field \"high\"")),
-      ("max 1 extra\nfail 0", Err("excess field")),
-    ];
-
-    for (input, expected) in cases {
-      match expected {
-        | Ok(expected) => {
-          assert_eq!(assert_ok!(input.parse::<SwapEvents>()), expected)
-        },
-        | Err(message) => assert!(
-          assert_err!(input.parse::<SwapEvents>())
-            .to_string()
-            .contains(message),
-          "input: {input:?}"
-        ),
-      }
-    }
+      ("", Err(Missing("max"))),
+      ("max 1\n", Err(Missing("fail"))),
+      ("max nope\nfail 0", Err(Invalid("max", "nope"))),
+      ("max 1\nfail -1", Err(Invalid("fail", "-1"))),
+      ("high nope\nmax 1\nfail 0", Err(Invalid("high", "nope"))),
+      ("max 1 extra\nfail 0", Err(Excess)),
+    ]);
   }
 }

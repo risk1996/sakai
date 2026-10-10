@@ -10,29 +10,18 @@ use rustix::{
 };
 
 /// Reads a cgroup v2 interface file relative to an open cgroup directory.
-pub(crate) fn read_file(
-  cgroup: impl AsFd,
-  interface: &str,
-) -> io::Result<String> {
+pub(crate) fn read_file(cgroup: impl AsFd, interface: &str) -> io::Result<String> {
   let mut components = Path::new(interface).components();
 
   match (components.next(), components.next()) {
     | (Some(Component::Normal(_)), None) => {},
     | _ => {
-      return Err(io::Error::new(
-        io::ErrorKind::InvalidInput,
-        "cgroup interface must be a single relative file name",
-      ));
+      return Err(io::Error::new(io::ErrorKind::InvalidInput, "cgroup interface must be a single relative file name"));
     },
   }
 
-  let descriptor = openat(
-    cgroup,
-    interface,
-    OFlags::RDONLY | OFlags::CLOEXEC | OFlags::NOFOLLOW,
-    Mode::empty(),
-  )
-  .map_err(io::Error::from)?;
+  let descriptor = openat(cgroup, interface, OFlags::RDONLY | OFlags::CLOEXEC | OFlags::NOFOLLOW, Mode::empty())
+    .map_err(io::Error::from)?;
   let mut contents = String::new();
   File::from(descriptor).read_to_string(&mut contents)?;
   Ok(contents)
@@ -52,10 +41,7 @@ mod tests {
       Mode::empty(),
     ));
 
-    assert_eq!(
-      assert_ok!(read_file(directory, "mod.rs")),
-      include_str!("mod.rs")
-    );
+    assert_eq!(assert_ok!(read_file(directory, "mod.rs")), include_str!("mod.rs"));
   }
 
   #[test]
@@ -66,9 +52,7 @@ mod tests {
       Mode::empty(),
     ));
 
-    for interface in
-      ["", ".", "..", "../parse/mod.rs", "/etc/passwd", "cpu/stat"]
-    {
+    for interface in ["", ".", "..", "../parse/mod.rs", "/etc/passwd", "cpu/stat"] {
       let error = assert_err!(read_file(&directory, interface));
 
       assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
@@ -77,11 +61,8 @@ mod tests {
 
   #[test]
   fn does_not_follow_interface_symlinks() {
-    let proc = assert_ok!(rustix::fs::open(
-      "/proc",
-      OFlags::RDONLY | OFlags::CLOEXEC | OFlags::DIRECTORY,
-      Mode::empty(),
-    ));
+    let proc =
+      assert_ok!(rustix::fs::open("/proc", OFlags::RDONLY | OFlags::CLOEXEC | OFlags::DIRECTORY, Mode::empty(),));
 
     assert_err!(read_file(proc, "self"));
   }

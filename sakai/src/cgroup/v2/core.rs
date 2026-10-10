@@ -22,9 +22,7 @@ struct CgroupTypeParseError {
 /// cgroup is invalid until converted to threaded. These four values are
 /// defined for `cgroup.type` in the Linux kernel's
 /// `Documentation/admin-guide/cgroup-v2.rst` (Core Interface Files).
-#[derive(
-  Debug, Clone, Copy, PartialEq, Eq, strum::EnumString, strum::Display,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::EnumString, strum::Display)]
 pub enum CgroupType {
   /// A normal, valid domain cgroup.
   #[strum(serialize = "domain")]
@@ -50,9 +48,7 @@ impl CgroupType {
 ///
 /// The kernel may add controllers; [`Other`](Self::Other) retains names this
 /// version of the library does not recognize.
-#[derive(
-  Debug, Clone, PartialEq, Eq, Hash, strum::EnumString, strum::Display,
-)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, strum::EnumString, strum::Display)]
 #[strum(serialize_all = "snake_case")]
 pub enum CgroupController {
   Cpu,
@@ -92,10 +88,7 @@ impl Core<'_> {
     let contents = self.cgroup.read(CgroupType::FILE_NAME)?;
     contents.trim().parse().map_err(|source| Error::Parse {
       path: self.cgroup.path().join(CgroupType::FILE_NAME),
-      source: Box::new(CgroupTypeParseError {
-        raw: contents,
-        source,
-      }),
+      source: Box::new(CgroupTypeParseError { raw: contents, source }),
     })
   }
 
@@ -146,8 +139,7 @@ mod tests {
 
   #[test]
   fn parses_controllers() {
-    let controllers = "cpu cpuset io memory hugetlb pids rdma misc dmem \
-                       perf_event future_controller"
+    let controllers = "cpu cpuset io memory hugetlb pids rdma misc dmem perf_event future_controller"
       .split_ascii_whitespace()
       .map(CgroupController::from)
       .collect::<Vec<_>>();
@@ -165,21 +157,11 @@ mod tests {
       CgroupController::Other("future_controller".into()),
     ]);
     assert_eq!(
-      controllers
-        .iter()
-        .map(ToString::to_string)
-        .collect::<Vec<_>>(),
-      "cpu cpuset io memory hugetlb pids rdma misc dmem perf_event \
-       future_controller"
+      controllers.iter().map(ToString::to_string).collect::<Vec<_>>(),
+      "cpu cpuset io memory hugetlb pids rdma misc dmem perf_event future_controller"
         .split_ascii_whitespace()
         .collect::<Vec<_>>()
     );
-    assert_eq!(
-      "\n"
-        .split_ascii_whitespace()
-        .map(CgroupController::from)
-        .collect::<Vec<_>>(),
-      vec![]
-    );
+    assert_eq!("\n".split_ascii_whitespace().map(CgroupController::from).collect::<Vec<_>>(), vec![]);
   }
 }

@@ -16,44 +16,44 @@ pub(crate) struct KeyedFields<'a> {
 }
 
 impl<'a> KeyedFields<'a> {
-  pub(crate) fn new(
+  pub(crate) fn new<E>(
     raw: &'a str,
-    fields: impl IntoIterator<Item = (&'a str, &'a str)>,
-  ) -> Self {
-    Self {
+    fields: impl IntoIterator<Item = Result<(&'a str, &'a str), E>>,
+  ) -> Result<Self, E> {
+    let values = fields.into_iter().collect::<Result<_, _>>()?;
+    Ok(Self { raw, values })
+  }
+
+  /// Reads checked key/value lines, preserving each interface's field names.
+  pub(crate) fn parse<E>(raw: &'a str, value_field: impl Fn(&str) -> &'static str) -> Result<Self, ParseError<E>> {
+    Self::new(
       raw,
-      values: fields.into_iter().collect(),
-    }
+      raw.lines().filter(|line| !line.trim().is_empty()).map(|line| {
+        Parser::parse_line(raw, line, |parser| {
+          let key = parser.next_raw_field("key")?;
+          Ok((key, parser.next_raw_field(value_field(key))?))
+        })
+      }),
+    )
   }
 
-  pub(crate) fn contains(&self, field: &'static str) -> bool {
-    self.values.contains_key(field)
+  pub(crate) fn contains_any(&self, fields: impl IntoIterator<Item = impl Into<&'static str>>) -> bool {
+    fields.into_iter().any(|field| self.values.contains_key(field.into()))
   }
 
-  pub(crate) fn required<Unit, T>(
-    &self,
-    field: &'static str,
-  ) -> Result<T, ParseError<T::Error>>
+  pub(crate) fn required<Unit, T>(&self, field: impl Into<&'static str>) -> Result<T, ParseError<T::Error>>
   where
     T: ParseCgroup<Unit>, {
-    let value = self
-      .values
-      .get(field)
-      .ok_or_else(|| ParseError::missing(self.raw, field))?;
+    let field = field.into();
+    let value = self.values.get(field).ok_or_else(|| ParseError::missing(self.raw, field))?;
     T::parse_field(self.raw, field, value)
   }
 
-  pub(crate) fn optional<Unit, T>(
-    &self,
-    field: &'static str,
-  ) -> Result<Option<T>, ParseError<T::Error>>
+  pub(crate) fn optional<Unit, T>(&self, field: impl Into<&'static str>) -> Result<Option<T>, ParseError<T::Error>>
   where
     T: ParseCgroup<Unit>, {
-    self
-      .values
-      .get(field)
-      .map(|value| T::parse_field(self.raw, field, value))
-      .transpose()
+    let field = field.into();
+    self.values.get(field).map(|value| T::parse_field(self.raw, field, value)).transpose()
   }
 }
 
@@ -64,6 +64,13 @@ pub(crate) struct Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
+  /// Parses exactly one typed value with its diagnostic field name.
+  pub(crate) fn single<Unit, T>(raw: &'a str, field: &'static str) -> Result<T, ParseError<T::Error>>
+  where
+    T: ParseCgroup<Unit>, {
+    Self::parse(raw, |parser| parser.next_field::<Unit, T>(field))
+  }
+
   /// Parses a value, rejecting any fields left after the closure succeeds.
   pub(crate) fn parse<T, E>(
     raw: &'a str,
@@ -86,29 +93,15 @@ impl<'a> Parser<'a> {
 
   /// Creates a parser that records `raw` in any parse error.
   #[must_use]
-  fn new(raw: &'a str, fields: &'a str) -> Self {
-    Self {
-      raw,
-      fields: fields.split_ascii_whitespace(),
-    }
-  }
+  fn new(raw: &'a str, fields: &'a str) -> Self { Self { raw, fields: fields.split_ascii_whitespace() } }
 
   /// Returns the next field without interpreting its value.
-  pub(crate) fn next_raw_field<E>(
-    &mut self,
-    field: &'static str,
-  ) -> Result<&'a str, ParseError<E>> {
-    self
-      .fields
-      .next()
-      .ok_or_else(|| ParseError::missing(self.raw, field))
+  pub(crate) fn next_raw_field<E>(&mut self, field: &'static str) -> Result<&'a str, ParseError<E>> {
+    self.fields.next().ok_or_else(|| ParseError::missing(self.raw, field))
   }
 
   /// Parses the next field as `T` using the `Unit` marker.
-  pub(crate) fn next_field<Unit, T>(
-    &mut self,
-    field: &'static str,
-  ) -> Result<T, ParseError<T::Error>>
+  pub(crate) fn next_field<Unit, T>(&mut self, field: &'static str) -> Result<T, ParseError<T::Error>>
   where
     T: ParseCgroup<Unit>, {
     let value = self.next_raw_field(field)?;
@@ -134,13 +127,8 @@ pub(crate) trait ParseCgroup<Unit>: Sized {
   fn parse_cgroup(value: &str) -> Result<Self, Self::Error>;
 
   /// Parses a cgroup field and attaches its source context to an error.
-  fn parse_field(
-    raw: &str,
-    field: &'static str,
-    value: &str,
-  ) -> Result<Self, ParseError<Self::Error>> {
-    Self::parse_cgroup(value)
-      .map_err(|source| ParseError::invalid(raw, field, value, source))
+  fn parse_field(raw: &str, field: &'static str, value: &str) -> Result<Self, ParseError<Self::Error>> {
+    Self::parse_cgroup(value).map_err(|source| ParseError::invalid(raw, field, value, source))
   }
 }
 
@@ -167,12 +155,7 @@ pub(crate) struct ParseCount;
 impl ParseCgroup<ParseCount> for Count {
   type Error = ParseValueError;
 
-  fn parse_cgroup(value: &str) -> Result<Self, Self::Error> {
-    Ok(Self {
-      value: value.parse()?,
-      ..Default::default()
-    })
-  }
+  fn parse_cgroup(value: &str) -> Result<Self, Self::Error> { Ok(Self { value: value.parse()?, ..Default::default() }) }
 }
 
 /// A zero-sized marker for cgroup page quantities.
@@ -182,12 +165,7 @@ pub(crate) struct ParsePages;
 impl ParseCgroup<ParsePages> for Pages {
   type Error = ParseValueError;
 
-  fn parse_cgroup(value: &str) -> Result<Self, Self::Error> {
-    Ok(Self {
-      value: value.parse()?,
-      ..Default::default()
-    })
-  }
+  fn parse_cgroup(value: &str) -> Result<Self, Self::Error> { Ok(Self { value: value.parse()?, ..Default::default() }) }
 }
 
 /// A zero-sized marker for cgroup memory amounts encoded in bytes.
@@ -198,27 +176,21 @@ impl ParseCgroup<ParseBytes> for Bytes {
   type Error = ParseValueError;
 
   /// Parses a decimal byte count without unit conversion.
-  fn parse_cgroup(value: &str) -> Result<Self, Self::Error> {
-    Ok(Self::new::<byte>(value.parse()?))
-  }
+  fn parse_cgroup(value: &str) -> Result<Self, Self::Error> { Ok(Self::new::<byte>(value.parse()?)) }
 }
 
 /// A zero-sized marker for cgroup percentages encoded as decimal percents.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct ParsePercent;
 
-#[nutype(
-  validate(finite, greater_or_equal = 0.0, less_or_equal = 100.0),
-  derive(Debug, Clone, Copy, PartialEq)
-)]
+#[nutype(validate(finite, greater_or_equal = 0.0, less_or_equal = 100.0), derive(Debug, Clone, Copy, PartialEq))]
 struct Percent(f64);
 
 impl ParseCgroup<ParsePercent> for Ratio {
   type Error = ParseValueError;
 
   fn parse_cgroup(value: &str) -> Result<Self, Self::Error> {
-    let percent_value = Percent::try_new(value.parse::<f64>()?)
-      .map_err(|_error| ParseValueError::OutOfRange)?;
+    let percent_value = Percent::try_new(value.parse::<f64>()?).map_err(|_error| ParseValueError::OutOfRange)?;
 
     Ok(Self::new::<percent>(percent_value.into_inner()))
   }
@@ -272,32 +244,4 @@ where
 }
 
 #[cfg(test)]
-mod tests {
-  use assertables::assert_err;
-
-  use super::*;
-
-  #[test]
-  fn rejects_times_that_overflow_nanosecond_storage() {
-    for input in ["18446744073709552", "18446744073709551615"] {
-      let error = assert_err!(Parser::parse(input, |parser| {
-        parser.next_field::<ParseMicroseconds, Time>("duration")
-      }));
-      match error {
-        | ParseError::Invalid {
-          raw,
-          field,
-          value,
-          source: ParseValueError::OutOfRange,
-        } => {
-          assert_eq!(raw.as_ref(), input);
-          assert_eq!(field, "duration");
-          assert_eq!(value.as_ref(), input);
-        },
-        | other => {
-          panic!("expected conversion overflow for {input:?}, got {other:?}")
-        },
-      }
-    }
-  }
-}
+pub(crate) mod tests;
