@@ -27,6 +27,11 @@ pub enum CpuWeight {
   Shares(Weight),
 }
 
+impl CpuWeight {
+  /// The cgroup v2 `cpu.weight` interface filename.
+  pub const FILE_NAME: &'static str = "cpu.weight";
+}
+
 impl FromStr for CpuWeight {
   type Err = ParseError<ParseValueError>;
 

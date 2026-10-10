@@ -23,6 +23,11 @@ pub struct Pressure {
 }
 
 impl Pressure {
+  /// The cgroup v2 `cpu.pressure` interface filename.
+  pub const CPU_FILE_NAME: &'static str = "cpu.pressure";
+  /// The cgroup v2 `memory.pressure` interface filename.
+  pub const MEMORY_FILE_NAME: &'static str = "memory.pressure";
+
   /// Returns pressure during which at least one task was stalled.
   #[must_use]
   pub const fn some(self) -> PressureLine {

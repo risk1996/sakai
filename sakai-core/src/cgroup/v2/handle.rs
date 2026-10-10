@@ -252,7 +252,15 @@ mod tests {
   use super::*;
   use crate::{
     error::{ParseError, ParseValueError},
-    v2::cpu::CpuIdle,
+    pressure::Pressure,
+    v2::{
+      core::CgroupType,
+      cpu::{CpuIdle, CpuStatLocal},
+      memory::{
+        MemoryCurrent, MemoryHigh, MemoryLow, MemoryMax, MemoryMin, MemoryPeak,
+        MemoryStat,
+      },
+    },
   };
 
   #[test]
@@ -299,7 +307,7 @@ mod tests {
     let Error::Parse { path: actual, .. } = &error else {
       panic!("expected parse failure, got {error:?}");
     };
-    assert_eq!(actual, &path.join("cgroup.type"));
+    assert_eq!(actual, &path.join(CgroupType::FILE_NAME));
     assert!(error.to_string().contains("\"unknown\\n\""));
     let reason = error
       .source()
@@ -318,16 +326,25 @@ mod tests {
       path: path.clone(),
     };
     for (result, name) in [
-      (cgroup.cpu().stat_local().map(|_| ()), "cpu.stat.local"),
-      (cgroup.core().kind().map(|_| ()), "cgroup.type"),
-      (cgroup.memory().current().map(|_| ()), "memory.current"),
-      (cgroup.memory().max().map(|_| ()), "memory.max"),
-      (cgroup.memory().high().map(|_| ()), "memory.high"),
-      (cgroup.memory().low().map(|_| ()), "memory.low"),
-      (cgroup.memory().min().map(|_| ()), "memory.min"),
-      (cgroup.memory().peak().map(|_| ()), "memory.peak"),
-      (cgroup.memory().stat().map(|_| ()), "memory.stat"),
-      (cgroup.memory().pressure().map(|_| ()), "memory.pressure"),
+      (
+        cgroup.cpu().stat_local().map(|_| ()),
+        CpuStatLocal::FILE_NAME,
+      ),
+      (cgroup.core().kind().map(|_| ()), CgroupType::FILE_NAME),
+      (
+        cgroup.memory().current().map(|_| ()),
+        MemoryCurrent::FILE_NAME,
+      ),
+      (cgroup.memory().max().map(|_| ()), MemoryMax::FILE_NAME),
+      (cgroup.memory().high().map(|_| ()), MemoryHigh::FILE_NAME),
+      (cgroup.memory().low().map(|_| ()), MemoryLow::FILE_NAME),
+      (cgroup.memory().min().map(|_| ()), MemoryMin::FILE_NAME),
+      (cgroup.memory().peak().map(|_| ()), MemoryPeak::FILE_NAME),
+      (cgroup.memory().stat().map(|_| ()), MemoryStat::FILE_NAME),
+      (
+        cgroup.memory().pressure().map(|_| ()),
+        Pressure::MEMORY_FILE_NAME,
+      ),
     ] {
       assert!(
         matches!(result, Err(Error::FileMissing { path: missing }) if missing == path.join(name))

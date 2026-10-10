@@ -27,27 +27,27 @@ pub struct Swap<'a> {
 impl Swap<'_> {
   /// Current swap usage of this cgroup and its descendants, in bytes.
   pub fn current(&self) -> Result<SwapCurrent, Error> {
-    self.cgroup.parse("memory.swap.current")
+    self.cgroup.parse(SwapCurrent::FILE_NAME)
   }
 
   /// Peak swap usage since cgroup creation for this fresh descriptor.
   pub fn peak(&self) -> Result<SwapPeak, Error> {
-    self.cgroup.parse("memory.swap.peak")
+    self.cgroup.parse(SwapPeak::FILE_NAME)
   }
 
   /// Hard swap limit configured for this cgroup.
   pub fn max(&self) -> Result<SwapMax, Error> {
-    self.cgroup.parse("memory.swap.max")
+    self.cgroup.parse(SwapMax::FILE_NAME)
   }
 
   /// Swap throttling limit configured for this cgroup.
   pub fn high(&self) -> Result<SwapHigh, Error> {
-    self.cgroup.parse("memory.swap.high")
+    self.cgroup.parse(SwapHigh::FILE_NAME)
   }
 
   /// Swap high, max, and allocation failure counters.
   pub fn events(&self) -> Result<SwapEvents, Error> {
-    self.cgroup.parse("memory.swap.events")
+    self.cgroup.parse(SwapEvents::FILE_NAME)
   }
 }
 
@@ -58,6 +58,9 @@ pub struct SwapCurrent {
 }
 
 impl SwapCurrent {
+  /// The cgroup v2 `memory.swap.current` interface filename.
+  pub const FILE_NAME: &'static str = "memory.swap.current";
+
   /// Returns the current swap usage in bytes.
   #[must_use]
   pub const fn value(self) -> Bytes {
@@ -88,6 +91,9 @@ pub struct SwapPeak {
 }
 
 impl SwapPeak {
+  /// The cgroup v2 `memory.swap.peak` interface filename.
+  pub const FILE_NAME: &'static str = "memory.swap.peak";
+
   /// Returns the peak swap usage in bytes.
   #[must_use]
   pub const fn value(self) -> Bytes {
@@ -116,6 +122,9 @@ pub struct SwapMax {
 }
 
 impl SwapMax {
+  /// The cgroup v2 `memory.swap.max` interface filename.
+  pub const FILE_NAME: &'static str = "memory.swap.max";
+
   /// Returns the hard swap limit in bytes, or [`MaxOr::Max`].
   #[must_use]
   pub const fn value(self) -> MaxOr<Bytes> {
@@ -145,6 +154,9 @@ pub struct SwapHigh {
 }
 
 impl SwapHigh {
+  /// The cgroup v2 `memory.swap.high` interface filename.
+  pub const FILE_NAME: &'static str = "memory.swap.high";
+
   /// Returns the swap throttling limit in bytes, or [`MaxOr::Max`].
   #[must_use]
   pub const fn value(self) -> MaxOr<Bytes> {
@@ -176,6 +188,9 @@ pub struct SwapEvents {
 }
 
 impl SwapEvents {
+  /// The cgroup v2 `memory.swap.events` interface filename.
+  pub const FILE_NAME: &'static str = "memory.swap.events";
+
   /// Times swap usage exceeded the high threshold, when reported.
   #[must_use]
   pub const fn high(self) -> Option<Count> {

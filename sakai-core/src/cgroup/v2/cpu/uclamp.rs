@@ -19,6 +19,9 @@ pub struct CpuUclampMin {
 }
 
 impl CpuUclampMin {
+  /// The cgroup v2 `cpu.uclamp.min` interface filename.
+  pub const FILE_NAME: &'static str = "cpu.uclamp.min";
+
   /// Returns the requested minimum CPU utilization.
   #[must_use]
   pub const fn value(self) -> Ratio {
@@ -51,6 +54,9 @@ pub struct CpuUclampMax {
 }
 
 impl CpuUclampMax {
+  /// The cgroup v2 `cpu.uclamp.max` interface filename.
+  pub const FILE_NAME: &'static str = "cpu.uclamp.max";
+
   /// Returns the requested maximum CPU utilization.
   #[must_use]
   pub const fn value(self) -> MaxOr<Ratio> {
