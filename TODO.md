@@ -59,12 +59,12 @@ files. Treat that as `FileMissing`, not a parse failure or panic.
 
 ## P2 — Process and cgroup state
 
-- [ ] `pids.current` — current process count; it may temporarily exceed the
+- [x] `pids.current` — current process count; it may temporarily exceed the
       configured maximum.
-- [ ] `pids.max` — process limit as `MaxOr<Count>`.
-- [ ] `pids.events` — hierarchical process-limit event counters.
-- [ ] `cgroup.events` — populated and frozen state for lifecycle monitoring.
-- [ ] `cgroup.stat` — descendant and subsystem state counters.
+- [x] `pids.max` — process limit as `MaxOr<Count>`.
+- [x] `pids.events` — hierarchical process-limit event counters.
+- [x] `cgroup.events` — populated and frozen state for lifecycle monitoring.
+- [x] `cgroup.stat` — descendant and subsystem state counters.
 
 ## P3 — I/O
 

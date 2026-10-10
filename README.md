@@ -27,6 +27,15 @@ Every call reads fresh contents. Multiple reads are not an atomic snapshot.
 limit. `cpu.stat.local` describes local runqueue throttling, including ancestor
 limits. Unknown CPU stat counters are ignored.
 
+`cgroup.pids()` reads the current hierarchical task count, configured limit,
+and process-limit events. Counts include threads; current usage can exceed
+the limit after migration or a limit reduction. `cgroup.core().events()` reads
+populated and completed frozen state, preserving a missing older-kernel frozen
+field as `None`. `cgroup.core().stat()` reads descendant counts and maps of live
+and dying subsystem counts keyed by controller. Older kernels may omit those
+maps; absent counters do not imply zero. These states and counts are volatile.
+The interfaces follow the [kernel cgroup v2 documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html).
+
 Times use `u64` nanoseconds with checked conversion from kernel microseconds.
 Counts have a separate `uom` kind. Ratios use `f64` to preserve fractional
 percentages. Integer quantity arithmetic truncates; use fractional operands

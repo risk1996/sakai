@@ -8,13 +8,14 @@ use sakai::{
   error::{ParseError, ParseValueError},
   v2::{
     CgroupPath,
-    core::{CgroupController, CgroupType},
+    core::{CgroupController, CgroupEvents, CgroupStat, CgroupType},
     cpu::{CpuIdle, CpuMax, CpuMaxBurst, CpuStat, CpuStatLocal, CpuUclampMax, CpuUclampMin, CpuWeight, Nice},
     memory::{
       MemoryCurrent, MemoryEvents, MemoryEventsLocal, MemoryHigh, MemoryLow, MemoryMax, MemoryMin, MemoryNumaStat,
       MemoryOomGroup, MemoryPeak, MemoryStat, SwapCurrent, SwapEvents, SwapHigh, SwapMax, SwapPeak, ZswapCurrent,
       ZswapMax, ZswapWriteback,
     },
+    pids::{PidsCurrent, PidsEvents, PidsMax},
   },
 };
 use uom::si::information::byte;
@@ -29,6 +30,7 @@ fn reads_current_cgroup_without_privileges() {
   assert_ok!(cgroup.cpu().stat());
   assert_ok!(cgroup.core().controllers());
   assert_ok!(cgroup.core().subtree_control());
+  assert_ok!(cgroup.core().stat());
   for result in [
     cgroup.cpu().stat_local().map(|_| ()),
     cgroup.cpu().weight().map(|_| ()),
@@ -40,6 +42,10 @@ fn reads_current_cgroup_without_privileges() {
     cgroup.cpu().uclamp_max().map(|_| ()),
     cgroup.cpu().idle().map(|_| ()),
     cgroup.core().kind().map(|_| ()),
+    cgroup.core().events().map(|_| ()),
+    cgroup.pids().current().map(|_| ()),
+    cgroup.pids().max().map(|_| ()),
+    cgroup.pids().events().map(|_| ()),
     cgroup.memory().current().map(|_| ()),
     cgroup.memory().max().map(|_| ()),
     cgroup.memory().high().map(|_| ()),
@@ -131,6 +137,7 @@ impl CgroupFixture {
       .split_ascii_whitespace()
       .any(|controller| controller == "memory");
     fs::write(parent.join(CgroupController::SUBTREE_CONTROL_FILE_NAME), "+cpu")?;
+    fs::write(parent.join(CgroupController::SUBTREE_CONTROL_FILE_NAME), "+pids")?;
     if has_memory_controller {
       fs::write(parent.join(CgroupController::SUBTREE_CONTROL_FILE_NAME), "+memory")?;
     }
@@ -199,6 +206,24 @@ fn parses_live_delegated_controller_interfaces() {
   fixture.check(CpuUclampMin::FILE_NAME, true, reader.cpu().uclamp_min());
   fixture.check(CpuWeight::FILE_NAME, false, reader.cpu().weight());
   fixture.check(Nice::FILE_NAME, false, reader.cpu().weight_nice());
+  fixture.check(PidsCurrent::FILE_NAME, false, reader.pids().current());
+  fixture.check(PidsMax::FILE_NAME, false, reader.pids().max());
+  fixture.check(PidsEvents::FILE_NAME, false, reader.pids().events());
+  fixture.check(CgroupEvents::FILE_NAME, false, reader.core().events());
+  fixture.check(CgroupStat::FILE_NAME, false, reader.core().stat());
+  assert_eq!(assert_ok!(reader.pids().current()).value().value, 0);
+  assert_eq!(assert_ok!(reader.pids().max()).value(), MaxOr::Max);
+  let pids_max_path = fixture.path.join(PidsMax::FILE_NAME);
+  for limit in ["0", "10", "max"] {
+    assert_ok!(fs::write(&pids_max_path, limit));
+    assert_eq!(assert_ok!(reader.pids().max()), assert_ok!(limit.parse::<PidsMax>()));
+    assert_eq!(assert_ok!(fs::read_to_string(&pids_max_path)).trim(), limit);
+  }
+  assert_eq!(assert_ok!(reader.pids().events()).max().value, 0);
+  let events = assert_ok!(reader.core().events());
+  assert!(!events.populated());
+  assert_eq!(events.frozen(), Some(false));
+  assert_eq!(assert_ok!(reader.core().stat()).descendants().value, 0);
   assert!(
     assert_ok!(reader.core().controllers()).contains(&CgroupController::Memory),
     "vmtest kernel must provide the memory controller"
@@ -290,6 +315,14 @@ fn root_memory_stat_is_readable_and_settings_are_missing() {
     assert!(matches!(result, Err(Error::FileMissing { path }) if path == root_path.join(name)));
   }
   assert_ok!(root.memory().stat());
+  assert_ok!(root.core().stat());
+  for (name, read) in [
+    (CgroupEvents::FILE_NAME, root.core().events().map(|_| ())),
+    (PidsMax::FILE_NAME, root.pids().max().map(|_| ())),
+    (PidsEvents::FILE_NAME, root.pids().events().map(|_| ())),
+  ] {
+    assert!(matches!(read, Err(Error::FileMissing { path }) if path == root_path.join(name)));
+  }
   for (name, read) in [
     (MemoryNumaStat::FILE_NAME, root.memory().numa_stat().map(|_| ())),
     (ZswapWriteback::FILE_NAME, root.memory().zswap().writeback().map(|_| ())),

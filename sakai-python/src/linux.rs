@@ -9,14 +9,17 @@ use pyo3::{
   types::{IntoPyDict, PyDict, PyMappingProxy, PyModule},
 };
 use sakai::{
-  Bytes, Error, MaxOr as CoreMaxOr, NonZeroTime, Pressure as CorePressure, PressureLine as CorePressureLine, Ratio,
+  Bytes, Count, Error, MaxOr as CoreMaxOr, NonZeroTime, Pressure as CorePressure, PressureLine as CorePressureLine,
+  Ratio,
   v2::{
+    core::{CgroupEvents as CoreCgroupEvents, CgroupStat as CoreCgroupStat},
     cpu::{
       CpuBandwidthStat as CoreCpuBandwidthStat, CpuBurstStat as CoreCpuBurstStat, CpuMax as CoreCpuMax,
       CpuStat as CoreCpuStat, CpuStatLocal as CoreCpuStatLocal, CpuTimeStat as CoreCpuTimeStat,
       CpuWeight as CoreCpuWeight,
     },
     memory::{MemoryNumaStat as CoreMemoryNumaStat, MemoryStat as CoreMemoryStat, SwapEvents as CoreSwapEvents},
+    pids::PidsEvents as CorePidsEvents,
   },
 };
 use uom::si::{information::byte, ratio::ratio, time::nanosecond};
@@ -157,6 +160,9 @@ impl Cgroup {
   /// Return a reader for memory controller interfaces.
   fn memory(&self) -> MemoryReader { MemoryReader { owner: Arc::clone(&self.owner) } }
 
+  /// Return a process-number reader; kernel PID counts include threads.
+  fn pids(&self) -> PidsReader { PidsReader { owner: Arc::clone(&self.owner) } }
+
   /// Return a reader for core cgroup topology interfaces.
   fn core(&self) -> CoreReader { CoreReader { owner: Arc::clone(&self.owner) } }
 
@@ -200,6 +206,10 @@ impl MaxOr {
 
   fn from_ratio(value: CoreMaxOr<Ratio>) -> Self {
     Self::from_value(value, |value| PythonLimitValue::Ratio(value.get::<ratio>()))
+  }
+
+  fn from_count(value: CoreMaxOr<Count>) -> Self {
+    Self::from_value(value, |count| PythonLimitValue::Integer(count.value))
   }
 }
 
@@ -703,7 +713,110 @@ impl MemoryNumaStat {
   }
 }
 
-/// Fresh reads of cgroup topology and controller files.
+/// Fresh process-number reads for one pinned cgroup. Counts include threads.
+///
+/// Separate calls are not atomic together. Missing files raise InterfaceMissingError.
+#[pyclass(frozen, module = "sakai._sakai")]
+struct PidsReader {
+  owner: Arc<sakai::Cgroup>,
+}
+
+#[pymethods]
+impl PidsReader {
+  /// Read the volatile hierarchical task count, which can exceed pids.max.
+  fn current(&self, py: Python<'_>) -> PyResult<u64> {
+    PythonError::read(py, &self.owner, |owner| owner.pids().current()).map(|value| value.value().value)
+  }
+
+  /// Read the configured task limit as MaxOr[int]; zero is a valid limit.
+  fn max(&self, py: Python<'_>) -> PyResult<MaxOr> {
+    PythonError::read(py, &self.owner, |owner| owner.pids().max()).map(|value| MaxOr::from_count(value.value()))
+  }
+
+  /// Read hierarchical limit events; older kernels or pids_localevents report local events.
+  fn events(&self, py: Python<'_>) -> PyResult<PidsEvents> {
+    PythonError::read(py, &self.owner, |owner| owner.pids().events()).map(Into::into)
+  }
+}
+
+/// Immutable, volatile process-limit event counts from pids.events.
+#[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PidsEvents {
+  /// Number of occurrences of the process limit being hit.
+  max: u64,
+}
+
+impl From<CorePidsEvents> for PidsEvents {
+  fn from(value: CorePidsEvents) -> Self { Self { max: value.max().value } }
+}
+
+/// Immutable lifecycle snapshot; states can change immediately after a read.
+#[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct CgroupEvents {
+  /// Whether this cgroup or any descendant contains live processes.
+  populated: bool,
+  /// Completed freezing, including ancestors; None when an older kernel omits it.
+  frozen: Option<bool>,
+}
+
+impl From<CoreCgroupEvents> for CgroupEvents {
+  fn from(value: CoreCgroupEvents) -> Self { Self { populated: value.populated(), frozen: value.frozen() } }
+}
+
+/// Immutable, volatile cgroup and subsystem object counts from cgroup.stat.
+///
+/// Subsystem maps use controller names, including unknown names. Missing
+/// counters are absent from the maps, rather than zero. All mappings are read-only.
+#[pyclass(frozen, module = "sakai._sakai")]
+#[derive(Debug, PartialEq, Eq)]
+struct CgroupStat {
+  descendants: u64,
+  dying_descendants: u64,
+  subsystems: BTreeMap<String, u64>,
+  dying_subsystems: BTreeMap<String, u64>,
+}
+
+impl From<CoreCgroupStat> for CgroupStat {
+  fn from(value: CoreCgroupStat) -> Self {
+    Self {
+      descendants: value.descendants().value,
+      dying_descendants: value.dying_descendants().value,
+      subsystems: value.subsystems().iter().map(|(controller, count)| (controller.to_string(), count.value)).collect(),
+      dying_subsystems: value
+        .dying_subsystems()
+        .iter()
+        .map(|(controller, count)| (controller.to_string(), count.value))
+        .collect(),
+    }
+  }
+}
+
+#[pymethods]
+impl CgroupStat {
+  /// Visible descendant cgroup count, excluding this cgroup.
+  #[getter]
+  fn descendants(&self) -> u64 { self.descendants }
+
+  /// Deleted descendant cgroups awaiting final destruction.
+  #[getter]
+  fn dying_descendants(&self) -> u64 { self.dying_descendants }
+
+  /// Read-only live subsystem counts at and beneath this cgroup.
+  #[getter]
+  fn subsystems(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
+    Ok(PyMappingProxy::new(py, self.subsystems.clone().into_py_dict(py)?.as_mapping()).unbind())
+  }
+
+  /// Read-only dying subsystem counts at and beneath this cgroup.
+  #[getter]
+  fn dying_subsystems(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
+    Ok(PyMappingProxy::new(py, self.dying_subsystems.clone().into_py_dict(py)?.as_mapping()).unbind())
+  }
+}
+
+/// Fresh reads of cgroup topology, controller, and lifecycle files.
 #[pyclass(frozen, module = "sakai._sakai")]
 struct CoreReader {
   owner: Arc<sakai::Cgroup>,
@@ -711,6 +824,16 @@ struct CoreReader {
 
 #[pymethods]
 impl CoreReader {
+  /// Read volatile populated and frozen state; root cgroups lack this interface.
+  fn events(&self, py: Python<'_>) -> PyResult<CgroupEvents> {
+    PythonError::read(py, &self.owner, |owner| owner.core().events()).map(Into::into)
+  }
+
+  /// Read volatile descendant and subsystem counts, including at the hierarchy root.
+  fn stat(&self, py: Python<'_>) -> PyResult<CgroupStat> {
+    PythonError::read(py, &self.owner, |owner| owner.core().stat()).map(Into::into)
+  }
+
   /// Read the cgroup type: domain, domain threaded, domain invalid, or threaded.
   fn kind(&self, py: Python<'_>) -> PyResult<String> {
     PythonError::read(py, &self.owner, |owner| owner.core().kind()).map(|kind| kind.to_string())
@@ -745,6 +868,10 @@ fn _sakai(module: &Bound<'_, PyModule>) -> PyResult<()> {
   module.add_class::<SwapReader>()?;
   module.add_class::<ZswapReader>()?;
   module.add_class::<CoreReader>()?;
+  module.add_class::<PidsReader>()?;
+  module.add_class::<PidsEvents>()?;
+  module.add_class::<CgroupEvents>()?;
+  module.add_class::<CgroupStat>()?;
   module.add_class::<CpuStat>()?;
   module.add_class::<CpuStatLocal>()?;
   module.add_class::<CpuTimeStat>()?;
@@ -913,6 +1040,75 @@ mod tests {
         assert!(assert_err!(nodes.set_item(0, 0)).is_instance_of::<PyTypeError>(py));
       }
       assert!(assert_err!(object.bind(py).setattr("bytes", 0)).is_instance_of::<PyAttributeError>(py));
+    });
+  }
+
+  #[test]
+  fn preserves_process_limits_states_and_immutable_subsystem_counts() {
+    Python::initialize();
+    Python::attach(|py| {
+      for (input, expected) in [("0", Some(0)), ("18446744073709551615", Some(u64::MAX)), ("max", None)] {
+        let limit = MaxOr::from_count(assert_ok!(input.parse::<sakai::v2::pids::PidsMax>()).value());
+        assert_eq!(limit.is_max(), expected.is_none());
+        match expected {
+          | Some(expected) => {
+            let object = assert_ok!(Py::new(py, limit));
+            let value = assert_ok!(object.bind(py).getattr("value"));
+            assert!(value.is_instance_of::<PyInt>());
+            assert_eq!(assert_ok!(value.extract::<u64>()), expected);
+          },
+          | None => {
+            assert_err!(limit.value());
+          },
+        }
+      }
+      for (input, expected) in [
+        ("populated 1", CgroupEvents { populated: true, frozen: None }),
+        ("frozen 0\npopulated 1", CgroupEvents { populated: true, frozen: Some(false) }),
+        ("populated 0\nfrozen 1", CgroupEvents { populated: false, frozen: Some(true) }),
+      ] {
+        let state = CgroupEvents::from(assert_ok!(input.parse::<CoreCgroupEvents>()));
+        assert_eq!(state, expected);
+        let object = assert_ok!(Py::new(py, state));
+        assert_eq!(
+          assert_ok!(assert_ok!(object.bind(py).getattr("frozen")).extract::<Option<bool>>()),
+          expected.frozen
+        );
+        assert!(assert_err!(object.bind(py).setattr("populated", false)).is_instance_of::<PyAttributeError>(py));
+      }
+      let events = PidsEvents::from(assert_ok!("max 18446744073709551615".parse::<CorePidsEvents>()));
+      assert_eq!(events, PidsEvents { max: u64::MAX });
+      let object = assert_ok!(Py::new(py, events));
+      assert_eq!(assert_ok!(assert_ok!(object.bind(py).getattr("max")).extract::<u64>()), u64::MAX);
+      assert!(assert_err!(object.bind(py).setattr("max", 0)).is_instance_of::<PyAttributeError>(py));
+      for (input, expected) in [
+        (
+          "nr_descendants 2\nnr_dying_descendants 1\nnr_subsys_memory 3\nnr_dying_subsys_future_controller 0",
+          CgroupStat {
+            descendants: 2,
+            dying_descendants: 1,
+            subsystems: BTreeMap::from([("memory".into(), 3)]),
+            dying_subsystems: BTreeMap::from([("future_controller".into(), 0)]),
+          },
+        ),
+        ("nr_descendants 0\nnr_dying_descendants 0", CgroupStat {
+          descendants: 0,
+          dying_descendants: 0,
+          subsystems: BTreeMap::new(),
+          dying_subsystems: BTreeMap::new(),
+        }),
+      ] {
+        let stat = CgroupStat::from(assert_ok!(input.parse::<CoreCgroupStat>()));
+        assert_eq!(stat, expected);
+        let object = assert_ok!(Py::new(py, stat));
+        for (name, expected) in [("subsystems", expected.subsystems), ("dying_subsystems", expected.dying_subsystems)] {
+          let mapping = assert_ok!(object.bind(py).getattr(name));
+          let values = assert_ok!(py.get_type::<PyDict>().call1((&mapping,)));
+          assert_eq!(assert_ok!(values.extract::<BTreeMap<String, u64>>()), expected);
+          assert!(assert_err!(mapping.set_item("memory", 0)).is_instance_of::<PyTypeError>(py));
+        }
+        assert!(assert_err!(object.bind(py).setattr("descendants", 0)).is_instance_of::<PyAttributeError>(py));
+      }
     });
   }
 

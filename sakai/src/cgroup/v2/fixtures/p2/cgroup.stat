@@ -1,0 +1,4 @@
+nr_subsys_memory 3
+nr_dying_subsys_memory 1
+nr_dying_descendants 1
+nr_descendants 2
