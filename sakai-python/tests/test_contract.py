@@ -20,6 +20,7 @@ from sakai import (
   CpuStat,
   InterfaceMissingError,
   MaxOr,
+  MemoryEventCounts,
   MemoryNumaStat,
   MemoryStat,
   NotCgroupV2Error,
@@ -193,6 +194,31 @@ class ContractTest(unittest.TestCase):
     )
     self.assertEqual(Cgroup.from_pid(os.getpid()).path, self.group.path)
 
+  def test_memory_events_and_oom_policy(self) -> None:
+    memory = self.group.memory()
+
+    def check_events(events: MemoryEventCounts) -> None:
+      self.assertIsInstance(events, MemoryEventCounts)
+      for name in ("low", "high", "max", "oom", "oom_kill"):
+        self.check_unsigned(getattr(events, name))
+      for name in ("oom_group_kill", "sock_throttled"):
+        value = getattr(events, name)
+        if value is not None:
+          self.check_unsigned(value)
+      with self.assertRaises(AttributeError):
+        cast("Any", events).low = 0
+
+    for name, read in (
+      ("memory.events", memory.events),
+      ("memory.events.local", memory.events_local),
+    ):
+      self.check_optional(name, read, check_events)
+    self.check_optional(
+      "memory.oom.group",
+      memory.oom_group,
+      lambda value: self.assertIsInstance(value, bool),
+    )
+
   def test_swap_contract(self) -> None:
     swap = self.group.memory().swap()
     self.assertIsInstance(swap, SwapReader)
@@ -311,7 +337,7 @@ class ContractTest(unittest.TestCase):
       BytePath(),
     ):
       with self.subTest(name=name):
-        with self.assertRaises(OSError) as caught:
+        with self.assertRaises(FileNotFoundError) as caught:
           self.group.child(name)
         self.assertEqual(caught.exception.errno, errno.ENOENT)
 

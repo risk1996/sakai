@@ -18,7 +18,10 @@ use sakai::{
       CpuStat as CoreCpuStat, CpuStatLocal as CoreCpuStatLocal, CpuTimeStat as CoreCpuTimeStat,
       CpuWeight as CoreCpuWeight,
     },
-    memory::{MemoryNumaStat as CoreMemoryNumaStat, MemoryStat as CoreMemoryStat, SwapEvents as CoreSwapEvents},
+    memory::{
+      MemoryEventCounts as CoreMemoryEventCounts, MemoryNumaStat as CoreMemoryNumaStat, MemoryStat as CoreMemoryStat,
+      SwapEvents as CoreSwapEvents,
+    },
     pids::PidsEvents as CorePidsEvents,
   },
 };
@@ -81,8 +84,13 @@ impl PythonError {
       | Error::Parse { path, source } => {
         Self::with_path::<CgroupParseError>(py, format!("failed to parse {}: {source}", path.display()), path)
       },
+      // Construct OSError first so errno selects its standard subclass even
+      // on Python 3.11, where a lazy PyErr can retain OSError as its type.
       | Error::Io(source) => match source.raw_os_error() {
-        | Some(errno) => PyOSError::new_err((errno, source.to_string())),
+        | Some(errno) => match py.get_type::<PyOSError>().call1((errno, source.to_string())) {
+          | Ok(exception) => PyErr::from_value(exception),
+          | Err(error) => error,
+        },
         | None => PyOSError::new_err(source.to_string()),
       },
     }
@@ -97,6 +105,8 @@ impl PythonError {
     owner: &Arc<sakai::Cgroup>,
     read: impl FnOnce(&sakai::Cgroup) -> Result<T, Error> + Send + 'static,
   ) -> PyResult<T> {
+    // Detach only after owning all inputs; shared handles never depend on the GIL.
+    // Construct Python values and translate exceptions after reattaching.
     let owner = Arc::clone(owner);
     Self::result(py, py.detach(move || read(&owner)))
   }
@@ -104,7 +114,7 @@ impl PythonError {
 
 /// An open, pinned cgroup v2 directory handle.
 ///
-/// Readers borrow this handle's ownership, so they remain usable after the
+/// Readers retain this handle's ownership, so they remain usable after the
 /// Python Cgroup object is released. Each read fetches a fresh kernel value;
 /// separate calls do not form an atomic snapshot.
 #[pyclass(frozen, module = "sakai._sakai")]
@@ -139,7 +149,8 @@ impl Cgroup {
     PythonError::result(py, py.detach(move || sakai::Cgroup::from_path(&path))).map(Into::into)
   }
 
-  /// Diagnostic filesystem path; it may become stale after a rename.
+  /// Diagnostic filesystem path; it may become stale after a rename or deletion.
+  /// Reads use the pinned directory handle, never this display path.
   #[getter]
   fn path(&self) -> PathBuf { self.owner.path().to_owned() }
 
@@ -510,6 +521,22 @@ impl MemoryReader {
     PythonError::read(py, &self.owner, |owner| owner.memory().min()).map(|value| value.value().get::<byte>())
   }
 
+  /// Read whether the OOM killer treats this cgroup as one workload.
+  fn oom_group(&self, py: Python<'_>) -> PyResult<bool> {
+    PythonError::read(py, &self.owner, |owner| owner.memory().oom_group()).map(|value| value.value())
+  }
+
+  /// Read hierarchical memory events; memory_localevents mounts report local events.
+  fn events(&self, py: Python<'_>) -> PyResult<MemoryEventCounts> {
+    PythonError::read(py, &self.owner, |owner| owner.memory().events()).map(|value| value.counts().into())
+  }
+
+  /// Read events originating in this cgroup, excluding descendants.
+  /// Older kernels may lack this interface, raising InterfaceMissingError.
+  fn events_local(&self, py: Python<'_>) -> PyResult<MemoryEventCounts> {
+    PythonError::read(py, &self.owner, |owner| owner.memory().events_local()).map(|value| value.counts().into())
+  }
+
   /// Read memory statistics in separate byte, page, and count mappings.
   fn stat(&self, py: Python<'_>) -> PyResult<MemoryStat> {
     PythonError::read(py, &self.owner, |owner| owner.memory().stat()).map(Into::into)
@@ -523,6 +550,43 @@ impl MemoryReader {
   /// Read memory pressure-stall averages and cumulative times.
   fn pressure(&self, py: Python<'_>) -> PyResult<Pressure> {
     PythonError::read(py, &self.owner, |owner| owner.memory().pressure()).map(Into::into)
+  }
+}
+
+/// Immutable occurrence counts from memory.events or memory.events.local.
+///
+/// Missing optional counters are None, distinct from zero. Unknown kernel
+/// fields are ignored. The reader method determines whether counts include descendants.
+#[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct MemoryEventCounts {
+  /// Reclaims despite usage below the effective low boundary.
+  low: u64,
+  /// Throttling and direct reclaim after crossing the high boundary.
+  high: u64,
+  /// Attempts to cross the max boundary.
+  max: u64,
+  /// Allocations about to fail at the memory limit.
+  oom: u64,
+  /// Processes killed by any OOM killer.
+  oom_kill: u64,
+  /// Group OOM kills, or None when the kernel omits the counter.
+  oom_group_kill: Option<u64>,
+  /// Network socket throttling events, or None when the kernel omits the counter.
+  sock_throttled: Option<u64>,
+}
+
+impl From<CoreMemoryEventCounts> for MemoryEventCounts {
+  fn from(value: CoreMemoryEventCounts) -> Self {
+    Self {
+      low: value.low().value,
+      high: value.high().value,
+      max: value.max().value,
+      oom: value.oom().value,
+      oom_kill: value.oom_kill().value,
+      oom_group_kill: value.oom_group_kill().map(|count| count.value),
+      sock_throttled: value.sock_throttled().map(|count| count.value),
+    }
   }
 }
 
@@ -882,6 +946,7 @@ fn _sakai(module: &Bound<'_, PyModule>) -> PyResult<()> {
   module.add_class::<Pressure>()?;
   module.add_class::<PressureLine>()?;
   module.add_class::<MemoryStat>()?;
+  module.add_class::<MemoryEventCounts>()?;
   module.add_class::<SwapEvents>()?;
   module.add_class::<MemoryNumaStat>()?;
   Ok(())
@@ -897,7 +962,7 @@ mod tests {
 
   use assertables::{assert_err, assert_in_delta, assert_ok};
   use pyo3::{
-    exceptions::{PyAttributeError, PyTypeError},
+    exceptions::{PyAttributeError, PyFileNotFoundError, PyPermissionError, PyTypeError},
     types::{PyBytes, PyFloat, PyInt},
   };
 
@@ -969,7 +1034,7 @@ mod tests {
       assert_in_delta!(assert_ok!(ratio_value.extract::<f64>()), 0.25, f64::EPSILON);
 
       let max = assert_ok!(Py::new(py, MaxOr::from_bytes(CoreMaxOr::Max)));
-      let error = max.bind(py).getattr("value").expect_err("max has no value");
+      let error = assert_err!(max.bind(py).getattr("value"));
       assert!(error.is_instance_of::<PyValueError>(py));
     });
   }
@@ -991,6 +1056,52 @@ mod tests {
     assert_eq!(stat.counts.get("pgfault"), Some(&7));
     assert!(!stat.bytes.contains_key("pswpin"));
     assert!(!stat.pages.contains_key("pgfault"));
+  }
+
+  #[test]
+  fn preserves_memory_optional_events_zero_and_unsigned_counts() {
+    Python::initialize();
+    Python::attach(|py| {
+      for (input, expected) in [
+        ("low 1\nhigh 2\nmax 3\noom 4\noom_kill 5", MemoryEventCounts {
+          low: 1,
+          high: 2,
+          max: 3,
+          oom: 4,
+          oom_kill: 5,
+          oom_group_kill: None,
+          sock_throttled: None,
+        }),
+        (
+          "low 0\nhigh 0\nmax 0\noom 0\noom_kill 18446744073709551615\noom_group_kill 0\nsock_throttled 0\nfuture nope",
+          MemoryEventCounts {
+            low: 0,
+            high: 0,
+            max: 0,
+            oom: 0,
+            oom_kill: u64::MAX,
+            oom_group_kill: Some(0),
+            sock_throttled: Some(0),
+          },
+        ),
+      ] {
+        for counts in [
+          assert_ok!(input.parse::<sakai::v2::memory::MemoryEvents>()).counts(),
+          assert_ok!(input.parse::<sakai::v2::memory::MemoryEventsLocal>()).counts(),
+        ] {
+          let events = MemoryEventCounts::from(counts);
+          assert_eq!(events, expected);
+          let object = assert_ok!(Py::new(py, events));
+          assert_eq!(assert_ok!(assert_ok!(object.bind(py).getattr("oom_kill")).extract::<u64>()), expected.oom_kill);
+          for (name, expected) in
+            [("oom_group_kill", expected.oom_group_kill), ("sock_throttled", expected.sock_throttled)]
+          {
+            assert_eq!(assert_ok!(assert_ok!(object.bind(py).getattr(name)).extract::<Option<u64>>()), expected);
+          }
+          assert!(assert_err!(object.bind(py).setattr("low", 0)).is_instance_of::<PyAttributeError>(py));
+        }
+      }
+    });
   }
 
   #[test]
@@ -1116,26 +1227,41 @@ mod tests {
   fn preserves_python_error_categories_paths_and_errno() {
     Python::initialize();
     Python::attach(|py| {
-      let path = PathBuf::from("/sys/fs/cgroup/cpu.stat.local");
-      let missing = PythonError::result::<()>(py, Err(Error::FileMissing { path: path.clone() }))
-        .expect_err("a missing interface must raise");
-      assert!(missing.is_instance_of::<InterfaceMissingError>(py));
-      assert!(missing.is_instance_of::<SakaiError>(py));
-      assert!(!missing.is_instance_of::<PyOSError>(py));
-      let actual = assert_ok!(assert_ok!(missing.value(py).getattr("path")).extract::<PathBuf>());
-      assert_eq!(actual, path);
-
-      let denied = PythonError::from_core(py, Error::Io(io::Error::from_raw_os_error(13)));
-      assert!(denied.is_instance_of::<PyOSError>(py));
-      let errno = assert_ok!(assert_ok!(denied.value(py).getattr("errno")).extract::<i32>());
-      assert_eq!(errno, 13);
-
-      let parsed = PythonError::from_core(py, Error::Parse {
-        path: PathBuf::from("/sys/fs/cgroup/cpu.max"),
-        source: Box::new(io::Error::other("invalid quota")),
-      });
-      assert!(parsed.is_instance_of::<CgroupParseError>(py));
-      assert!(parsed.to_string().contains("invalid quota"));
+      let path = PathBuf::from("/sys/fs/cgroup/example");
+      for (error, exception_type, expected_path) in [
+        (Error::FileMissing { path: path.clone() }, py.get_type::<InterfaceMissingError>(), Some(&path)),
+        (Error::DeletedCgroup { path: path.clone() }, py.get_type::<DeletedCgroupError>(), Some(&path)),
+        (
+          Error::Parse { path: path.clone(), source: Box::new(io::Error::other("invalid quota")) },
+          py.get_type::<CgroupParseError>(),
+          Some(&path),
+        ),
+        (Error::NotCgroupV2, py.get_type::<NotCgroupV2Error>(), None),
+        (Error::NotSupported, py.get_type::<NotSupportedError>(), None),
+      ] {
+        let translated = assert_err!(PythonError::result::<()>(py, Err(error)));
+        assert!(translated.is_instance(py, &exception_type));
+        assert!(translated.is_instance_of::<SakaiError>(py));
+        assert!(!translated.is_instance_of::<PyOSError>(py));
+        match expected_path {
+          | Some(expected) => {
+            let actual = assert_ok!(assert_ok!(translated.value(py).getattr("path")).extract::<PathBuf>());
+            assert_eq!(&actual, expected);
+          },
+          | None => assert!(!assert_ok!(translated.value(py).hasattr("path"))),
+        }
+        if translated.is_instance_of::<CgroupParseError>(py) {
+          assert!(translated.to_string().contains("invalid quota"));
+        }
+      }
+      for (errno, exception_type) in
+        [(2, py.get_type::<PyFileNotFoundError>()), (13, py.get_type::<PyPermissionError>())]
+      {
+        let translated = PythonError::from_core(py, Error::Io(io::Error::from_raw_os_error(errno)));
+        assert!(translated.is_instance(py, &exception_type));
+        assert!(!translated.is_instance_of::<SakaiError>(py));
+        assert_eq!(assert_ok!(assert_ok!(translated.value(py).getattr("errno")).extract::<i32>()), errno);
+      }
     });
   }
 

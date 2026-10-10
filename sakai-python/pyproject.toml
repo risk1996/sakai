@@ -15,6 +15,8 @@ requires = ["maturin>=1.15,<2"]
 build-backend = "maturin"
 
 [tool.maturin]
+# Mixed package layout: the final component must match the #[pymodule] name.
+# https://www.maturin.rs/project_layout
 python-source = "python"
 module-name = "sakai._sakai"
 bindings = "pyo3"
