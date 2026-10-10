@@ -52,9 +52,10 @@ because the workspace also contains `xtask` and `sakai-python`.
   on macOS, plus an all-targets, all-features cross-check for
   `x86_64-unknown-linux-gnu`, using the locked dependencies. `devenv test`
   also passed. The existing Ubuntu CI checks job now compiles all crate
-  targets and features on Rust 1.88.0; it runs repository tests and lints
-  with the development toolchain. Execution of CI and the broader release
-  checks remain gates below, including macOS verification before publication.
+  targets and features and runs doctests on Rust 1.88.0; it runs repository
+  tests and lints with the development toolchain. Execution of CI and the
+  broader release checks remain gates below, including macOS verification
+  before publication.
   [Rust 1.85 release](https://blog.rust-lang.org/2025/02/20/Rust-1.85.0.html),
   [Cargo rust-version guidance](https://doc.rust-lang.org/cargo/reference/rust-version.html).
 - [ ] Review the version number and SemVer promise, including changes to
