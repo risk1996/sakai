@@ -1,0 +1,26 @@
+FROM rust:1.98.1-bookworm@sha256:828077e0f5ed0401fbd9cb5b4d5dedca23bd13c7fe032f3e8b7313e7acd2a57f AS build
+
+RUN apt-get update \
+  && apt-get install --no-install-recommends -y python3 python3-venv \
+  && rm -rf /var/lib/apt/lists/*
+RUN python3 -m venv /opt/build \
+  && /opt/build/bin/pip install --no-cache-dir maturin==1.15.0
+WORKDIR /src
+COPY Cargo.toml Cargo.lock ./
+COPY sakai-core ./sakai-core
+COPY sakai-python/Cargo.toml sakai-python/pyproject.toml ./sakai-python/
+COPY sakai-python/src ./sakai-python/src
+COPY sakai-python/python ./sakai-python/python
+COPY xtask ./xtask
+RUN /opt/build/bin/maturin build --release --locked \
+  --manifest-path sakai-python/Cargo.toml --interpreter /usr/bin/python3 \
+  --out /wheels
+
+FROM python:3.11-slim-bookworm@sha256:0a310eeecf4e1f5a0743f9a6520c90c88d089c903ca5fd283f501e3a805f5f89
+COPY --from=build /wheels /wheels
+RUN pip install --no-cache-dir /wheels/*.whl \
+  && rm -rf /wheels
+COPY sakai-python/tests /tests
+WORKDIR /tmp
+USER 65532:65532
+CMD ["python", "-m", "unittest", "discover", "-s", "/tests", "-p", "test_kubernetes.py", "-v"]
