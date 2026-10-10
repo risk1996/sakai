@@ -19,12 +19,35 @@ except InterfaceMissingError as error:
   print(f"Unavailable interface: {error.path}")
 ```
 
-Every method opens a fresh read-only kernel interface. Readings from separate
+Every reader method opens a fresh read-only kernel interface. Readings from separate
 methods are not atomic together. Limits use `MaxOr[int]` or `MaxOr[float]`:
 check `.is_max` before reading `.value`, which raises `ValueError` for `max`.
 These limits do not account for ancestor limits, affinity, or other policy. The `path`
 property is for display and may become stale; live reads continue through the
 original open directory handle.
+
+Compound readings are immutable native snapshot objects. Times are integer
+nanoseconds, memory amounts are integer bytes, page counts stay integers in
+pages, and event counts are integers. Pressure averages and utilization clamps
+are floating-point ratios from zero to one. Optional counters use `None` when
+omitted by the kernel, preserving the distinction from zero.
+
+`Cgroup.from_path()` and `.child()` accept `str`, `bytes`, and `os.PathLike`,
+including non-UTF-8 names. Child names must be one direct filesystem component;
+the core rejects traversal and slashes. Reader objects retain the open handle
+after the original `Cgroup` object is released; `.children()` returns separate
+pinned handles.
+
+`SakaiError` is the base for `InterfaceMissingError`, `NotCgroupV2Error`,
+`DeletedCgroupError`, `CgroupParseError`, and `NotSupportedError`. Missing-interface,
+deleted-cgroup, and parse exceptions carry a diagnostic `.path`; parse messages
+include the underlying failure. Other I/O failures retain standard `OSError`
+subclasses and `.errno`, including `FileNotFoundError` for a missing directory.
+
+`group.memory().events()` reads hierarchical counters (local on mounts with
+`memory_localevents`); `.events_local()` excludes descendants. Both return
+immutable `MemoryEventCounts`, including optional `.oom_group_kill` and
+`.sock_throttled` counters. `.oom_group()` returns the boolean group OOM policy.
 
 `group.memory().swap()` reads swap usage, peak usage, limits, and event counters.
 `group.memory().zswap()` reads compressed pool usage, its limit, and the configured
@@ -78,6 +101,28 @@ devenv --profile python shell -- rtk maturin sdist --manifest-path sakai-python/
 
 Install the wheel into a clean environment and run
 `python -m unittest discover -s sakai-python/tests` from outside the checkout.
+Also rebuild and install the sdist in a separate clean environment: its path
+dependency on `../sakai` needs the included Rust crate, workspace manifests,
+and lockfile. CI performs both installed-package checks and verifies the
+`cp311-abi3` wheel tag. `devenv --profile python test` runs Rust, lint, and type
+checks; the Linux package contract suite runs in the separate CI packaging job.
+
+Publication decisions and artifact verification remain in the
+[PyPI pre-publication checklist](../design/pypi-prepublish-checklist.md).
+Adding free-threaded wheels requires a separate ABI choice, native-state audit,
+and build/test matrix; adding portable parser bindings requires a concrete use
+case. Neither is part of this Linux handle package.
+
+For binding mechanics, see the versioned [PyO3 guide](https://pyo3.rs/v0.29.2/),
+especially [classes](https://pyo3.rs/v0.29.2/class),
+[exceptions](https://pyo3.rs/v0.29.2/exception.html),
+[parallelism](https://pyo3.rs/v0.29.2/parallelism), and
+[free-threading](https://pyo3.rs/v0.29.2/free-threading.html), plus
+[Maturin local development](https://www.maturin.rs/local_development).
+The [Python binary-extension guide](https://packaging.python.org/en/latest/guides/packaging-binary-extensions/)
+and [package-format guide](https://packaging.python.org/en/latest/discussions/package-formats/)
+explain ABI and wheel portability. Public naming, units, and exception policy
+are defined by this package's native docstrings, stubs, and contract tests.
 
 For exact assertions against Kubernetes container CPU and memory resources,
 run the [Kubernetes resource test](../tools/kubernetes/README.md). It checks the

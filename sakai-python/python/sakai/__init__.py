@@ -17,6 +17,7 @@ from ._sakai import CpuWeight as CpuWeight
 from ._sakai import DeletedCgroupError as DeletedCgroupError
 from ._sakai import InterfaceMissingError as InterfaceMissingError
 from ._sakai import MaxOr as MaxOr
+from ._sakai import MemoryEventCounts as MemoryEventCounts
 from ._sakai import MemoryNumaStat as MemoryNumaStat
 from ._sakai import MemoryReader as MemoryReader
 from ._sakai import MemoryStat as MemoryStat

@@ -18,6 +18,10 @@ links navigate existing files, whose contents may differ from the audited
 snapshot. Removed files are named as historical evidence and can be inspected
 in the recorded source baseline.
 
+Follow-up: the former `pyo3-bindings.md` plan has been removed after its contract
+and build notes moved into the [Python package](../sakai-python/README.md).
+References to that plan below preserve historical audit evidence.
+
 ## Overall assessment
 
 Sakai has a sound core architecture and is broadly aligned with idiomatic
@@ -382,7 +386,7 @@ The public surface is maintained independently in:
 - [`_sakai.pyi`](../sakai-python/python/sakai/_sakai.pyi): public type stubs.
 - [`test_contract.py`](../sakai-python/tests/test_contract.py): a manually
   listed inventory of documented public members.
-- [`pyo3-bindings.md`](pyo3-bindings.md): the planned public mapping.
+- The former `pyo3-bindings.md`: the planned public mapping at audit time.
 
 This repetition creates opportunities for a new method to be exported but
 mistyped, omitted from the package, or absent from the test inventory. Ty
@@ -554,7 +558,7 @@ the crate actually uses. A numeric minimum should follow that verification.
 
 Design-document status has also drifted:
 
-- [The binding plan](pyo3-bindings.md) says no binding implementation exists.
+- The former binding plan said no binding implementation existed.
 - [The PyPI checklist](pypi-prepublish-checklist.md) says the repository has no
   Python extension or release artifacts.
 - The implementation and CI now include a binding crate and workflows that
