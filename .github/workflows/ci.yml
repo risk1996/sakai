@@ -144,6 +144,8 @@ jobs:
     name: Build Linux live test
     runs-on: ubuntu-26.04
     timeout-minutes: 30
+    outputs:
+      kernels: ${{ steps.matrix.outputs.kernels }}
     steps:
       - uses: actions/checkout@v7
       - uses: cachix/install-nix-action@v31
@@ -172,6 +174,13 @@ jobs:
           devenv shell -- ./target/debug/xtask build-live-test
           cp target/debug/xtask tests/.cache/sakai-vmtest/bin/xtask
           ldd tests/.cache/sakai-vmtest/bin/linux_live
+      - name: Select kernel matrix from the Rust fixture definitions
+        id: matrix
+        env:
+          KERNEL_PROFILE: ${{ github.event_name == 'schedule' && 'full' || 'smoke' }}
+        run: |
+          kernels=$(devenv shell -- ./target/debug/xtask kernel-matrix --profile "$KERNEL_PROFILE")
+          echo "kernels=$kernels" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v7
         with:
           name: linux-live-host-binaries
@@ -183,10 +192,12 @@ jobs:
     runs-on: ubuntu-26.04
     needs: build-live-test
     timeout-minutes: 10
+    env:
+      VMTEST_CONSOLE_MAX_BYTES: '1048576'
     strategy:
       fail-fast: false
       matrix:
-        kernel: ${{ fromJSON(github.event_name == 'schedule' && '["5.15","6.1","6.6","6.12","6.18"]' || '["5.15","6.18"]') }}
+        kernel: ${{ fromJSON(needs.build-live-test.outputs.kernels) }}
     steps:
       - uses: actions/checkout@v7
 
@@ -221,9 +232,10 @@ jobs:
         if: failure()
         run: |
           if [[ "${{ github.event_name }}" != workflow_dispatch || "${{ inputs.vmtest_debug }}" != true ]]; then
-            if [[ -f vmtest-console.log ]] && (( $(wc -c < vmtest-console.log) > 1048576 )); then
-              head -c 524288 vmtest-console.log > vmtest-failure.log
-              tail -c 524288 vmtest-console.log >> vmtest-failure.log
+            if [[ -f vmtest-console.log ]] && (( $(wc -c < vmtest-console.log) > VMTEST_CONSOLE_MAX_BYTES )); then
+              half=$((VMTEST_CONSOLE_MAX_BYTES / 2))
+              head -c "$half" vmtest-console.log > vmtest-failure.log
+              tail -c "$half" vmtest-console.log >> vmtest-failure.log
               mv vmtest-failure.log vmtest-console.log
             fi
           fi

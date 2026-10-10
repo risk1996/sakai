@@ -77,6 +77,14 @@ repository checks (`devenv test`) passed. CI is configured for KVM-backed
 parallel execution, but this local run does not establish CI runtime or p95
 performance.
 
+### Implementation update (2026-10-10)
+
+The fixture versions and smoke/full selection remain in Rust; CI now obtains
+its matrix from `cargo xtask kernel-matrix`. Container tooling derives its Rust
+version and vmtest URL from devenv. Manually maintained image and download
+checksum pins were removed; generated lockfiles, download file locks, atomic
+rename, and commit provenance remain.
+
 ## References
 
 - [vmtest](https://github.com/danobi/vmtest) and its [configuration](https://github.com/danobi/vmtest/blob/v0.18.0/docs/config.md)

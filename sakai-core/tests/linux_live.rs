@@ -91,32 +91,34 @@ fn parses_available_root_cpu_interfaces() {
   type Parse = fn(&str) -> Result<(), ParseError<ParseValueError>>;
 
   let parsers: [(&str, Parse); 10] = [
-    ("cpu.idle", |contents| {
+    (CpuIdle::FILE_NAME, |contents| {
       contents.parse::<CpuIdle>().map(|_| ())
     }),
-    ("cpu.max", |contents| contents.parse::<CpuMax>().map(|_| ())),
-    ("cpu.max.burst", |contents| {
+    (CpuMax::FILE_NAME, |contents| {
+      contents.parse::<CpuMax>().map(|_| ())
+    }),
+    (CpuMaxBurst::FILE_NAME, |contents| {
       contents.parse::<CpuMaxBurst>().map(|_| ())
     }),
-    ("cpu.pressure", |contents| {
+    (Pressure::CPU_FILE_NAME, |contents| {
       contents.parse::<Pressure>().map(|_| ())
     }),
-    ("cpu.stat", |contents| {
+    (CpuStat::FILE_NAME, |contents| {
       contents.parse::<CpuStat>().map(|_| ())
     }),
-    ("cpu.stat.local", |contents| {
+    (CpuStatLocal::FILE_NAME, |contents| {
       contents.parse::<CpuStatLocal>().map(|_| ())
     }),
-    ("cpu.uclamp.max", |contents| {
+    (CpuUclampMax::FILE_NAME, |contents| {
       contents.parse::<CpuUclampMax>().map(|_| ())
     }),
-    ("cpu.uclamp.min", |contents| {
+    (CpuUclampMin::FILE_NAME, |contents| {
       contents.parse::<CpuUclampMin>().map(|_| ())
     }),
-    ("cpu.weight", |contents| {
+    (CpuWeight::FILE_NAME, |contents| {
       contents.parse::<CpuWeight>().map(|_| ())
     }),
-    ("cpu.weight.nice", |contents| {
+    (Nice::FILE_NAME, |contents| {
       contents.parse::<Nice>().map(|_| ())
     }),
   ];
@@ -162,16 +164,22 @@ impl CgroupFixture {
     let path = parent.join(format!("sakai-vmtest-{}", std::process::id()));
 
     let has_memory_controller =
-      fs::read_to_string(parent.join("cgroup.controllers"))?
+      fs::read_to_string(parent.join(CgroupController::CONTROLLERS_FILE_NAME))?
         .split_ascii_whitespace()
         .any(|controller| controller == "memory");
-    fs::write(parent.join("cgroup.subtree_control"), "+cpu")?;
+    fs::write(
+      parent.join(CgroupController::SUBTREE_CONTROL_FILE_NAME),
+      "+cpu",
+    )?;
     if has_memory_controller {
-      fs::write(parent.join("cgroup.subtree_control"), "+memory")?;
+      fs::write(
+        parent.join(CgroupController::SUBTREE_CONTROL_FILE_NAME),
+        "+memory",
+      )?;
     }
     fs::create_dir(&path)?;
     let fixture = Self { path };
-    fs::write(fixture.path.join("cpu.max"), "25000 100000")?;
+    fs::write(fixture.path.join(CpuMax::FILE_NAME), "25000 100000")?;
 
     Ok(fixture)
   }
@@ -228,10 +236,13 @@ fn parses_live_delegated_controller_interfaces() {
   let finite = assert_ok!(reader.cpu().max());
   assert_eq!(finite, assert_ok!("25000 100000".parse::<CpuMax>()));
   assert_eq!(
-    assert_ok!(fs::read_to_string(fixture.path.join("cpu.max"))).trim(),
+    assert_ok!(fs::read_to_string(fixture.path.join(CpuMax::FILE_NAME))).trim(),
     "25000 100000"
   );
-  assert_ok!(fs::write(fixture.path.join("cpu.max"), "max 100000"));
+  assert_ok!(fs::write(
+    fixture.path.join(CpuMax::FILE_NAME),
+    "max 100000"
+  ));
   assert_eq!(
     assert_ok!(reader.cpu().max()),
     assert_ok!("max 100000".parse::<CpuMax>())
@@ -242,123 +253,160 @@ fn parses_live_delegated_controller_interfaces() {
     | Err(error) => panic!("local CPU read failed: {error}"),
   }
 
-  fixture.check::<CpuIdle>("cpu.idle", true, reader.cpu().idle());
-  fixture.check::<CpuMax>("cpu.max", false, reader.cpu().max());
-  fixture.check::<CpuMaxBurst>("cpu.max.burst", true, reader.cpu().max_burst());
-  fixture.check::<Pressure>("cpu.pressure", false, reader.cpu().pressure());
-  fixture.check::<CpuStat>("cpu.stat", false, reader.cpu().stat());
+  fixture.check::<CpuIdle>(CpuIdle::FILE_NAME, true, reader.cpu().idle());
+  fixture.check::<CpuMax>(CpuMax::FILE_NAME, false, reader.cpu().max());
+  fixture.check::<CpuMaxBurst>(
+    CpuMaxBurst::FILE_NAME,
+    true,
+    reader.cpu().max_burst(),
+  );
+  fixture.check::<Pressure>(
+    Pressure::CPU_FILE_NAME,
+    false,
+    reader.cpu().pressure(),
+  );
+  fixture.check::<CpuStat>(CpuStat::FILE_NAME, false, reader.cpu().stat());
   fixture.check::<CpuStatLocal>(
-    "cpu.stat.local",
+    CpuStatLocal::FILE_NAME,
     true,
     reader.cpu().stat_local(),
   );
   fixture.check::<CpuUclampMax>(
-    "cpu.uclamp.max",
+    CpuUclampMax::FILE_NAME,
     true,
     reader.cpu().uclamp_max(),
   );
   fixture.check::<CpuUclampMin>(
-    "cpu.uclamp.min",
+    CpuUclampMin::FILE_NAME,
     true,
     reader.cpu().uclamp_min(),
   );
-  fixture.check::<CpuWeight>("cpu.weight", false, reader.cpu().weight());
-  fixture.check::<Nice>("cpu.weight.nice", false, reader.cpu().weight_nice());
+  fixture.check::<CpuWeight>(
+    CpuWeight::FILE_NAME,
+    false,
+    reader.cpu().weight(),
+  );
+  fixture.check::<Nice>(Nice::FILE_NAME, false, reader.cpu().weight_nice());
   assert!(
     assert_ok!(reader.core().controllers()).contains(&CgroupController::Memory),
     "vmtest kernel must provide the memory controller"
   );
   fixture.check::<MemoryCurrent>(
-    "memory.current",
+    MemoryCurrent::FILE_NAME,
     false,
     reader.memory().current(),
   );
-  fixture.check::<MemoryMax>("memory.max", false, reader.memory().max());
-  fixture.check::<MemoryHigh>("memory.high", false, reader.memory().high());
-  fixture.check::<MemoryLow>("memory.low", false, reader.memory().low());
-  fixture.check::<MemoryMin>("memory.min", false, reader.memory().min());
-  fixture.check::<MemoryPeak>("memory.peak", true, reader.memory().peak());
-  fixture.check::<MemoryStat>("memory.stat", false, reader.memory().stat());
+  fixture.check::<MemoryMax>(
+    MemoryMax::FILE_NAME,
+    false,
+    reader.memory().max(),
+  );
+  fixture.check::<MemoryHigh>(
+    MemoryHigh::FILE_NAME,
+    false,
+    reader.memory().high(),
+  );
+  fixture.check::<MemoryLow>(
+    MemoryLow::FILE_NAME,
+    false,
+    reader.memory().low(),
+  );
+  fixture.check::<MemoryMin>(
+    MemoryMin::FILE_NAME,
+    false,
+    reader.memory().min(),
+  );
+  fixture.check::<MemoryPeak>(
+    MemoryPeak::FILE_NAME,
+    true,
+    reader.memory().peak(),
+  );
+  fixture.check::<MemoryStat>(
+    MemoryStat::FILE_NAME,
+    false,
+    reader.memory().stat(),
+  );
   fixture.check::<MemoryEvents>(
-    "memory.events",
+    MemoryEvents::FILE_NAME,
     false,
     reader.memory().events(),
   );
   fixture.check::<MemoryEventsLocal>(
-    "memory.events.local",
+    MemoryEventsLocal::FILE_NAME,
     true,
     reader.memory().events_local(),
   );
   fixture.check::<MemoryOomGroup>(
-    "memory.oom.group",
+    MemoryOomGroup::FILE_NAME,
     false,
     reader.memory().oom_group(),
   );
   fixture.check::<MemoryNumaStat>(
-    "memory.numa_stat",
+    MemoryNumaStat::FILE_NAME,
     true,
     reader.memory().numa_stat(),
   );
   fixture.check::<Pressure>(
-    "memory.pressure",
+    Pressure::MEMORY_FILE_NAME,
     true,
     reader.memory().pressure(),
   );
   fixture.check::<SwapCurrent>(
-    "memory.swap.current",
+    SwapCurrent::FILE_NAME,
     true,
     reader.memory().swap().current(),
   );
   fixture.check::<SwapPeak>(
-    "memory.swap.peak",
+    SwapPeak::FILE_NAME,
     true,
     reader.memory().swap().peak(),
   );
   fixture.check::<SwapMax>(
-    "memory.swap.max",
+    SwapMax::FILE_NAME,
     true,
     reader.memory().swap().max(),
   );
   fixture.check::<SwapHigh>(
-    "memory.swap.high",
+    SwapHigh::FILE_NAME,
     true,
     reader.memory().swap().high(),
   );
   fixture.check::<SwapEvents>(
-    "memory.swap.events",
+    SwapEvents::FILE_NAME,
     true,
     reader.memory().swap().events(),
   );
   fixture.check::<ZswapCurrent>(
-    "memory.zswap.current",
+    ZswapCurrent::FILE_NAME,
     true,
     reader.memory().zswap().current(),
   );
   fixture.check::<ZswapMax>(
-    "memory.zswap.max",
+    ZswapMax::FILE_NAME,
     true,
     reader.memory().zswap().max(),
   );
   fixture.check::<ZswapWriteback>(
-    "memory.zswap.writeback",
+    ZswapWriteback::FILE_NAME,
     true,
     reader.memory().zswap().writeback(),
   );
 
   // No process joins the fixture, so its usage is stable across these reads.
-  let current_contents =
-    assert_ok!(fs::read_to_string(fixture.path.join("memory.current")));
+  let current_contents = assert_ok!(fs::read_to_string(
+    fixture.path.join(MemoryCurrent::FILE_NAME)
+  ));
   let current_bytes = assert_ok!(current_contents.trim().parse::<u64>());
   assert_eq!(
     assert_ok!(reader.memory().current()).value().get::<byte>(),
     current_bytes
   );
 
-  let max_path = fixture.path.join("memory.max");
-  let high_path = fixture.path.join("memory.high");
-  let low_path = fixture.path.join("memory.low");
-  let min_path = fixture.path.join("memory.min");
-  let oom_group_path = fixture.path.join("memory.oom.group");
+  let max_path = fixture.path.join(MemoryMax::FILE_NAME);
+  let high_path = fixture.path.join(MemoryHigh::FILE_NAME);
+  let low_path = fixture.path.join(MemoryLow::FILE_NAME);
+  let min_path = fixture.path.join(MemoryMin::FILE_NAME);
+  let oom_group_path = fixture.path.join(MemoryOomGroup::FILE_NAME);
   assert_eq!(assert_ok!(reader.memory().max()).value(), MaxOr::Max);
   assert_eq!(assert_ok!(reader.memory().high()).value(), MaxOr::Max);
   assert_eq!(
@@ -416,34 +464,40 @@ fn root_memory_stat_is_readable_and_settings_are_missing() {
   let root_path = PathBuf::from("/sys/fs/cgroup");
   let root = assert_ok!(Cgroup::from_path(&root_path));
   for (result, name) in [
-    (root.memory().current().map(|_| ()), "memory.current"),
-    (root.memory().max().map(|_| ()), "memory.max"),
-    (root.memory().high().map(|_| ()), "memory.high"),
-    (root.memory().low().map(|_| ()), "memory.low"),
-    (root.memory().min().map(|_| ()), "memory.min"),
-    (root.memory().peak().map(|_| ()), "memory.peak"),
-    (root.memory().events().map(|_| ()), "memory.events"),
+    (
+      root.memory().current().map(|_| ()),
+      MemoryCurrent::FILE_NAME,
+    ),
+    (root.memory().max().map(|_| ()), MemoryMax::FILE_NAME),
+    (root.memory().high().map(|_| ()), MemoryHigh::FILE_NAME),
+    (root.memory().low().map(|_| ()), MemoryLow::FILE_NAME),
+    (root.memory().min().map(|_| ()), MemoryMin::FILE_NAME),
+    (root.memory().peak().map(|_| ()), MemoryPeak::FILE_NAME),
+    (root.memory().events().map(|_| ()), MemoryEvents::FILE_NAME),
     (
       root.memory().events_local().map(|_| ()),
-      "memory.events.local",
+      MemoryEventsLocal::FILE_NAME,
     ),
-    (root.memory().oom_group().map(|_| ()), "memory.oom.group"),
+    (
+      root.memory().oom_group().map(|_| ()),
+      MemoryOomGroup::FILE_NAME,
+    ),
     (
       root.memory().swap().current().map(|_| ()),
-      "memory.swap.current",
+      SwapCurrent::FILE_NAME,
     ),
-    (root.memory().swap().peak().map(|_| ()), "memory.swap.peak"),
-    (root.memory().swap().max().map(|_| ()), "memory.swap.max"),
-    (root.memory().swap().high().map(|_| ()), "memory.swap.high"),
+    (root.memory().swap().peak().map(|_| ()), SwapPeak::FILE_NAME),
+    (root.memory().swap().max().map(|_| ()), SwapMax::FILE_NAME),
+    (root.memory().swap().high().map(|_| ()), SwapHigh::FILE_NAME),
     (
       root.memory().swap().events().map(|_| ()),
-      "memory.swap.events",
+      SwapEvents::FILE_NAME,
     ),
     (
       root.memory().zswap().current().map(|_| ()),
-      "memory.zswap.current",
+      ZswapCurrent::FILE_NAME,
     ),
-    (root.memory().zswap().max().map(|_| ()), "memory.zswap.max"),
+    (root.memory().zswap().max().map(|_| ()), ZswapMax::FILE_NAME),
   ] {
     assert!(
       matches!(result, Err(Error::FileMissing { path }) if path == root_path.join(name))
@@ -451,9 +505,12 @@ fn root_memory_stat_is_readable_and_settings_are_missing() {
   }
   assert_ok!(root.memory().stat());
   for (name, read) in [
-    ("memory.numa_stat", root.memory().numa_stat().map(|_| ())),
     (
-      "memory.zswap.writeback",
+      MemoryNumaStat::FILE_NAME,
+      root.memory().numa_stat().map(|_| ()),
+    ),
+    (
+      ZswapWriteback::FILE_NAME,
       root.memory().zswap().writeback().map(|_| ()),
     ),
   ] {

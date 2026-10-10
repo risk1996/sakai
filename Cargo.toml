@@ -6,6 +6,14 @@ members = [
   "xtask",
 ]
 
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+
+[workspace.dependencies]
+assertables = "10.1.0"
+uom = { version = "0.38.0", default-features = false, features = ["f64", "u64", "si"] }
+
 # REF: https://emschwartz.me/your-clippy-config-should-be-stricter/
 [workspace.lints.clippy]
 # Don't Panic - prevent panics from unwraps and unsafe slicing or indexing

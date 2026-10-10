@@ -40,6 +40,11 @@ pub enum CgroupType {
   Threaded,
 }
 
+impl CgroupType {
+  /// The cgroup v2 `cgroup.type` interface filename.
+  pub const FILE_NAME: &'static str = "cgroup.type";
+}
+
 /// A controller name reported by `cgroup.controllers` or
 /// `cgroup.subtree_control`.
 ///
@@ -64,6 +69,13 @@ pub enum CgroupController {
   Other(String),
 }
 
+impl CgroupController {
+  /// The cgroup v2 `cgroup.controllers` interface filename.
+  pub const CONTROLLERS_FILE_NAME: &'static str = "cgroup.controllers";
+  /// The cgroup v2 `cgroup.subtree_control` interface filename.
+  pub const SUBTREE_CONTROL_FILE_NAME: &'static str = "cgroup.subtree_control";
+}
+
 /// A borrowed view of one open cgroup's core interfaces.
 ///
 /// Each method reads a fresh snapshot; separate reads are not atomic together.
@@ -77,9 +89,9 @@ pub struct Core<'a> {
 impl Core<'_> {
   /// Configuration snapshot; the hierarchy root may lack this file.
   pub fn kind(&self) -> Result<CgroupType, Error> {
-    let contents = self.cgroup.read("cgroup.type")?;
+    let contents = self.cgroup.read(CgroupType::FILE_NAME)?;
     contents.trim().parse().map_err(|source| Error::Parse {
-      path: self.cgroup.path().join("cgroup.type"),
+      path: self.cgroup.path().join(CgroupType::FILE_NAME),
       source: Box::new(CgroupTypeParseError {
         raw: contents,
         source,
@@ -92,7 +104,7 @@ impl Core<'_> {
     Ok(
       self
         .cgroup
-        .read("cgroup.controllers")?
+        .read(CgroupController::CONTROLLERS_FILE_NAME)?
         .split_ascii_whitespace()
         .map(CgroupController::from)
         .collect(),
@@ -104,7 +116,7 @@ impl Core<'_> {
     Ok(
       self
         .cgroup
-        .read("cgroup.subtree_control")?
+        .read(CgroupController::SUBTREE_CONTROL_FILE_NAME)?
         .split_ascii_whitespace()
         .map(CgroupController::from)
         .collect(),

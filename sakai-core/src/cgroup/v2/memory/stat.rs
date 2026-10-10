@@ -20,6 +20,9 @@ pub struct MemoryStat {
 }
 
 impl MemoryStat {
+  /// The cgroup v2 `memory.stat` interface filename.
+  pub const FILE_NAME: &'static str = "memory.stat";
+
   /// Returns memory amounts measured in bytes.
   #[must_use]
   pub const fn bytes(&self) -> &BTreeMap<MemoryStatByteField, Bytes> {

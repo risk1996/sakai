@@ -57,62 +57,62 @@ impl Memory<'_> {
 
   /// Live memory usage of this cgroup and its descendants, in bytes.
   pub fn current(&self) -> Result<MemoryCurrent, Error> {
-    self.cgroup.parse("memory.current")
+    self.cgroup.parse(MemoryCurrent::FILE_NAME)
   }
 
   /// Live peak usage, in bytes, since cgroup creation for this fresh descriptor.
   pub fn peak(&self) -> Result<MemoryPeak, Error> {
-    self.cgroup.parse("memory.peak")
+    self.cgroup.parse(MemoryPeak::FILE_NAME)
   }
 
   /// Live breakdown of memory usage, page quantities, and event counts.
   pub fn stat(&self) -> Result<MemoryStat, Error> {
-    self.cgroup.parse("memory.stat")
+    self.cgroup.parse(MemoryStat::FILE_NAME)
   }
 
   /// Live memory event counters for this cgroup and its descendants.
   pub fn events(&self) -> Result<MemoryEvents, Error> {
-    self.cgroup.parse("memory.events")
+    self.cgroup.parse(MemoryEvents::FILE_NAME)
   }
 
   /// Live memory event counters originating in this cgroup only.
   pub fn events_local(&self) -> Result<MemoryEventsLocal, Error> {
-    self.cgroup.parse("memory.events.local")
+    self.cgroup.parse(MemoryEventsLocal::FILE_NAME)
   }
 
   /// Live per-NUMA-node memory amounts, page quantities, and event counts.
   pub fn numa_stat(&self) -> Result<MemoryNumaStat, Error> {
-    self.cgroup.parse("memory.numa_stat")
+    self.cgroup.parse(MemoryNumaStat::FILE_NAME)
   }
 
   /// Live PSI averages and totals. Never registers a pressure trigger.
   pub fn pressure(&self) -> Result<Pressure, Error> {
-    self.cgroup.parse("memory.pressure")
+    self.cgroup.parse(Pressure::MEMORY_FILE_NAME)
   }
 
   /// Configuration snapshot of this cgroup's hard memory limit in bytes.
   pub fn max(&self) -> Result<MemoryMax, Error> {
-    self.cgroup.parse("memory.max")
+    self.cgroup.parse(MemoryMax::FILE_NAME)
   }
 
   /// Configuration snapshot of this cgroup's throttling limit in bytes.
   pub fn high(&self) -> Result<MemoryHigh, Error> {
-    self.cgroup.parse("memory.high")
+    self.cgroup.parse(MemoryHigh::FILE_NAME)
   }
 
   /// Configuration snapshot of this cgroup's best-effort memory protection.
   pub fn low(&self) -> Result<MemoryLow, Error> {
-    self.cgroup.parse("memory.low")
+    self.cgroup.parse(MemoryLow::FILE_NAME)
   }
 
   /// Configuration snapshot of this cgroup's hard memory protection.
   pub fn min(&self) -> Result<MemoryMin, Error> {
-    self.cgroup.parse("memory.min")
+    self.cgroup.parse(MemoryMin::FILE_NAME)
   }
 
   /// Configuration snapshot of group OOM kill behavior.
   pub fn oom_group(&self) -> Result<MemoryOomGroup, Error> {
-    self.cgroup.parse("memory.oom.group")
+    self.cgroup.parse(MemoryOomGroup::FILE_NAME)
   }
 }
 
@@ -126,6 +126,9 @@ pub struct MemoryOomGroup {
 }
 
 impl MemoryOomGroup {
+  /// The cgroup v2 `memory.oom.group` interface filename.
+  pub const FILE_NAME: &'static str = "memory.oom.group";
+
   /// Returns whether group OOM killing is enabled.
   #[must_use]
   pub const fn value(self) -> bool {
@@ -155,6 +158,9 @@ pub struct MemoryCurrent {
 }
 
 impl MemoryCurrent {
+  /// The cgroup v2 `memory.current` interface filename.
+  pub const FILE_NAME: &'static str = "memory.current";
+
   /// Returns the current hierarchical usage in bytes.
   #[must_use]
   pub const fn value(self) -> Bytes {
@@ -187,6 +193,9 @@ pub struct MemoryPeak {
 }
 
 impl MemoryPeak {
+  /// The cgroup v2 `memory.peak` interface filename.
+  pub const FILE_NAME: &'static str = "memory.peak";
+
   /// Returns the peak hierarchical usage in bytes.
   #[must_use]
   pub const fn value(self) -> Bytes {
@@ -216,6 +225,9 @@ pub struct MemoryMax {
 }
 
 impl MemoryMax {
+  /// The cgroup v2 `memory.max` interface filename.
+  pub const FILE_NAME: &'static str = "memory.max";
+
   /// Returns this cgroup's hard limit in bytes, or [`MaxOr::Max`].
   #[must_use]
   pub const fn value(self) -> MaxOr<Bytes> {
@@ -247,6 +259,9 @@ pub struct MemoryHigh {
 }
 
 impl MemoryHigh {
+  /// The cgroup v2 `memory.high` interface filename.
+  pub const FILE_NAME: &'static str = "memory.high";
+
   /// Returns this cgroup's throttling limit in bytes, or [`MaxOr::Max`].
   #[must_use]
   pub const fn value(self) -> MaxOr<Bytes> {
@@ -278,6 +293,9 @@ pub struct MemoryLow {
 }
 
 impl MemoryLow {
+  /// The cgroup v2 `memory.low` interface filename.
+  pub const FILE_NAME: &'static str = "memory.low";
+
   /// Returns this cgroup's configured best-effort protection in bytes.
   #[must_use]
   pub const fn value(self) -> Bytes {
@@ -310,6 +328,9 @@ pub struct MemoryMin {
 }
 
 impl MemoryMin {
+  /// The cgroup v2 `memory.min` interface filename.
+  pub const FILE_NAME: &'static str = "memory.min";
+
   /// Returns this cgroup's configured hard protection in bytes.
   #[must_use]
   pub const fn value(self) -> Bytes {

@@ -228,13 +228,17 @@ impl ParseCgroup<ParsePercent> for Ratio {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct ParseMicroseconds;
 
+impl ParseMicroseconds {
+  const NANOSECONDS_PER_MICROSECOND: u64 = 1_000;
+}
+
 impl ParseCgroup<ParseMicroseconds> for Time {
   type Error = ParseValueError;
 
   fn parse_cgroup(value: &str) -> Result<Self, Self::Error> {
     let nanoseconds = value
       .parse::<u64>()?
-      .checked_mul(1_000)
+      .checked_mul(ParseMicroseconds::NANOSECONDS_PER_MICROSECOND)
       .ok_or(ParseValueError::OutOfRange)?;
     Ok(Self::new::<nanosecond>(nanoseconds))
   }

@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use vmtest::Vmtest;
+use vmtest::{Profile, Vmtest};
 
 mod vmtest;
 
@@ -16,6 +16,11 @@ enum Command {
   Vmtest(Vmtest),
   /// Build and stage the linux_live test executable for CI.
   BuildLiveTest,
+  /// Print the kernel names as JSON for CI's job matrix.
+  KernelMatrix {
+    #[arg(long, value_enum, default_value_t = Profile::Smoke)]
+    profile: Profile,
+  },
 }
 
 #[tokio::main]
@@ -23,5 +28,6 @@ async fn main() -> Result<()> {
   match Xtask::parse().command {
     | Command::Vmtest(command) => command.run().await,
     | Command::BuildLiveTest => Vmtest::build_live_test(),
+    | Command::KernelMatrix { profile } => Vmtest::kernel_matrix(profile),
   }
 }

@@ -16,6 +16,9 @@ pub struct CpuIdle {
 }
 
 impl CpuIdle {
+  /// The cgroup v2 `cpu.idle` interface filename.
+  pub const FILE_NAME: &'static str = "cpu.idle";
+
   /// Returns whether idle scheduling is enabled.
   #[must_use]
   pub const fn value(self) -> bool {
