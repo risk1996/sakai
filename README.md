@@ -6,9 +6,9 @@ parsers are OS-independent. Python bindings are work in progress.
 The `sakai` crate supports Rust 1.88 and newer. This is a fixed minimum,
 not a policy that tracks the latest stable release. Raising it requires an
 explicit, documented change. Development tools and Python bindings use their
-own toolchain requirements. The Ubuntu CI job checks all crate targets and
-features and runs doctests on the minimum Rust version. Repository tests and
-lints use the development toolchain.
+own toolchain requirements. The Ubuntu CI job checks and tests all crate
+targets and features and runs doctests on the minimum Rust version.
+Repository tests and lints use the development toolchain.
 
 ```rust,no_run
 use sakai::{Cgroup, Error};

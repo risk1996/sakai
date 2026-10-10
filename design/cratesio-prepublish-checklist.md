@@ -51,7 +51,7 @@ because the workspace also contains `xtask` and `sakai-python`.
   On 2026-10-10, Rust 1.88.0 passed all 32 crate unit tests and both doctests
   on macOS, plus an all-targets, all-features cross-check for
   `x86_64-unknown-linux-gnu`, using the locked dependencies. `devenv test`
-  also passed. The existing Ubuntu CI checks job now compiles all crate
+  also passed. The existing Ubuntu CI checks job now compiles and tests all crate
   targets and features and runs doctests on Rust 1.88.0; it runs repository
   tests and lints with the development toolchain. Execution of CI and the
   broader release checks remain gates below, including macOS verification

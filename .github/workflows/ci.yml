@@ -177,6 +177,10 @@ jobs:
         env:
           RUST_VERSION: ${{ steps.msrv.outputs.version }}
         run: rustup run "$RUST_VERSION" cargo check -p sakai --all-targets --all-features --locked
+      - name: Test all crate targets and features on MSRV
+        env:
+          RUST_VERSION: ${{ steps.msrv.outputs.version }}
+        run: rustup run "$RUST_VERSION" cargo test -p sakai --all-targets --all-features --locked
       - name: Test crate documentation on MSRV
         env:
           RUST_VERSION: ${{ steps.msrv.outputs.version }}
