@@ -15,7 +15,9 @@ use sakai_core::{
     },
     memory::{
       MemoryCurrent, MemoryEvents, MemoryEventsLocal, MemoryHigh, MemoryLow,
-      MemoryMax, MemoryMin, MemoryOomGroup, MemoryPeak, MemoryStat,
+      MemoryMax, MemoryMin, MemoryNumaStat, MemoryOomGroup, MemoryPeak,
+      MemoryStat, SwapCurrent, SwapEvents, SwapHigh, SwapMax, SwapPeak,
+      ZswapCurrent, ZswapMax, ZswapWriteback,
     },
   },
 };
@@ -56,7 +58,16 @@ fn reads_current_cgroup_without_privileges() {
     cgroup.memory().events().map(|_| ()),
     cgroup.memory().events_local().map(|_| ()),
     cgroup.memory().oom_group().map(|_| ()),
+    cgroup.memory().numa_stat().map(|_| ()),
     cgroup.memory().pressure().map(|_| ()),
+    cgroup.memory().swap().current().map(|_| ()),
+    cgroup.memory().swap().peak().map(|_| ()),
+    cgroup.memory().swap().max().map(|_| ()),
+    cgroup.memory().swap().high().map(|_| ()),
+    cgroup.memory().swap().events().map(|_| ()),
+    cgroup.memory().zswap().current().map(|_| ()),
+    cgroup.memory().zswap().max().map(|_| ()),
+    cgroup.memory().zswap().writeback().map(|_| ()),
   ] {
     match result {
       | Ok(()) | Err(Error::FileMissing { .. }) => {},
@@ -283,10 +294,55 @@ fn parses_live_delegated_controller_interfaces() {
     false,
     reader.memory().oom_group(),
   );
+  fixture.check::<MemoryNumaStat>(
+    "memory.numa_stat",
+    true,
+    reader.memory().numa_stat(),
+  );
   fixture.check::<Pressure>(
     "memory.pressure",
     true,
     reader.memory().pressure(),
+  );
+  fixture.check::<SwapCurrent>(
+    "memory.swap.current",
+    true,
+    reader.memory().swap().current(),
+  );
+  fixture.check::<SwapPeak>(
+    "memory.swap.peak",
+    true,
+    reader.memory().swap().peak(),
+  );
+  fixture.check::<SwapMax>(
+    "memory.swap.max",
+    true,
+    reader.memory().swap().max(),
+  );
+  fixture.check::<SwapHigh>(
+    "memory.swap.high",
+    true,
+    reader.memory().swap().high(),
+  );
+  fixture.check::<SwapEvents>(
+    "memory.swap.events",
+    true,
+    reader.memory().swap().events(),
+  );
+  fixture.check::<ZswapCurrent>(
+    "memory.zswap.current",
+    true,
+    reader.memory().zswap().current(),
+  );
+  fixture.check::<ZswapMax>(
+    "memory.zswap.max",
+    true,
+    reader.memory().zswap().max(),
+  );
+  fixture.check::<ZswapWriteback>(
+    "memory.zswap.writeback",
+    true,
+    reader.memory().zswap().writeback(),
   );
 
   // No process joins the fixture, so its usage is stable across these reads.
@@ -372,10 +428,41 @@ fn root_memory_stat_is_readable_and_settings_are_missing() {
       "memory.events.local",
     ),
     (root.memory().oom_group().map(|_| ()), "memory.oom.group"),
+    (
+      root.memory().swap().current().map(|_| ()),
+      "memory.swap.current",
+    ),
+    (root.memory().swap().peak().map(|_| ()), "memory.swap.peak"),
+    (root.memory().swap().max().map(|_| ()), "memory.swap.max"),
+    (root.memory().swap().high().map(|_| ()), "memory.swap.high"),
+    (
+      root.memory().swap().events().map(|_| ()),
+      "memory.swap.events",
+    ),
+    (
+      root.memory().zswap().current().map(|_| ()),
+      "memory.zswap.current",
+    ),
+    (root.memory().zswap().max().map(|_| ()), "memory.zswap.max"),
   ] {
     assert!(
       matches!(result, Err(Error::FileMissing { path }) if path == root_path.join(name))
     );
   }
   assert_ok!(root.memory().stat());
+  for (name, read) in [
+    ("memory.numa_stat", root.memory().numa_stat().map(|_| ())),
+    (
+      "memory.zswap.writeback",
+      root.memory().zswap().writeback().map(|_| ()),
+    ),
+  ] {
+    match fs::read_to_string(root_path.join(name)) {
+      | Ok(_) => assert_ok!(read),
+      | Err(error) if error.kind() == io::ErrorKind::NotFound => {
+        assert!(matches!(read, Err(Error::FileMissing { .. })));
+      },
+      | Err(error) => panic!("failed to read {name}: {error}"),
+    }
+  }
 }

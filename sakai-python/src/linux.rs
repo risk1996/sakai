@@ -18,7 +18,10 @@ use sakai_core::{
       CpuStat as CoreCpuStat, CpuStatLocal as CoreCpuStatLocal,
       CpuTimeStat as CoreCpuTimeStat, CpuWeight as CoreCpuWeight,
     },
-    memory::MemoryStat as CoreMemoryStat,
+    memory::{
+      MemoryNumaStat as CoreMemoryNumaStat, MemoryStat as CoreMemoryStat,
+      SwapEvents as CoreSwapEvents,
+    },
   },
 };
 use uom::si::{information::byte, ratio::ratio, time::nanosecond};
@@ -624,6 +627,20 @@ struct MemoryReader {
 
 #[pymethods]
 impl MemoryReader {
+  /// Return a swap reader that retains this pinned cgroup handle.
+  fn swap(&self) -> SwapReader {
+    SwapReader {
+      owner: Arc::clone(&self.owner),
+    }
+  }
+
+  /// Return a compressed swap reader that retains this pinned cgroup handle.
+  fn zswap(&self) -> ZswapReader {
+    ZswapReader {
+      owner: Arc::clone(&self.owner),
+    }
+  }
+
   /// Read current memory usage in bytes.
   fn current(&self, py: Python<'_>) -> PyResult<u64> {
     PythonError::read(py, &self.owner, |owner| owner.memory().current())
@@ -666,10 +683,109 @@ impl MemoryReader {
       .map(Into::into)
   }
 
+  /// Read memory statistics by field and NUMA node, grouped by native units.
+  fn numa_stat(&self, py: Python<'_>) -> PyResult<MemoryNumaStat> {
+    PythonError::read(py, &self.owner, |owner| owner.memory().numa_stat())
+      .map(Into::into)
+  }
+
   /// Read memory pressure-stall averages and cumulative times.
   fn pressure(&self, py: Python<'_>) -> PyResult<Pressure> {
     PythonError::read(py, &self.owner, |owner| owner.memory().pressure())
       .map(Into::into)
+  }
+}
+
+/// Fresh reads of swap usage, limits, and events for one pinned cgroup.
+#[pyclass(frozen, module = "sakai._sakai")]
+struct SwapReader {
+  owner: Arc<sakai_core::Cgroup>,
+}
+
+#[pymethods]
+impl SwapReader {
+  /// Read current hierarchical swap usage in bytes.
+  fn current(&self, py: Python<'_>) -> PyResult<u64> {
+    PythonError::read(py, &self.owner, |owner| owner.memory().swap().current())
+      .map(|value| value.value().get::<byte>())
+  }
+
+  /// Read peak swap usage since cgroup creation; this never resets the peak.
+  fn peak(&self, py: Python<'_>) -> PyResult<u64> {
+    PythonError::read(py, &self.owner, |owner| owner.memory().swap().peak())
+      .map(|value| value.value().get::<byte>())
+  }
+
+  /// Read the hard swap limit as `max` or a concrete byte count.
+  fn max(&self, py: Python<'_>) -> PyResult<MaxOr> {
+    PythonError::read(py, &self.owner, |owner| owner.memory().swap().max())
+      .map(|value| MaxOr::from_bytes(value.value()))
+  }
+
+  /// Read the swap throttling threshold as `max` or a concrete byte count.
+  fn high(&self, py: Python<'_>) -> PyResult<MaxOr> {
+    PythonError::read(py, &self.owner, |owner| owner.memory().swap().high())
+      .map(|value| MaxOr::from_bytes(value.value()))
+  }
+
+  /// Read swap threshold and allocation failure counters.
+  fn events(&self, py: Python<'_>) -> PyResult<SwapEvents> {
+    PythonError::read(py, &self.owner, |owner| owner.memory().swap().events())
+      .map(Into::into)
+  }
+}
+
+/// Immutable swap threshold and allocation failure counters.
+#[pyclass(frozen, module = "sakai._sakai")]
+#[derive(Debug, PartialEq, Eq)]
+struct SwapEvents {
+  /// Times swap usage exceeded the high threshold; absent on older kernels.
+  #[pyo3(get)]
+  high: Option<u64>,
+  /// Times swap allocation failed at the max boundary.
+  #[pyo3(get)]
+  max: u64,
+  /// Swap allocation failures from the limit or system-wide exhaustion.
+  #[pyo3(get)]
+  fail: u64,
+}
+
+impl From<CoreSwapEvents> for SwapEvents {
+  fn from(value: CoreSwapEvents) -> Self {
+    Self {
+      high: value.high().map(|count| count.value),
+      max: value.max().value,
+      fail: value.fail().value,
+    }
+  }
+}
+
+/// Fresh reads of compressed swap usage and settings for one pinned cgroup.
+#[pyclass(frozen, module = "sakai._sakai")]
+struct ZswapReader {
+  owner: Arc<sakai_core::Cgroup>,
+}
+
+#[pymethods]
+impl ZswapReader {
+  /// Read memory consumed by the zswap compression backend in bytes.
+  fn current(&self, py: Python<'_>) -> PyResult<u64> {
+    PythonError::read(py, &self.owner, |owner| owner.memory().zswap().current())
+      .map(|value| value.value().get::<byte>())
+  }
+
+  /// Read the hard zswap pool limit as `max` or a concrete byte count.
+  fn max(&self, py: Python<'_>) -> PyResult<MaxOr> {
+    PythonError::read(py, &self.owner, |owner| owner.memory().zswap().max())
+      .map(|value| MaxOr::from_bytes(value.value()))
+  }
+
+  /// Read the configured disk writeback policy; an ancestor can disable it.
+  fn writeback(&self, py: Python<'_>) -> PyResult<bool> {
+    PythonError::read(py, &self.owner, |owner| {
+      owner.memory().zswap().writeback()
+    })
+    .map(|value| value.value())
   }
 }
 
@@ -740,6 +856,104 @@ impl MemoryStat {
   }
 }
 
+type NumaValues = BTreeMap<&'static str, BTreeMap<u32, u64>>;
+
+/// Immutable per-NUMA-node memory statistics grouped by native units.
+///
+/// Outer keys retain kernel field names; inner keys are integer NUMA node IDs.
+/// Both levels of every mapping are read-only. Unknown fields are ignored.
+#[pyclass(frozen, module = "sakai._sakai")]
+#[derive(Debug, PartialEq, Eq)]
+struct MemoryNumaStat {
+  bytes: NumaValues,
+  pages: NumaValues,
+  counts: NumaValues,
+}
+
+impl From<CoreMemoryNumaStat> for MemoryNumaStat {
+  fn from(value: CoreMemoryNumaStat) -> Self {
+    Self {
+      bytes: value
+        .bytes()
+        .iter()
+        .map(|(key, nodes)| {
+          (
+            (*key).into(),
+            nodes
+              .iter()
+              .map(|(node, value)| (*node, value.get::<byte>()))
+              .collect(),
+          )
+        })
+        .collect(),
+      pages: value
+        .pages()
+        .iter()
+        .map(|(key, nodes)| {
+          (
+            (*key).into(),
+            nodes
+              .iter()
+              .map(|(node, value)| (*node, value.value))
+              .collect(),
+          )
+        })
+        .collect(),
+      counts: value
+        .counts()
+        .iter()
+        .map(|(key, nodes)| {
+          (
+            (*key).into(),
+            nodes
+              .iter()
+              .map(|(node, value)| (*node, value.value))
+              .collect(),
+          )
+        })
+        .collect(),
+    }
+  }
+}
+
+#[pymethods]
+impl MemoryNumaStat {
+  /// Read-only byte amounts by memory field and NUMA node ID.
+  #[getter]
+  fn bytes(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
+    Self::mapping(py, &self.bytes)
+  }
+
+  /// Read-only page quantities by memory field and NUMA node ID.
+  #[getter]
+  fn pages(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
+    Self::mapping(py, &self.pages)
+  }
+
+  /// Read-only event counts by memory field and NUMA node ID.
+  #[getter]
+  fn counts(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
+    Self::mapping(py, &self.counts)
+  }
+}
+
+impl MemoryNumaStat {
+  fn mapping(
+    py: Python<'_>,
+    values: &NumaValues,
+  ) -> PyResult<Py<PyMappingProxy>> {
+    let dict = PyDict::new(py);
+    for (key, nodes) in values {
+      let inner = PyDict::new(py);
+      for (node, value) in nodes {
+        inner.set_item(node, value)?;
+      }
+      dict.set_item(key, PyMappingProxy::new(py, inner.as_mapping()))?;
+    }
+    Ok(PyMappingProxy::new(py, dict.as_mapping()).unbind())
+  }
+}
+
 /// Fresh reads of cgroup topology and controller files.
 #[pyclass(frozen, module = "sakai._sakai")]
 struct CoreReader {
@@ -795,6 +1009,8 @@ fn _sakai(module: &Bound<'_, PyModule>) -> PyResult<()> {
   module.add_class::<MaxOr>()?;
   module.add_class::<CpuReader>()?;
   module.add_class::<MemoryReader>()?;
+  module.add_class::<SwapReader>()?;
+  module.add_class::<ZswapReader>()?;
   module.add_class::<CoreReader>()?;
   module.add_class::<CpuStat>()?;
   module.add_class::<CpuStatLocal>()?;
@@ -806,6 +1022,8 @@ fn _sakai(module: &Bound<'_, PyModule>) -> PyResult<()> {
   module.add_class::<Pressure>()?;
   module.add_class::<PressureLine>()?;
   module.add_class::<MemoryStat>()?;
+  module.add_class::<SwapEvents>()?;
+  module.add_class::<MemoryNumaStat>()?;
   Ok(())
 }
 
@@ -818,7 +1036,10 @@ mod tests {
   };
 
   use assertables::{assert_err, assert_in_delta, assert_ok};
-  use pyo3::types::{PyBytes, PyFloat, PyInt};
+  use pyo3::{
+    exceptions::{PyAttributeError, PyTypeError},
+    types::{PyBytes, PyFloat, PyInt},
+  };
 
   use super::*;
 
@@ -954,6 +1175,91 @@ mod tests {
     assert_eq!(stat.counts.get("pgfault"), Some(&7));
     assert!(!stat.bytes.contains_key("pswpin"));
     assert!(!stat.pages.contains_key("pgfault"));
+  }
+
+  #[test]
+  fn preserves_swap_optional_high_and_unsigned_counts() {
+    Python::initialize();
+    Python::attach(|py| {
+      for (input, expected) in [
+        ("max 1\nfail 2\n", SwapEvents {
+          high: None,
+          max: 1,
+          fail: 2,
+        }),
+        ("high 0\nmax 0\nfail 18446744073709551615\n", SwapEvents {
+          high: Some(0),
+          max: 0,
+          fail: u64::MAX,
+        }),
+      ] {
+        let events =
+          SwapEvents::from(assert_ok!(input.parse::<CoreSwapEvents>()));
+        assert_eq!(events, expected);
+        let object = assert_ok!(Py::new(py, events));
+        let high = assert_ok!(object.bind(py).getattr("high"));
+        assert_eq!(assert_ok!(high.extract::<Option<u64>>()), expected.high);
+        let error = assert_err!(object.bind(py).setattr("fail", 0));
+        assert!(error.is_instance_of::<PyAttributeError>(py));
+      }
+    });
+  }
+
+  #[test]
+  fn converts_numa_units_and_freezes_both_mapping_levels() {
+    let stat = MemoryNumaStat::from(assert_ok!(
+      "anon N0=4096 N2=8192\nfile N0=0\npgdemote_direct \
+       N2=3\nworkingset_refault_file N2=7\nfuture N0=nope\n"
+        .parse::<CoreMemoryNumaStat>()
+    ));
+    assert_eq!(stat, MemoryNumaStat {
+      bytes: BTreeMap::from([
+        ("anon", BTreeMap::from([(0, 4096), (2, 8192)])),
+        ("file", BTreeMap::from([(0, 0)])),
+      ]),
+      pages: BTreeMap::from([("pgdemote_direct", BTreeMap::from([(2, 3)]))]),
+      counts: BTreeMap::from([(
+        "workingset_refault_file",
+        BTreeMap::from([(2, 7)])
+      )]),
+    });
+
+    Python::initialize();
+    Python::attach(|py| {
+      let object = assert_ok!(Py::new(py, stat));
+      for (name, field, expected) in [
+        (
+          "bytes",
+          "anon",
+          BTreeMap::from([(0_u32, 4096_u64), (2, 8192)]),
+        ),
+        ("pages", "pgdemote_direct", BTreeMap::from([(2, 3)])),
+        (
+          "counts",
+          "workingset_refault_file",
+          BTreeMap::from([(2, 7)]),
+        ),
+      ] {
+        let mapping = assert_ok!(object.bind(py).getattr(name));
+        let nodes = assert_ok!(mapping.get_item(field));
+        let values = assert_ok!(py.get_type::<PyDict>().call1((&nodes,)));
+        assert_eq!(
+          assert_ok!(values.extract::<BTreeMap<u32, u64>>()),
+          expected
+        );
+        assert!(
+          assert_err!(mapping.set_item("future", 0))
+            .is_instance_of::<PyTypeError>(py)
+        );
+        assert!(
+          assert_err!(nodes.set_item(0, 0)).is_instance_of::<PyTypeError>(py)
+        );
+      }
+      assert!(
+        assert_err!(object.bind(py).setattr("bytes", 0))
+          .is_instance_of::<PyAttributeError>(py)
+      );
+    });
   }
 
   #[test]

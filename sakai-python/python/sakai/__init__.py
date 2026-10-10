@@ -15,6 +15,7 @@ from ._sakai import (
   DeletedCgroupError,
   InterfaceMissingError,
   MaxOr,
+  MemoryNumaStat,
   MemoryReader,
   MemoryStat,
   NotCgroupV2Error,
@@ -22,6 +23,9 @@ from ._sakai import (
   Pressure,
   PressureLine,
   SakaiError,
+  SwapEvents,
+  SwapReader,
+  ZswapReader,
 )
 
 __all__ = [
@@ -39,6 +43,7 @@ __all__ = [
   "DeletedCgroupError",
   "InterfaceMissingError",
   "MaxOr",
+  "MemoryNumaStat",
   "MemoryReader",
   "MemoryStat",
   "NotCgroupV2Error",
@@ -46,4 +51,7 @@ __all__ = [
   "Pressure",
   "PressureLine",
   "SakaiError",
+  "SwapEvents",
+  "SwapReader",
+  "ZswapReader",
 ]
