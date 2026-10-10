@@ -1,13 +1,13 @@
 use std::{
-  fs,
+  fmt, fs,
   io::{Read, Write},
   path::{Path, PathBuf},
-  time::Duration,
+  time::{Duration, Instant, SystemTime},
 };
 
 use anyhow::{Context, Result, ensure};
 use fs2::FileExt;
-use reqwest::{Client, StatusCode};
+use reqwest::{Client, StatusCode, header::RETRY_AFTER};
 use sha2::{Digest, Sha256};
 
 pub(super) const KERNELS: &[Kernel] = &[
@@ -43,6 +43,38 @@ pub(super) struct Kernel {
   pub(super) name: &'static str,
   pub(super) smoke: bool,
   pub(super) sha256: &'static str,
+}
+
+/// Server-requested retry interval retained as HTTP error context.
+#[derive(Debug, PartialEq, Eq)]
+struct RetryAfter(Duration);
+
+impl RetryAfter {
+  fn parse(value: &str, now: SystemTime) -> Option<Self> {
+    let value = value.trim();
+    let delay = match value.bytes().all(|byte| byte.is_ascii_digit()) {
+      | true => Duration::from_secs(value.parse().ok()?),
+      | false => httpdate::parse_http_date(value)
+        .ok()?
+        .duration_since(now)
+        .unwrap_or(Duration::ZERO),
+    };
+    // Treat intervals that cannot be represented by the timer as unusable.
+    Instant::now().checked_add(delay)?;
+    Some(Self(delay))
+  }
+
+  fn delay(error: &anyhow::Error, fallback: Duration) -> Duration {
+    error
+      .downcast_ref::<Self>()
+      .map_or(fallback, |retry| retry.0)
+  }
+}
+
+impl fmt::Display for RetryAfter {
+  fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(formatter, "server requested retry after {:?}", self.0)
+  }
 }
 
 impl Kernel {
@@ -100,7 +132,7 @@ impl Kernel {
           eprintln!(
             "kernel download attempt {attempt}/3 failed: {error:#}; retrying"
           );
-          tokio::time::sleep(retry_delay).await;
+          tokio::time::sleep(RetryAfter::delay(&error, retry_delay)).await;
         },
         | Err(error) => {
           return Err(error).with_context(|| {
@@ -117,7 +149,22 @@ impl Kernel {
     url: &str,
     partial: &Path,
   ) -> Result<()> {
-    let mut response = client.get(url).send().await?.error_for_status()?;
+    let response = client.get(url).send().await?;
+    let retry_after = match response.status() {
+      | StatusCode::TOO_MANY_REQUESTS => response
+        .headers()
+        .get(RETRY_AFTER)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| RetryAfter::parse(value, SystemTime::now())),
+      | _ => None,
+    };
+    let mut response =
+      response
+        .error_for_status()
+        .map_err(|error| match retry_after {
+          | Some(retry) => anyhow::Error::new(error).context(retry),
+          | None => error.into(),
+        })?;
     // Each attempt truncates any incomplete response from the previous one.
     let mut output = fs::File::create(partial)?;
     while let Some(chunk) = response.chunk().await? {
@@ -171,14 +218,49 @@ mod tests {
     io::{BufRead, BufReader, ErrorKind, Write},
     net::TcpListener,
     thread,
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime},
   };
 
   use anyhow::{Context, Result, ensure};
   use reqwest::Client;
   use tempfile::tempdir;
 
-  use super::Kernel;
+  use super::{Kernel, RetryAfter};
+
+  #[test]
+  fn parses_retry_after_and_preserves_fallback() {
+    let now = SystemTime::UNIX_EPOCH + Duration::from_secs(1_445_412_480);
+    for (value, expected) in [
+      ("10", Some(RetryAfter(Duration::from_secs(10)))),
+      (" 0 ", Some(RetryAfter(Duration::ZERO))),
+      (
+        "Wed, 21 Oct 2015 07:28:10 GMT",
+        Some(RetryAfter(Duration::from_secs(10))),
+      ),
+      (
+        "Wed, 21 Oct 2015 07:28:00 GMT",
+        Some(RetryAfter(Duration::ZERO)),
+      ),
+      (
+        "Wed, 21 Oct 2015 07:27:00 GMT",
+        Some(RetryAfter(Duration::ZERO)),
+      ),
+      ("", None),
+      ("-1", None),
+      ("+10", None),
+      ("1.5", None),
+      ("invalid", None),
+      ("18446744073709551615", None),
+      ("18446744073709551616", None),
+    ] {
+      assert_eq!(RetryAfter::parse(value, now), expected);
+    }
+    let fallback = Duration::from_secs(2);
+    let error = anyhow::anyhow!("missing or invalid Retry-After");
+    assert_eq!(RetryAfter::delay(&error, fallback), fallback);
+    let error = error.context(RetryAfter(Duration::from_secs(10)));
+    assert_eq!(RetryAfter::delay(&error, fallback), Duration::from_secs(10));
+  }
 
   #[tokio::test]
   async fn retries_transient_download_failures_with_a_fixed_budget()
@@ -195,6 +277,14 @@ mod tests {
         2,
       ),
       (
+        vec![
+          ("429 Too Many Requests\r\nRetry-After: 1", "kernel"),
+          ("200 OK", "kernel"),
+        ],
+        Some("kernel"),
+        2,
+      ),
+      (
         vec![("200 OK", "par"), ("200 OK", "kernel")],
         Some("kernel"),
         2,
@@ -202,6 +292,13 @@ mod tests {
       (vec![("503 Service Unavailable", "kernel"); 3], None, 3),
       (vec![("404 Not Found", "kernel")], None, 1),
     ] {
+      let server_delay = match responses
+        .iter()
+        .any(|(status, _)| status.contains("Retry-After: 1"))
+      {
+        | true => Duration::from_secs(1),
+        | false => Duration::ZERO,
+      };
       let listener = TcpListener::bind("127.0.0.1:0")?;
       listener.set_nonblocking(true)?;
       let url = format!("http://{}/kernel", listener.local_addr()?);
@@ -245,8 +342,13 @@ mod tests {
       let partial = directory.path().join("kernel.partial");
       fs::write(&partial, "stale incomplete response")?;
       let client = Client::builder().timeout(Duration::from_secs(5)).build()?;
+      let started = Instant::now();
       let result =
         Kernel::download(&client, &url, &partial, Duration::ZERO).await;
+      ensure!(
+        started.elapsed() >= server_delay,
+        "server's Retry-After interval was ignored"
+      );
       ensure!(
         result.is_ok() == expected_body.is_some(),
         "unexpected download result: {result:?}"
