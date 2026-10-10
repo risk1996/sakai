@@ -20,6 +20,9 @@ pub struct CpuMax {
 }
 
 impl CpuMax {
+  /// The cgroup v2 `cpu.max` interface filename.
+  pub const FILE_NAME: &'static str = "cpu.max";
+
   /// Returns the configured CPU quota.
   #[must_use]
   pub const fn quota(self) -> MaxOr<NonZeroTime> {

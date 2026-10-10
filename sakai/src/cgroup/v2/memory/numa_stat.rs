@@ -21,6 +21,9 @@ pub struct MemoryNumaStat {
 }
 
 impl MemoryNumaStat {
+  /// The cgroup v2 `memory.numa_stat` interface filename.
+  pub const FILE_NAME: &'static str = "memory.numa_stat";
+
   /// Returns byte amounts by memory field and NUMA node ID.
   #[must_use]
   pub const fn bytes(

@@ -19,6 +19,11 @@ use crate::{
 )]
 pub struct Nice(i8);
 
+impl Nice {
+  /// The cgroup v2 `cpu.weight.nice` interface filename.
+  pub const FILE_NAME: &'static str = "cpu.weight.nice";
+}
+
 impl FromStr for Nice {
   type Err = ParseError<ParseValueError>;
 

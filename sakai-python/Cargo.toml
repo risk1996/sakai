@@ -1,7 +1,7 @@
 [package]
 name = "sakai-python"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 license.workspace = true
 publish = false
 
@@ -15,7 +15,7 @@ workspace = true
 [dependencies]
 pyo3 = { version = "=0.29.2", features = ["abi3-py311"] }
 sakai = { path = "../sakai" }
-uom = { version = "0.38.0", default-features = false, features = ["f64", "u64", "si"] }
+uom.workspace = true
 
 [dev-dependencies]
-assertables = "10.1.0"
+assertables.workspace = true

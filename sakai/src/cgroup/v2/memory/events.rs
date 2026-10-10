@@ -16,6 +16,9 @@ pub struct MemoryEvents {
 }
 
 impl MemoryEvents {
+  /// The cgroup v2 `memory.events` interface filename.
+  pub const FILE_NAME: &'static str = "memory.events";
+
   /// Returns the event counts, measured as numbers of occurrences.
   #[must_use]
   pub const fn counts(self) -> MemoryEventCounts {
@@ -43,6 +46,9 @@ pub struct MemoryEventsLocal {
 }
 
 impl MemoryEventsLocal {
+  /// The cgroup v2 `memory.events.local` interface filename.
+  pub const FILE_NAME: &'static str = "memory.events.local";
+
   /// Returns the local event counts, measured as numbers of occurrences.
   #[must_use]
   pub const fn counts(self) -> MemoryEventCounts {

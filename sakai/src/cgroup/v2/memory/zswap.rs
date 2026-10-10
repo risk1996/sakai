@@ -27,17 +27,17 @@ pub struct Zswap<'a> {
 impl Zswap<'_> {
   /// Memory consumed by this cgroup's zswap compression backend.
   pub fn current(&self) -> Result<ZswapCurrent, Error> {
-    self.cgroup.parse("memory.zswap.current")
+    self.cgroup.parse(ZswapCurrent::FILE_NAME)
   }
 
   /// Hard limit on this cgroup's compressed swap pool.
   pub fn max(&self) -> Result<ZswapMax, Error> {
-    self.cgroup.parse("memory.zswap.max")
+    self.cgroup.parse(ZswapMax::FILE_NAME)
   }
 
   /// Whether disk swap writeback is enabled for this cgroup.
   pub fn writeback(&self) -> Result<ZswapWriteback, Error> {
-    self.cgroup.parse("memory.zswap.writeback")
+    self.cgroup.parse(ZswapWriteback::FILE_NAME)
   }
 }
 
@@ -48,6 +48,9 @@ pub struct ZswapCurrent {
 }
 
 impl ZswapCurrent {
+  /// The cgroup v2 `memory.zswap.current` interface filename.
+  pub const FILE_NAME: &'static str = "memory.zswap.current";
+
   /// Returns compressed pool usage in bytes.
   #[must_use]
   pub const fn value(self) -> Bytes {
@@ -76,6 +79,9 @@ pub struct ZswapMax {
 }
 
 impl ZswapMax {
+  /// The cgroup v2 `memory.zswap.max` interface filename.
+  pub const FILE_NAME: &'static str = "memory.zswap.max";
+
   /// Returns the pool limit in bytes, or [`MaxOr::Max`].
   #[must_use]
   pub const fn value(self) -> MaxOr<Bytes> {
@@ -105,6 +111,9 @@ pub struct ZswapWriteback {
 }
 
 impl ZswapWriteback {
+  /// The cgroup v2 `memory.zswap.writeback` interface filename.
+  pub const FILE_NAME: &'static str = "memory.zswap.writeback";
+
   /// Returns this cgroup's configured disk swap writeback policy.
   #[must_use]
   pub const fn value(self) -> bool {

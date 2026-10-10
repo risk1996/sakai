@@ -18,6 +18,9 @@ pub struct CpuStat {
 }
 
 impl CpuStat {
+  /// The cgroup v2 `cpu.stat` interface filename.
+  pub const FILE_NAME: &'static str = "cpu.stat";
+
   /// Returns CPU usage times.
   #[must_use]
   pub const fn time(&self) -> CpuTimeStat {
@@ -41,6 +44,9 @@ pub struct CpuStatLocal {
 }
 
 impl CpuStatLocal {
+  /// The cgroup v2 `cpu.stat.local` interface filename.
+  pub const FILE_NAME: &'static str = "cpu.stat.local";
+
   /// Returns throttling of this cgroup's own runqueues, when reported.
   pub const fn throttled(&self) -> Option<Time> {
     self.throttled

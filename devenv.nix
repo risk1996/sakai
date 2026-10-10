@@ -39,6 +39,10 @@
 
   scripts.vmtest.exec = ''cargo xtask vmtest "$@"'';
 
+  # Container tooling follows the resolved devenv toolchain and input URL.
+  env.SAKAI_VMTEST_RUST_VERSION = config.languages.rust.toolchain.rustc.version;
+  env.SAKAI_VMTEST_URL = (builtins.fromJSON (builtins.readFile ./devenv.lock)).nodes.vmtest.locked.url;
+
   # Run together with `devenv test`, or individually with `devenv tasks run check:fmt`.
   tasks = {
     # Attach checks only in test mode, keeping shell entry and Zed formatting fast.

@@ -54,6 +54,10 @@ devenv --profile python test
 The devenv Python profile uses Python 3.15, and CI tests installed wheels and
 source distributions on Python 3.11 and 3.15.
 
+The package version is inherited from Cargo's workspace release version via
+Maturin's dynamic version metadata. The devenv Python interpreter is a development
+tool choice; it does not change the package's minimum supported Python version.
+
 To build locally on Linux, use an explicit Python 3.11 or newer interpreter:
 
 ```text

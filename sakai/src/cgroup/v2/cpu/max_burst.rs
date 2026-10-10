@@ -17,6 +17,9 @@ pub struct CpuMaxBurst {
 }
 
 impl CpuMaxBurst {
+  /// The cgroup v2 `cpu.max.burst` interface filename.
+  pub const FILE_NAME: &'static str = "cpu.max.burst";
+
   /// Returns the configured burst allowance.
   #[must_use]
   pub const fn value(self) -> Time {

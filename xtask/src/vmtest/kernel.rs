@@ -1,48 +1,17 @@
 use std::{
   fmt, fs,
-  io::{Read, Write},
+  io::Write,
   path::{Path, PathBuf},
   time::{Duration, Instant, SystemTime},
 };
 
-use anyhow::{Context, Result, ensure};
+use anyhow::{Context, Result};
 use fs2::FileExt;
 use reqwest::{Client, StatusCode, header::RETRY_AFTER};
-use sha2::{Digest, Sha256};
-
-pub(super) const KERNELS: &[Kernel] = &[
-  Kernel::new(
-    "5.15",
-    true,
-    "23879f21c7e3c7137902904fd89695fc9d8a938f1d2c1549dd1658443cb7a084",
-  ),
-  Kernel::new(
-    "6.1",
-    false,
-    "303b9010d92e4a9cf3930114f5c854edb2c5f7d1f9da2c3c29df7b1f7ab86a3c",
-  ),
-  Kernel::new(
-    "6.6",
-    false,
-    "3b47b1fefe02d49208da139bb1ad0363971ca5c02ab4ce89b9b8a52504b0fedf",
-  ),
-  Kernel::new(
-    "6.12",
-    false,
-    "a389c774c4bf035fbb7685be8493d128d8196c62862f750a8ef49b3b58428738",
-  ),
-  Kernel::new(
-    "6.18",
-    true,
-    "c2a05883f9556e73f5665d5979679163d80ff17754c4090e8d801df2a2e92551",
-  ),
-];
-
 #[derive(Debug)]
 pub(super) struct Kernel {
   pub(super) name: &'static str,
   pub(super) smoke: bool,
-  pub(super) sha256: &'static str,
 }
 
 /// Server-requested retry interval retained as HTTP error context.
@@ -78,12 +47,22 @@ impl fmt::Display for RetryAfter {
 }
 
 impl Kernel {
-  const fn new(name: &'static str, smoke: bool, sha256: &'static str) -> Self {
-    Self {
-      name,
-      smoke,
-      sha256,
-    }
+  pub(super) const ALL: &[Self] = &[
+    Self::new("5.15", true),
+    Self::new("6.1", false),
+    Self::new("6.6", false),
+    Self::new("6.12", false),
+    Self::new("6.18", true),
+  ];
+  const ASSET_URL: &str =
+    "https://github.com/danobi/vmtest/releases/download/test_assets";
+  const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
+  const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(120);
+  const MAX_DOWNLOAD_ATTEMPTS: u8 = 3;
+  const RETRY_DELAY: Duration = Duration::from_secs(2);
+
+  const fn new(name: &'static str, smoke: bool) -> Self {
+    Self { name, smoke }
   }
 
   pub(super) async fn image(&self, cache: &Path) -> Result<PathBuf> {
@@ -92,22 +71,18 @@ impl Kernel {
     let destination = cache.join(&file_name);
     let lock = fs::File::create(cache.join(format!("{file_name}.lock")))?;
     lock.lock_exclusive()?;
-    if destination.try_exists()? && Self::matches(&destination, self.sha256)? {
+    if destination.try_exists()? {
       return Ok(destination);
     }
-    let url = format!("https://github.com/danobi/vmtest/releases/download/test_assets/{file_name}");
+    let url = format!("{}/{file_name}", Self::ASSET_URL);
     let partial =
       cache.join(format!("{file_name}.{}.partial", std::process::id()));
     let result = async {
       let client = Client::builder()
-        .connect_timeout(Duration::from_secs(30))
-        .timeout(Duration::from_secs(120))
+        .connect_timeout(Self::CONNECT_TIMEOUT)
+        .timeout(Self::DOWNLOAD_TIMEOUT)
         .build()?;
-      Self::download(&client, &url, &partial, Duration::from_secs(2)).await?;
-      ensure!(
-        Self::matches(&partial, self.sha256)?,
-        "checksum mismatch for {url}"
-      );
+      Self::download(&client, &url, &partial, Self::RETRY_DELAY).await?;
       fs::rename(&partial, &destination)?;
       Ok::<_, anyhow::Error>(())
     }
@@ -125,18 +100,25 @@ impl Kernel {
     partial: &Path,
     retry_delay: Duration,
   ) -> Result<()> {
-    for attempt in 1..=3 {
+    for attempt in 1..=Self::MAX_DOWNLOAD_ATTEMPTS {
       match Self::download_once(client, url, partial).await {
         | Ok(()) => return Ok(()),
-        | Err(error) if attempt < 3 && Self::retryable(&error) => {
+        | Err(error)
+          if attempt < Self::MAX_DOWNLOAD_ATTEMPTS
+            && Self::retryable(&error) =>
+        {
           eprintln!(
-            "kernel download attempt {attempt}/3 failed: {error:#}; retrying"
+            "kernel download attempt {attempt}/{} failed: {error:#}; retrying",
+            Self::MAX_DOWNLOAD_ATTEMPTS
           );
           tokio::time::sleep(RetryAfter::delay(&error, retry_delay)).await;
         },
         | Err(error) => {
           return Err(error).with_context(|| {
-            format!("kernel download failed on attempt {attempt}/3: {url}")
+            format!(
+              "kernel download failed on attempt {attempt}/{}: {url}",
+              Self::MAX_DOWNLOAD_ATTEMPTS,
+            )
           });
         },
       }
@@ -187,27 +169,6 @@ impl Kernel {
       },
       | None => false,
     }
-  }
-
-  fn matches(path: &Path, expected: &str) -> Result<bool> {
-    Ok(Self::digest(path)? == expected)
-  }
-
-  pub(super) fn digest(path: &Path) -> Result<String> {
-    let mut file = fs::File::open(path)?;
-    let mut hasher = Sha256::new();
-    let mut buffer = [0; 64 * 1024];
-    loop {
-      match file.read(&mut buffer)? {
-        | 0 => break,
-        | size => hasher.update(
-          buffer
-            .get(..size)
-            .context("read exceeded checksum buffer")?,
-        ),
-      }
-    }
-    Ok(hex::encode(hasher.finalize()))
   }
 }
 
