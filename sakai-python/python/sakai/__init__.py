@@ -22,6 +22,9 @@ from ._sakai import (
   Pressure,
   PressureLine,
   SakaiError,
+  SwapEvents,
+  SwapReader,
+  ZswapReader,
 )
 
 __all__ = [
@@ -46,4 +49,7 @@ __all__ = [
   "Pressure",
   "PressureLine",
   "SakaiError",
+  "SwapEvents",
+  "SwapReader",
+  "ZswapReader",
 ]

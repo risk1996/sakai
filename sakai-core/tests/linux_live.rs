@@ -16,8 +16,8 @@ use sakai_core::{
     memory::{
       MemoryCurrent, MemoryEvents, MemoryEventsLocal, MemoryHigh, MemoryLow,
       MemoryMax, MemoryMin, MemoryNumaStat, MemoryOomGroup, MemoryPeak,
-      MemoryStat, SwapCurrent, SwapEvents,
-      SwapHigh, SwapMax, SwapPeak, ZswapCurrent, ZswapMax, ZswapWriteback,
+      MemoryStat, SwapCurrent, SwapEvents, SwapHigh, SwapMax, SwapPeak,
+      ZswapCurrent, ZswapMax, ZswapWriteback,
     },
   },
 };

@@ -19,6 +19,9 @@ from sakai import (
   MemoryStat,
   NotCgroupV2Error,
   Pressure,
+  SwapEvents,
+  SwapReader,
+  ZswapReader,
 )
 
 
@@ -75,6 +78,8 @@ class ContractTest(unittest.TestCase):
       "Pressure": ("some", "full"),
       "PressureLine": ("avg10", "avg60", "avg300", "total_ns"),
       "MemoryReader": (
+        "swap",
+        "zswap",
         "current",
         "peak",
         "max",
@@ -85,6 +90,9 @@ class ContractTest(unittest.TestCase):
         "pressure",
       ),
       "MemoryStat": ("bytes", "pages", "counts"),
+      "SwapReader": ("current", "peak", "max", "high", "events"),
+      "SwapEvents": ("high", "max", "fail"),
+      "ZswapReader": ("current", "max", "writeback"),
       "CoreReader": ("kind", "controllers", "subtree_control"),
     }
     for class_name, members in public_members.items():
@@ -216,6 +224,93 @@ class ContractTest(unittest.TestCase):
       all(isinstance(v, str) for v in self.group.core().subtree_control())
     )
     self.assertEqual(Cgroup.from_pid(os.getpid()).path, self.group.path)
+
+  def test_swap_contract(self) -> None:
+    swap = self.group.memory().swap()
+    self.assertIsInstance(swap, SwapReader)
+    for name, read in (("current", swap.current), ("peak", swap.peak)):
+      with self.subTest(name=name):
+        try:
+          value = read()
+        except InterfaceMissingError as error:
+          self.assertEqual(error.path, self.group.path / f"memory.swap.{name}")
+        else:
+          self.assertIsInstance(value, int)
+          self.assertGreaterEqual(value, 0)
+    for name, read in (("max", swap.max), ("high", swap.high)):
+      with self.subTest(name=name):
+        try:
+          limit = read()
+        except InterfaceMissingError as error:
+          self.assertEqual(error.path, self.group.path / f"memory.swap.{name}")
+        else:
+          self.assertIsInstance(limit, MaxOr)
+          if limit.is_max:
+            with self.assertRaises(ValueError):
+              _ = limit.value
+          else:
+            self.assertIsInstance(limit.value, int)
+            self.assertGreaterEqual(limit.value, 0)
+    try:
+      events = swap.events()
+    except InterfaceMissingError as error:
+      self.assertEqual(error.path, self.group.path / "memory.swap.events")
+    else:
+      self.assertIsInstance(events, SwapEvents)
+      self.assertTrue(events.high is None or events.high >= 0)
+      self.assertIsInstance(events.max, int)
+      self.assertIsInstance(events.fail, int)
+      self.assertGreaterEqual(events.max, 0)
+      self.assertGreaterEqual(events.fail, 0)
+      with self.assertRaises(AttributeError):
+        cast("Any", events).fail = 0
+
+  def test_zswap_contract(self) -> None:
+    zswap = self.group.memory().zswap()
+    self.assertIsInstance(zswap, ZswapReader)
+    try:
+      usage = zswap.current()
+    except InterfaceMissingError as error:
+      self.assertEqual(error.path, self.group.path / "memory.zswap.current")
+    else:
+      self.assertIsInstance(usage, int)
+      self.assertGreaterEqual(usage, 0)
+    try:
+      limit = zswap.max()
+    except InterfaceMissingError as error:
+      self.assertEqual(error.path, self.group.path / "memory.zswap.max")
+    else:
+      self.assertIsInstance(limit, MaxOr)
+      if limit.is_max:
+        with self.assertRaises(ValueError):
+          _ = limit.value
+      else:
+        self.assertIsInstance(limit.value, int)
+        self.assertGreaterEqual(limit.value, 0)
+    try:
+      writeback = zswap.writeback()
+    except InterfaceMissingError as error:
+      self.assertEqual(error.path, self.group.path / "memory.zswap.writeback")
+    else:
+      self.assertIsInstance(writeback, bool)
+
+  def test_nested_memory_readers_retain_handle(self) -> None:
+    parent = Cgroup.from_path(self.group.path)
+    memory = parent.memory()
+    swap = memory.swap()
+    zswap = memory.zswap()
+    del parent, memory
+    for name, read in (
+      ("memory.swap.current", swap.current),
+      ("memory.zswap.current", zswap.current),
+    ):
+      with self.subTest(name=name):
+        try:
+          value = read()
+        except InterfaceMissingError as error:
+          self.assertEqual(error.path, self.group.path / name)
+        else:
+          self.assertIsInstance(value, int)
 
   def test_non_utf8_child_lookup(self) -> None:
     class BytePath(os.PathLike[bytes]):

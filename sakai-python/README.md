@@ -26,6 +26,13 @@ These limits do not account for ancestor limits, affinity, or other policy. The 
 property is for display and may become stale; live reads continue through the
 original open directory handle.
 
+`group.memory().swap()` reads swap usage, peak usage, limits, and event counters.
+`group.memory().zswap()` reads compressed pool usage, its limit, and the configured
+disk writeback policy. Both readers retain the pinned handle independently.
+Byte limits use `MaxOr[int]`; swap event counters are integers, with `.high`
+set to `None` when an older kernel omits that counter. Missing files raise
+`InterfaceMissingError` with the interface path.
+
 Native classes, methods, and snapshot attributes carry Python `__doc__`
 strings generated from their Rust documentation comments. Use `help(Cgroup)`
 or inspect an individual method such as `Cgroup.current.__doc__`.

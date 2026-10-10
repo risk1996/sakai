@@ -18,7 +18,7 @@ use sakai_core::{
       CpuStat as CoreCpuStat, CpuStatLocal as CoreCpuStatLocal,
       CpuTimeStat as CoreCpuTimeStat, CpuWeight as CoreCpuWeight,
     },
-    memory::MemoryStat as CoreMemoryStat,
+    memory::{MemoryStat as CoreMemoryStat, SwapEvents as CoreSwapEvents},
   },
 };
 use uom::si::{information::byte, ratio::ratio, time::nanosecond};
@@ -624,6 +624,20 @@ struct MemoryReader {
 
 #[pymethods]
 impl MemoryReader {
+  /// Return a swap reader that retains this pinned cgroup handle.
+  fn swap(&self) -> SwapReader {
+    SwapReader {
+      owner: Arc::clone(&self.owner),
+    }
+  }
+
+  /// Return a compressed swap reader that retains this pinned cgroup handle.
+  fn zswap(&self) -> ZswapReader {
+    ZswapReader {
+      owner: Arc::clone(&self.owner),
+    }
+  }
+
   /// Read current memory usage in bytes.
   fn current(&self, py: Python<'_>) -> PyResult<u64> {
     PythonError::read(py, &self.owner, |owner| owner.memory().current())
@@ -670,6 +684,99 @@ impl MemoryReader {
   fn pressure(&self, py: Python<'_>) -> PyResult<Pressure> {
     PythonError::read(py, &self.owner, |owner| owner.memory().pressure())
       .map(Into::into)
+  }
+}
+
+/// Fresh reads of swap usage, limits, and events for one pinned cgroup.
+#[pyclass(frozen, module = "sakai._sakai")]
+struct SwapReader {
+  owner: Arc<sakai_core::Cgroup>,
+}
+
+#[pymethods]
+impl SwapReader {
+  /// Read current hierarchical swap usage in bytes.
+  fn current(&self, py: Python<'_>) -> PyResult<u64> {
+    PythonError::read(py, &self.owner, |owner| owner.memory().swap().current())
+      .map(|value| value.value().get::<byte>())
+  }
+
+  /// Read peak swap usage since cgroup creation; this never resets the peak.
+  fn peak(&self, py: Python<'_>) -> PyResult<u64> {
+    PythonError::read(py, &self.owner, |owner| owner.memory().swap().peak())
+      .map(|value| value.value().get::<byte>())
+  }
+
+  /// Read the hard swap limit as `max` or a concrete byte count.
+  fn max(&self, py: Python<'_>) -> PyResult<MaxOr> {
+    PythonError::read(py, &self.owner, |owner| owner.memory().swap().max())
+      .map(|value| MaxOr::from_bytes(value.value()))
+  }
+
+  /// Read the swap throttling threshold as `max` or a concrete byte count.
+  fn high(&self, py: Python<'_>) -> PyResult<MaxOr> {
+    PythonError::read(py, &self.owner, |owner| owner.memory().swap().high())
+      .map(|value| MaxOr::from_bytes(value.value()))
+  }
+
+  /// Read swap threshold and allocation failure counters.
+  fn events(&self, py: Python<'_>) -> PyResult<SwapEvents> {
+    PythonError::read(py, &self.owner, |owner| owner.memory().swap().events())
+      .map(Into::into)
+  }
+}
+
+/// Immutable swap threshold and allocation failure counters.
+#[pyclass(frozen, module = "sakai._sakai")]
+#[derive(Debug, PartialEq, Eq)]
+struct SwapEvents {
+  /// Times swap usage exceeded the high threshold; absent on older kernels.
+  #[pyo3(get)]
+  high: Option<u64>,
+  /// Times swap allocation failed at the max boundary.
+  #[pyo3(get)]
+  max: u64,
+  /// Swap allocation failures from the limit or system-wide exhaustion.
+  #[pyo3(get)]
+  fail: u64,
+}
+
+impl From<CoreSwapEvents> for SwapEvents {
+  fn from(value: CoreSwapEvents) -> Self {
+    Self {
+      high: value.high().map(|count| count.value),
+      max: value.max().value,
+      fail: value.fail().value,
+    }
+  }
+}
+
+/// Fresh reads of compressed swap usage and settings for one pinned cgroup.
+#[pyclass(frozen, module = "sakai._sakai")]
+struct ZswapReader {
+  owner: Arc<sakai_core::Cgroup>,
+}
+
+#[pymethods]
+impl ZswapReader {
+  /// Read memory consumed by the zswap compression backend in bytes.
+  fn current(&self, py: Python<'_>) -> PyResult<u64> {
+    PythonError::read(py, &self.owner, |owner| owner.memory().zswap().current())
+      .map(|value| value.value().get::<byte>())
+  }
+
+  /// Read the hard zswap pool limit as `max` or a concrete byte count.
+  fn max(&self, py: Python<'_>) -> PyResult<MaxOr> {
+    PythonError::read(py, &self.owner, |owner| owner.memory().zswap().max())
+      .map(|value| MaxOr::from_bytes(value.value()))
+  }
+
+  /// Read the configured disk writeback policy; an ancestor can disable it.
+  fn writeback(&self, py: Python<'_>) -> PyResult<bool> {
+    PythonError::read(py, &self.owner, |owner| {
+      owner.memory().zswap().writeback()
+    })
+    .map(|value| value.value())
   }
 }
 
@@ -795,6 +902,8 @@ fn _sakai(module: &Bound<'_, PyModule>) -> PyResult<()> {
   module.add_class::<MaxOr>()?;
   module.add_class::<CpuReader>()?;
   module.add_class::<MemoryReader>()?;
+  module.add_class::<SwapReader>()?;
+  module.add_class::<ZswapReader>()?;
   module.add_class::<CoreReader>()?;
   module.add_class::<CpuStat>()?;
   module.add_class::<CpuStatLocal>()?;
@@ -806,6 +915,7 @@ fn _sakai(module: &Bound<'_, PyModule>) -> PyResult<()> {
   module.add_class::<Pressure>()?;
   module.add_class::<PressureLine>()?;
   module.add_class::<MemoryStat>()?;
+  module.add_class::<SwapEvents>()?;
   Ok(())
 }
 
@@ -818,7 +928,10 @@ mod tests {
   };
 
   use assertables::{assert_err, assert_in_delta, assert_ok};
-  use pyo3::types::{PyBytes, PyFloat, PyInt};
+  use pyo3::{
+    exceptions::PyAttributeError,
+    types::{PyBytes, PyFloat, PyInt},
+  };
 
   use super::*;
 
@@ -954,6 +1067,34 @@ mod tests {
     assert_eq!(stat.counts.get("pgfault"), Some(&7));
     assert!(!stat.bytes.contains_key("pswpin"));
     assert!(!stat.pages.contains_key("pgfault"));
+  }
+
+  #[test]
+  fn preserves_swap_optional_high_and_unsigned_counts() {
+    Python::initialize();
+    Python::attach(|py| {
+      for (input, expected) in [
+        ("max 1\nfail 2\n", SwapEvents {
+          high: None,
+          max: 1,
+          fail: 2,
+        }),
+        ("high 0\nmax 0\nfail 18446744073709551615\n", SwapEvents {
+          high: Some(0),
+          max: 0,
+          fail: u64::MAX,
+        }),
+      ] {
+        let events =
+          SwapEvents::from(assert_ok!(input.parse::<CoreSwapEvents>()));
+        assert_eq!(events, expected);
+        let object = assert_ok!(Py::new(py, events));
+        let high = assert_ok!(object.bind(py).getattr("high"));
+        assert_eq!(assert_ok!(high.extract::<Option<u64>>()), expected.high);
+        let error = assert_err!(object.bind(py).setattr("fail", 0));
+        assert!(error.is_instance_of::<PyAttributeError>(py));
+      }
+    });
   }
 
   #[test]
