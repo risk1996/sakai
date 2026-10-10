@@ -17,6 +17,7 @@
     rust = {
       enable = true;
       channel = "stable";
+      version = "1.99.0";
       # .rustfmt.toml needs nightly; devenv.lock pins both toolchains.
       toolchain.rustfmt = (inputs.rust-overlay.lib.mkRustBin { } pkgs).nightly.latest.rustfmt;
     };

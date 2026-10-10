@@ -24,7 +24,7 @@ allow = [
 
 [[licenses.exceptions]]
 # Mozilla's root certificate data is distributed under this permissive data license.
-crate = "webpki-roots"
+crate = "webpki-root-certs"
 allow = ["CDLA-Permissive-2.0"]
 
 [bans]
