@@ -24,7 +24,7 @@ concurrency:
 jobs:
   python:
     name: Python ${{ matrix.python-version }} wheel and sdist
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -38,6 +38,8 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
+          # Prefer stable 3.15, falling back until GitHub publishes its build.
+          allow-prereleases: ${{ matrix.python-version == '3.15' }}
       - uses: cachix/install-nix-action@v31
       - uses: cachix/cachix-action@v17
         with:
