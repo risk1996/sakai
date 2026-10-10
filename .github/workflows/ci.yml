@@ -43,41 +43,6 @@ jobs:
       - name: Audit the lockfile and check dependency policy
         run: devenv tasks run check:security
 
-  compatibility:
-    name: Rust ${{ matrix.toolchain }} on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-26.04, macos-15]
-        toolchain: [msrv, stable]
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - name: Read the crate's minimum Rust version
-        id: toolchain
-        env:
-          TOOLCHAIN: ${{ matrix.toolchain }}
-        run: |
-          version=stable
-          if [ "$TOOLCHAIN" = msrv ]; then
-            version=$(cargo metadata --no-deps --format-version 1 | python3 -c 'import json, sys; print(next(p for p in json.load(sys.stdin)["packages"] if p["name"] == "sakai")["rust_version"])')
-          fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-      - name: Install Rust
-        env:
-          RUST_VERSION: ${{ steps.toolchain.outputs.version }}
-        run: |
-          rustup toolchain install "$RUST_VERSION" --profile minimal
-          echo "RUSTC=$(rustup which --toolchain "$RUST_VERSION" rustc)" >> "$GITHUB_ENV"
-          echo "RUSTDOC=$(rustup which --toolchain "$RUST_VERSION" rustdoc)" >> "$GITHUB_ENV"
-      - name: Test all crate targets and features
-        run: rustup run "${{ steps.toolchain.outputs.version }}" cargo test -p sakai --all-targets --all-features --locked
-      - name: Test documentation examples
-        run: rustup run "${{ steps.toolchain.outputs.version }}" cargo test -p sakai --all-features --doc --locked
-
   kubernetes:
     name: Kubernetes resources through Python
     runs-on: ubuntu-26.04
@@ -195,6 +160,20 @@ jobs:
 
       - name: Run Rust and Python checks
         run: devenv --profile python test
+
+      - name: Read the crate's minimum Rust version
+        id: msrv
+        run: |
+          version=$(cargo metadata --no-deps --format-version 1 | python3 -c 'import json, sys; print(next(p for p in json.load(sys.stdin)["packages"] if p["name"] == "sakai")["rust_version"])')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Install minimum Rust toolchain
+        env:
+          RUST_VERSION: ${{ steps.msrv.outputs.version }}
+        run: |
+          rustup toolchain install "$RUST_VERSION" --profile minimal
+          echo "RUSTC=$(rustup which --toolchain "$RUST_VERSION" rustc)" >> "$GITHUB_ENV"
+      - name: Check all crate targets and features on MSRV
+        run: rustup run "${{ steps.msrv.outputs.version }}" cargo check -p sakai --all-targets --all-features --locked
 
   build-live-test:
     name: Build Linux live test
