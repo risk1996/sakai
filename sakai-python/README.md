@@ -1,8 +1,8 @@
 # Sakai Python bindings
 
 `sakai` exposes the current read-only Linux cgroup v2 readers from
-`sakai-core`. Python 3.10 or newer is required. The native module uses the
-`cp310-abi3` stable ABI for regular CPython; free-threaded CPython needs a
+`sakai-core`. Python 3.11 or newer is required. The native module uses the
+`cp311-abi3` stable ABI for regular CPython; free-threaded CPython needs a
 separate wheel and is not supported by this build.
 
 ```python
@@ -33,16 +33,19 @@ or inspect an individual method such as `Cgroup.current.__doc__`.
 Ruff and Ty are supplied by the devenv Python profile. The Python sources use
 two-space indentation and the repository's `ruff.toml` enables Ruff's `ALL`
 rule set with narrow project-specific exceptions. Run lint, formatting, and
-Python 3.10 type checks with:
+Python 3.11 type checks with:
 
 ```text
 devenv --profile python test
 ```
 
-To build locally on Linux, use an explicit Python 3.10 or newer interpreter:
+The devenv Python profile uses Python 3.15, and CI tests installed wheels and
+source distributions on Python 3.11 and 3.15.
+
+To build locally on Linux, use an explicit Python 3.11 or newer interpreter:
 
 ```text
-devenv --profile python shell -- rtk maturin build --manifest-path sakai-python/Cargo.toml --interpreter /path/to/python3.10 --locked
+devenv --profile python shell -- rtk maturin build --manifest-path sakai-python/Cargo.toml --interpreter /path/to/python3.11 --locked
 devenv --profile python shell -- rtk maturin sdist --manifest-path sakai-python/Cargo.toml
 ```
 

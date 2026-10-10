@@ -2,7 +2,7 @@
 name = "sakai"
 version = "0.1.0"
 description = "Read-only Linux cgroup v2 metrics"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 classifiers = [
   "Programming Language :: Python :: 3",
   "Operating System :: POSIX :: Linux",

@@ -59,6 +59,7 @@
     python.module = { config, pkgs, ... }: {
       languages.python = {
         enable = true;
+        package = pkgs.python315;
         uv.enable = true;
       };
 

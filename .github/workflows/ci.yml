@@ -29,8 +29,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Exercise the minimum and newest runtime for the cp310-abi3 wheel.
-        python-version: ['3.10', '3.14']
+        # Exercise the minimum and newest runtime for the cp311-abi3 wheel.
+        python-version: ['3.11', '3.15']
     steps:
       - uses: actions/checkout@v7
         with:
@@ -53,7 +53,7 @@ jobs:
           # The hosted interpreter must not load Nix's newer libpython/glibc.
           devenv --profile python shell -- env -u LD_LIBRARY_PATH PYO3_PYTHON="$python_executable" maturin build --manifest-path sakai-python/Cargo.toml --interpreter "$python_executable" --locked --out dist
           devenv --profile python shell -- maturin sdist --manifest-path sakai-python/Cargo.toml --out dist
-          compgen -G 'dist/*-cp310-abi3-*.whl'
+          compgen -G 'dist/*-cp311-abi3-*.whl'
       - name: Test installed wheel outside checkout
         run: |
           python -m venv "$RUNNER_TEMP/sakai-wheel"

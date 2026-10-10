@@ -7,8 +7,8 @@ repository does not yet have a Python extension or release artifacts. A
 successful local import is not the release gate; test the actual archives that
 will be uploaded.
 
-First release target: Linux CPython, Python 3.10 minimum,
-`abi3-py310`, package import `sakai`, built with Maturin. Do not silently add
+First release target: Linux CPython, Python 3.11 minimum,
+`abi3-py311`, package import `sakai`, built with Maturin. Do not silently add
 macOS/Windows wheels or claim free-threaded CPython support while the Linux-only
 handle API and ABI plan remain as documented. Sources for these package-specific
 choices are the binding plan and current Rust code; the external best-practice
@@ -36,7 +36,7 @@ sources are linked below.
   metadata, wheel/sdist filenames, and the release tag. Check that `Name`,
   `Version`, `Requires-Python`, and dependencies agree across **all** archives
   in the release. [Core metadata](https://packaging.python.org/en/latest/specifications/core-metadata/).
-- [ ] Set `requires-python = ">=3.10"` and accurate Linux/CPython classifiers.
+- [ ] Set `requires-python = ">=3.11"` and accurate Linux/CPython classifiers.
   Do not use classifiers as a substitute for `Requires-Python`; the latter
   controls install compatibility.
   [Pyproject guidance](https://packaging.python.org/en/latest/guides/writing-pyproject-toml/).
@@ -58,7 +58,7 @@ sources are linked below.
 - [ ] Run the repository's Rust gates (`devenv test`), including parser and
   Linux live tests, against the release candidate. Run Python lint, type,
   and contract checks added with the binding.
-- [ ] Test the **installed wheel**, outside the checkout, on CPython 3.10 and
+- [ ] Test the **installed wheel**, outside the checkout, on CPython 3.11 and
   every newer minor version the release claims. Check import, public exports,
   `py.typed`/stubs, constructors and child traversal, every bound CPU/memory/core
   reader, exception paths, and conversion of `u64` values above signed 64-bit
@@ -90,7 +90,7 @@ sources are linked below.
   [Python package formats](https://packaging.python.org/en/latest/discussions/package-formats/).
 - [ ] Build Linux wheels in a suitable `manylinux` environment (or supported
   equivalent) and keep Maturin's native dependency audit enabled. Check the
-  actual wheel filename and tags: `cp310-abi3` plus the intended
+  actual wheel filename and tags: `cp311-abi3` plus the intended
   `manylinux_*_<arch>` platform. Inspect any bundled shared libraries and
   required glibc baseline. [Maturin distribution](https://www.maturin.rs/distribution),
   [platform tags](https://packaging.python.org/en/latest/specifications/platform-compatibility-tags/).
@@ -112,7 +112,7 @@ sources are linked below.
   [PyPI-friendly README](https://packaging.python.org/en/latest/guides/making-a-pypi-friendly-readme/),
   [core metadata](https://packaging.python.org/en/latest/specifications/core-metadata/).
 - [ ] Install each wheel by filename or from a local wheel directory in a clean
-  environment with the source checkout unavailable. Confirm Python 3.10 accepts
+  environment with the source checkout unavailable. Confirm Python 3.11 accepts
   it, an unsupported interpreter/platform does not select it, and a source
   install behaves as documented. [Packaging flow](https://packaging.python.org/en/latest/flow/),
   [platform tags](https://packaging.python.org/en/latest/specifications/platform-compatibility-tags/).
@@ -132,7 +132,7 @@ sources are linked below.
   repository or CI. [PyPI Trusted Publishing](https://docs.pypi.org/trusted-publishers/),
   [pending publisher](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/).
 - [ ] Run the release workflow against TestPyPI with the candidate artifacts,
-  then install the uploaded wheel from **TestPyPI** into a fresh Python 3.10
+  then install the uploaded wheel from **TestPyPI** into a fresh Python 3.11
   environment and run a short live smoke test. TestPyPI and PyPI are separate
   indices/accounts, so verify both publisher configurations. Use dependency
   resolution from PyPI only if needed, and inspect what index supplied each
