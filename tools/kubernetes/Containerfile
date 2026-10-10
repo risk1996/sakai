@@ -7,7 +7,7 @@ RUN python3 -m venv /opt/build \
   && /opt/build/bin/pip install --no-cache-dir maturin==1.15.0
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
-COPY sakai-core ./sakai-core
+COPY sakai ./sakai
 COPY sakai-python/Cargo.toml sakai-python/pyproject.toml ./sakai-python/
 COPY sakai-python/src ./sakai-python/src
 COPY sakai-python/python ./sakai-python/python

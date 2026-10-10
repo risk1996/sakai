@@ -7,10 +7,10 @@ parsers and snapshot values remain available on other platforms.
 
 ## Rust crate publication
 
-Once the read surface and public API are ready, prepare `sakai-core` for its
+Once the read surface and public API are ready, prepare `sakai` for its
 first crates.io release:
 
-- Add the license, package metadata, and a README installation and usage
+- Add package metadata and a README installation and usage
   example that matches the released API.
 - Check the packaged file list and run the existing project checks against the
   release candidate.

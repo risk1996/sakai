@@ -34,7 +34,7 @@ additional OCI, jailer, namespace, and kernel-adaptation work that the cgroup
 test does not need. The GitHub Action adds another wrapper and package-install
 path; invoking the pinned CLI directly keeps local and CI behavior aligned.
 
-`xtask` builds `sakai-core`'s `linux_live` test executable on the Linux runner
+`xtask` builds `sakai`'s `linux_live` test executable on the Linux runner
 (inside a container on macOS), identifies it from Cargo's JSON artifact
 messages, and runs that executable in each guest. The guest gets the Linux
 runner's root read-only, a shared executable at `/mnt/vmtest`, and a fresh

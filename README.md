@@ -4,7 +4,7 @@ A _read-only_ Rust cgroup v2 library. While kernel reads require Linux, the
 parsers are OS-independent. Python bindings are work in progress.
 
 ```rust,no_run
-use sakai_core::{Cgroup, Error};
+use sakai::{Cgroup, Error};
 
 fn main() -> Result<(), Error> {
   let cgroup = Cgroup::from_current_process()?;
@@ -33,9 +33,9 @@ percentages. Integer quantity arithmetic truncates; use fractional operands
 when calculating rates. `CpuMax::cpu_count()` is only this cgroup's quota/period
 ratio: it does not resolve affinity, ancestor quotas, or scheduling policy.
 
-Shared values are available as `sakai_core::{Time, Count, EventRate, Ratio,
+Shared values are available as `sakai::{Time, Count, EventRate, Ratio,
 NonZeroTime, MaxOr, Pressure, PressureLine}`. Parse failures use
-`sakai_core::error::{ParseError, ParseValueError, FieldKind}`. Linux read errors
+`sakai::error::{ParseError, ParseValueError, FieldKind}`. Linux read errors
 include the full interface path and retain the parser error as their source.
 
 Run `devenv test` for formatting, Clippy, parser tests, and doctests.

@@ -1,7 +1,7 @@
 # Sakai Python bindings
 
 `sakai` exposes the current read-only Linux cgroup v2 readers from
-`sakai-core`. Python 3.11 or newer is required. The native module uses the
+`sakai`. Python 3.11 or newer is required. The native module uses the
 `cp311-abi3` stable ABI for regular CPython; free-threaded CPython needs a
 separate wheel and is not supported by this build.
 

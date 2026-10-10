@@ -1,6 +1,6 @@
 # Cross-Platform Process Resource Introspection Research
 
-For the concrete implementation plan against today's `sakai-core` API, see
+For the concrete implementation plan against today's `sakai` API, see
 [PyO3 binding research and implementation plan](pyo3-bindings.md). This note
 explores a broader future process-resource model.
 

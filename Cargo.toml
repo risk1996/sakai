@@ -1,10 +1,13 @@
 [workspace]
 resolver = "2"
 members = [
-  "sakai-core",
+  "sakai",
   "sakai-python",
   "xtask",
 ]
+
+[workspace.package]
+license = "MIT"
 
 # REF: https://emschwartz.me/your-clippy-config-should-be-stricter/
 [workspace.lints.clippy]

@@ -2,6 +2,7 @@
 name = "sakai-python"
 version = "0.1.0"
 edition = "2024"
+license.workspace = true
 publish = false
 
 [lib]
@@ -13,7 +14,7 @@ workspace = true
 
 [dependencies]
 pyo3 = { version = "=0.29.2", features = ["abi3-py311"] }
-sakai-core = { path = "../sakai-core" }
+sakai = { path = "../sakai" }
 uom = { version = "0.38.0", default-features = false, features = ["f64", "u64", "si"] }
 
 [dev-dependencies]

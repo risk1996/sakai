@@ -1,7 +1,7 @@
 # PyO3 binding research and implementation plan
 
 Research checked on 2026-09-30. This is a plan for bindings to the **current**
-read-only `sakai-core` cgroup v2 API, not the broader cross-platform resource
+read-only `sakai` cgroup v2 API, not the broader cross-platform resource
 model explored in [bindings.md](bindings.md). No binding implementation exists
 yet. The Rust core remains the source of truth for discovery, parsing, units,
 and kernel semantics.
@@ -29,7 +29,7 @@ The extension should still use thread-safe Rust state and avoid relying on the
 GIL for correctness.
 
 Linux is the only runtime target for this first package because the handle API
-is `#[cfg(target_os = "linux")]`. `sakai-core` parsers remain portable; do not
+is `#[cfg(target_os = "linux")]`. `sakai` parsers remain portable; do not
 publish macOS/Windows wheels that can import but cannot perform the advertised
 queries. Revisit portable parser bindings if there is a concrete use case.
 
@@ -37,13 +37,13 @@ queries. Revisit portable parser bindings if there is a concrete use case.
 
 | Current source | Consequence for Python |
 | --- | --- |
-| [`Cgroup`](../sakai-core/src/cgroup/v2/handle.rs) owns an open directory; `cpu()`, `memory()`, and `core()` borrow it. | Python reader objects must keep the owner alive, for example with `Arc<Cgroup>` in their native wrappers. A Python `Cgroup` is not reconstructed from its display path on each call. |
+| [`Cgroup`](../sakai/src/cgroup/v2/handle.rs) owns an open directory; `cpu()`, `memory()`, and `core()` borrow it. | Python reader objects must keep the owner alive, for example with `Arc<Cgroup>` in their native wrappers. A Python `Cgroup` is not reconstructed from its display path on each call. |
 | `from_current_process`, `from_pid(u32)`, `from_path`, `child`, and `children` are implemented. | Expose constructors and traversal; accept `os.PathLike` paths and child names without lossy UTF-8 conversion. Convert Python PIDs to `u32` and leave range validation to the core. |
 | `Cgroup::path()` is diagnostic and can become stale. | Expose a `path` property for display only; never use it to perform subsequent reads. |
 | Each reader opens and reads an interface anew. | Methods stay methods, not cached properties. Document that values from separate methods are not an atomic snapshot. |
-| [`Error`](../sakai-core/src/error.rs) distinguishes missing interfaces, unsupported operations, non-v2 filesystems, deleted cgroups, parse failures, and I/O. | Preserve these categories in Python exceptions, including the interface path and underlying OS error where available. |
-| [`MaxOr<T>`](../sakai-core/src/limit.rs) distinguishes `max` from a numeric value. | Preserve the variant as a generic Python `MaxOr[T]` with `is_max` and a guarded `value` property. A missing file still raises an exception. |
-| [`Time`, `Bytes`, `Count`, `Pages`, `Ratio`](../sakai-core/src/unit.rs) are `uom` quantities. | Return Python `int` nanoseconds/bytes/count/pages and `float` dimensionless ratios; encode units in attribute names and stubs. Do not pass `uom` types through FFI. |
+| [`Error`](../sakai/src/error.rs) distinguishes missing interfaces, unsupported operations, non-v2 filesystems, deleted cgroups, parse failures, and I/O. | Preserve these categories in Python exceptions, including the interface path and underlying OS error where available. |
+| [`MaxOr<T>`](../sakai/src/limit.rs) distinguishes `max` from a numeric value. | Preserve the variant as a generic Python `MaxOr[T]` with `is_max` and a guarded `value` property. A missing file still raises an exception. |
+| [`Time`, `Bytes`, `Count`, `Pages`, `Ratio`](../sakai/src/unit.rs) are `uom` quantities. | Return Python `int` nanoseconds/bytes/count/pages and `float` dimensionless ratios; encode units in attribute names and stubs. Do not pass `uom` types through FFI. |
 | [`TODO.md`](../TODO.md) has unfinished swap, pids, I/O, and cpuset work. | Bind only implemented readers; add later surfaces as their core readers land. The old conceptual MVP in `bindings.md` lists some interfaces that are still unimplemented. |
 
 ## Proposed public Python contract
@@ -145,11 +145,11 @@ sakai-python/
 
 Set `[tool.maturin] python-source = "python"` and
 `module-name = "sakai._sakai"`; the `#[pymodule]` initialization name must be
-`_sakai`. Keep the PyO3 dependency out of `sakai-core`. Use Maturin >=1.9.4,
+`_sakai`. Keep the PyO3 dependency out of `sakai`. Use Maturin >=1.9.4,
 which sets `PYO3_BUILD_EXTENSION_MODULE` when building the extension; current
 PyO3 guidance deprecates the `extension-module` Cargo feature because it
 interferes with Rust tests. Check the packaged source distribution in isolation:
-the extension crate depends on `../sakai-core` and the workspace root, so the
+the extension crate depends on `../sakai` and the workspace root, so the
 sdist must contain enough workspace files to rebuild without the checkout.
 
 The repository already has `profiles.python` in `devenv.nix` with Python, uv,
@@ -173,7 +173,7 @@ runtime annotations valid on 3.11.
    Verify missing interface, non-v2 path, invalid PID, deleted-path, and
    permission-error behavior where reproducible.
 3. **Bind CPU.** Cover every method currently implemented in
-   `sakai-core/src/cgroup/v2/cpu/mod.rs`, including older-kernel optional
+   `sakai/src/cgroup/v2/cpu/mod.rs`, including older-kernel optional
    fields. Share conversion helpers for `Time`, `Count`, `Ratio`, and `MaxOr`.
 4. **Bind memory and core.** Cover all implemented memory and core methods;
    preserve local versus hierarchical events and byte/page/count categories.

@@ -1,8 +1,8 @@
 **
 !Cargo.toml
 !Cargo.lock
-!sakai-core/
-!sakai-core/**
+!sakai/
+!sakai/**
 !sakai-python/
 !sakai-python/**
 !xtask/

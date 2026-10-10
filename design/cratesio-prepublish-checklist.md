@@ -1,16 +1,15 @@
-# crates.io pre-publication checklist for `sakai-core`
+# crates.io pre-publication checklist for `sakai`
 
 Research checked on 2026-09-30. Use this before the **first** production
-publication of `sakai-core`. All boxes are unchecked; this is a release gate,
-not a claim that the crate is ready. The scope and priority of unfinished
-interfaces remain in [`TODO.md`](../TODO.md), and the release direction is in
+publication of `sakai`. Checked boxes record completed preparation; this is
+a release gate, not a claim that the crate is ready. The scope and priority of
+unfinished interfaces remain in [`TODO.md`](../TODO.md), and the release direction is in
 [project-direction.md](project-direction.md).
 
 Cargo's [publishing guide](https://doc.rust-lang.org/cargo/reference/publishing.html)
 warns that a published version cannot be overwritten. Review the packaged
-crate, not only the working tree. Commands below name `sakai-core` explicitly
-because the workspace also contains `xtask` and may later contain
-`sakai-python`.
+crate, not only the working tree. Commands below name `sakai` explicitly
+because the workspace also contains `xtask` and `sakai-python`.
 
 ## 1. Settle the crate contract and metadata
 
@@ -20,14 +19,19 @@ because the workspace also contains `xtask` and may later contain
   guarantees, and non-atomic fresh reads are stable enough to document.
   [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/checklist.html),
   [current README](../README.md).
-- [ ] Confirm that `sakai-core` is available on crates.io immediately before
+- [ ] Confirm that `sakai` is available on crates.io immediately before
   release and that the intended crates.io account controls the name. Crate
   names are allocated first come, first served.
   [Cargo publishing guide](https://doc.rust-lang.org/cargo/reference/publishing.html).
-- [ ] Add a real license file and set `license` to its SPDX expression, or use
+- [x] Add a real license file and set `license` to its SPDX expression, or use
   `license-file` for a nonstandard license. Inspect the packaged archive to
-  ensure the license text is present. This and `description` are required by
-  crates.io; both are currently absent from `sakai-core/Cargo.toml`.
+  ensure the license text is present. MIT is set through workspace metadata;
+  the crate-local [LICENSE](../sakai/LICENSE) symlinks to the root
+  [LICENSE](../LICENSE). On 2026-10-10, an isolated working-tree snapshot was
+  packaged and built with `cargo package -p sakai --locked --offline`;
+  the archive's regular license file, exact text, and normalized
+  `license = "MIT"` were verified.
+  `description` is still absent and belongs to the metadata item below.
   [Cargo manifest reference](https://doc.rust-lang.org/cargo/reference/manifest.html).
 - [ ] Fill in accurate `[package]` metadata: concise `description`, source
   `repository`, crate-local `readme`, and useful `keywords`/`categories` if
@@ -52,7 +56,7 @@ because the workspace also contains `xtask` and may later contain
   parsers and snapshot values are portable. Explain units, `MaxOr::Max`,
   controller-disabled files, and `CpuMax::cpu_count()`'s limited meaning.
   [Rust API Guidelines on documentation](https://rust-lang.github.io/api-guidelines/documentation.html),
-  [current crate root](../sakai-core/src/lib.rs).
+  [current crate root](../sakai/src/lib.rs).
 
 ## 2. Validate what Cargo will actually publish
 
@@ -70,19 +74,19 @@ because the workspace also contains `xtask` and may later contain
   `cargo audit` checks the lockfile against RustSec advisories, but a clean
   report does not prove every dependency is safe.
   [RustSec cargo-audit](https://github.com/rustsec/rustsec/blob/main/cargo-audit/README.md).
-- [ ] Use `devenv shell -- rtk cargo package -p sakai-core --list --locked`
+- [ ] Use `devenv shell -- rtk cargo package -p sakai --list --locked`
   and inspect every included file. Include Rust sources, tests/fixtures used by
   the package, README, license, and required manifests; exclude unrelated
   workspace tools, generated output, caches, and secrets. Check the final
   `.crate` size. [Cargo package](https://doc.rust-lang.org/cargo/commands/cargo-package.html).
-- [ ] Run `devenv shell -- rtk cargo package -p sakai-core --locked` and
-  `devenv shell -- rtk cargo publish -p sakai-core --dry-run --locked` from a
+- [ ] Run `devenv shell -- rtk cargo package -p sakai --locked` and
+  `devenv shell -- rtk cargo publish -p sakai --dry-run --locked` from a
   clean release commit. Do not use `--allow-dirty`, `--no-verify`, or
   `--no-metadata` to get past warnings. Cargo extracts and builds the package
   during verification; `--dry-run` performs checks without uploading.
   [Cargo package](https://doc.rust-lang.org/cargo/commands/cargo-package.html),
   [Cargo publish](https://doc.rust-lang.org/cargo/commands/cargo-publish.html).
-- [ ] Inspect `target/package/sakai-core-<version>.crate` itself, including
+- [ ] Inspect `target/package/sakai-<version>.crate` itself, including
   Cargo's normalized manifest and `Cargo.lock`. Build and test from an
   extracted archive or fresh external consumer project with no access to the
   workspace. This catches accidental reliance on files, workspace members,
@@ -105,9 +109,9 @@ because the workspace also contains `xtask` and may later contain
 
 - [ ] Ensure the crates.io account has a verified email and access to the
   intended crate name. For the **first** release, prepare a personal API
-  token for a manual `cargo publish -p sakai-core --locked`; handle it as a
-  secret and avoid committing it or storing it in CI. Cargo's credential
-  provider can use an OS keychain; its plain token provider stores credentials
+  token for a manual `devenv shell -- rtk cargo publish -p sakai --locked`;
+  handle it as a secret and avoid committing it or storing it in CI. Cargo's
+  credential provider can use an OS keychain; its plain token provider stores credentials
   unencrypted on disk.
   [Cargo publishing guide](https://doc.rust-lang.org/cargo/reference/publishing.html),
   [registry authentication](https://doc.rust-lang.org/cargo/reference/registry-authentication.html).
