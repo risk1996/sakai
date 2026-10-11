@@ -27,6 +27,10 @@ use sakai::{
 };
 use uom::si::{information::byte, ratio::ratio, time::nanosecond};
 
+use self::io::{IoDeviceMax, IoDeviceStat, IoLatency, IoMax, IoReader, IoStat, IoWeight};
+
+mod io;
+
 create_exception!(_sakai, SakaiError, PyException, "Base error for Sakai cgroup operations.");
 create_exception!(
   _sakai,
@@ -170,6 +174,9 @@ impl Cgroup {
 
   /// Return a reader for memory controller interfaces.
   fn memory(&self) -> MemoryReader { MemoryReader { owner: Arc::clone(&self.owner) } }
+
+  /// Return a reader for per-device I/O statistics, pressure, and configuration.
+  fn io(&self) -> IoReader { IoReader { owner: Arc::clone(&self.owner) } }
 
   /// Return a process-number reader; kernel PID counts include threads.
   fn pids(&self) -> PidsReader { PidsReader { owner: Arc::clone(&self.owner) } }
@@ -929,6 +936,13 @@ fn _sakai(module: &Bound<'_, PyModule>) -> PyResult<()> {
   module.add_class::<MaxOr>()?;
   module.add_class::<CpuReader>()?;
   module.add_class::<MemoryReader>()?;
+  module.add_class::<IoReader>()?;
+  module.add_class::<IoStat>()?;
+  module.add_class::<IoDeviceStat>()?;
+  module.add_class::<IoWeight>()?;
+  module.add_class::<IoMax>()?;
+  module.add_class::<IoDeviceMax>()?;
+  module.add_class::<IoLatency>()?;
   module.add_class::<SwapReader>()?;
   module.add_class::<ZswapReader>()?;
   module.add_class::<CoreReader>()?;

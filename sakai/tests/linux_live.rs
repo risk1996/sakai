@@ -10,6 +10,7 @@ use sakai::{
     CgroupPath,
     core::{CgroupController, CgroupEvents, CgroupStat, CgroupType},
     cpu::{CpuIdle, CpuMax, CpuMaxBurst, CpuStat, CpuStatLocal, CpuUclampMax, CpuUclampMin, CpuWeight, Nice},
+    io::{IoLatency, IoMax, IoStat, IoWeight},
     memory::{
       MemoryCurrent, MemoryEvents, MemoryEventsLocal, MemoryHigh, MemoryLow, MemoryMax, MemoryMin, MemoryNumaStat,
       MemoryOomGroup, MemoryPeak, MemoryStat, SwapCurrent, SwapEvents, SwapHigh, SwapMax, SwapPeak, ZswapCurrent,
@@ -32,6 +33,11 @@ fn reads_current_cgroup_without_privileges() {
   assert_ok!(cgroup.core().subtree_control());
   assert_ok!(cgroup.core().stat());
   for result in [
+    cgroup.io().stat().map(|_| ()),
+    cgroup.io().pressure().map(|_| ()),
+    cgroup.io().weight().map(|_| ()),
+    cgroup.io().max().map(|_| ()),
+    cgroup.io().latency().map(|_| ()),
     cgroup.cpu().stat_local().map(|_| ()),
     cgroup.cpu().weight().map(|_| ()),
     cgroup.cpu().weight_nice().map(|_| ()),
@@ -133,13 +139,13 @@ impl CgroupFixture {
     let parent = cgroup.as_ref();
     let path = parent.join(format!("sakai-vmtest-{}", std::process::id()));
 
-    let has_memory_controller = fs::read_to_string(parent.join(CgroupController::CONTROLLERS_FILE_NAME))?
-      .split_ascii_whitespace()
-      .any(|controller| controller == "memory");
+    let controllers = fs::read_to_string(parent.join(CgroupController::CONTROLLERS_FILE_NAME))?;
     fs::write(parent.join(CgroupController::SUBTREE_CONTROL_FILE_NAME), "+cpu")?;
     fs::write(parent.join(CgroupController::SUBTREE_CONTROL_FILE_NAME), "+pids")?;
-    if has_memory_controller {
-      fs::write(parent.join(CgroupController::SUBTREE_CONTROL_FILE_NAME), "+memory")?;
+    for controller in ["memory", "io"] {
+      if controllers.split_ascii_whitespace().any(|available| available == controller) {
+        fs::write(parent.join(CgroupController::SUBTREE_CONTROL_FILE_NAME), format!("+{controller}"))?;
+      }
     }
     fs::create_dir(&path)?;
     let fixture = Self { path };
@@ -211,6 +217,30 @@ fn parses_live_delegated_controller_interfaces() {
   fixture.check(PidsEvents::FILE_NAME, false, reader.pids().events());
   fixture.check(CgroupEvents::FILE_NAME, false, reader.core().events());
   fixture.check(CgroupStat::FILE_NAME, false, reader.core().stat());
+  assert!(
+    assert_ok!(reader.core().controllers()).contains(&CgroupController::Io),
+    "vmtest kernel must provide the I/O controller"
+  );
+  fixture.check(IoStat::FILE_NAME, false, reader.io().stat());
+  fixture.check(Pressure::IO_FILE_NAME, true, reader.io().pressure());
+  fixture.check(IoWeight::FILE_NAME, true, reader.io().weight());
+  fixture.check(IoMax::FILE_NAME, false, reader.io().max());
+  fixture.check(IoLatency::FILE_NAME, true, reader.io().latency());
+  assert_eq!(assert_ok!(reader.io().stat()), IoStat::default());
+  assert_eq!(assert_ok!(reader.io().max()), IoMax::default());
+  let weight_path = fixture.path.join(IoWeight::FILE_NAME);
+  match fs::read_to_string(&weight_path) {
+    | Ok(_) => {
+      for weight in [1, 100, 10_000] {
+        let configuration = format!("default {weight}");
+        assert_ok!(fs::write(&weight_path, &configuration));
+        assert_eq!(assert_ok!(reader.io().weight()), assert_ok!(configuration.parse::<IoWeight>()));
+        assert_eq!(assert_ok!(fs::read_to_string(&weight_path)).trim(), configuration);
+      }
+    },
+    | Err(error) if error.kind() == io::ErrorKind::NotFound => {},
+    | Err(error) => panic!("failed to read {weight_path:?}: {error}"),
+  }
   assert_eq!(assert_ok!(reader.pids().current()).value().value, 0);
   assert_eq!(assert_ok!(reader.pids().max()).value(), MaxOr::Max);
   let pids_max_path = fixture.path.join(PidsMax::FILE_NAME);
@@ -283,6 +313,35 @@ fn parses_live_delegated_controller_interfaces() {
   assert_eq!(assert_ok!(reader.core().kind()), CgroupType::Domain);
   assert_ok!(reader.core().controllers());
   assert_ok!(reader.core().subtree_control());
+}
+
+#[test]
+fn reads_root_io_interfaces_and_reports_root_exemptions() {
+  match std::env::var_os("SAKAI_VMTEST") {
+    | None => return,
+    | Some(_) => {},
+  }
+  let path = PathBuf::from("/sys/fs/cgroup");
+  let root = assert_ok!(Cgroup::from_path(&path));
+  for (name, result) in [
+    (IoWeight::FILE_NAME, root.io().weight().map(|_| ())),
+    (IoMax::FILE_NAME, root.io().max().map(|_| ())),
+    (IoLatency::FILE_NAME, root.io().latency().map(|_| ())),
+  ] {
+    assert!(matches!(result, Err(Error::FileMissing { path: missing }) if missing == path.join(name)));
+  }
+  // Older kernels omit root io.stat; PSI can be disabled at build/boot time.
+  for (name, result) in
+    [(IoStat::FILE_NAME, root.io().stat().map(|_| ())), (Pressure::IO_FILE_NAME, root.io().pressure().map(|_| ()))]
+  {
+    match fs::read_to_string(path.join(name)) {
+      | Ok(_) => assert_ok!(result),
+      | Err(error) if error.kind() == io::ErrorKind::NotFound => {
+        assert!(matches!(result, Err(Error::FileMissing { path: missing }) if missing == path.join(name)));
+      },
+      | Err(error) => panic!("failed to read {name}: {error}"),
+    }
+  }
 }
 
 #[test]

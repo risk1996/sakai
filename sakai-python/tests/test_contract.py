@@ -19,6 +19,13 @@ from sakai import (
   CpuMax,
   CpuStat,
   InterfaceMissingError,
+  IoDeviceMax,
+  IoDeviceStat,
+  IoLatency,
+  IoMax,
+  IoReader,
+  IoStat,
+  IoWeight,
   MaxOr,
   MemoryEventCounts,
   MemoryNumaStat,
@@ -182,6 +189,112 @@ class ContractTest(unittest.TestCase):
     self.assertTrue(all(isinstance(v, int) for v in stat.pages.values()))
     self.assertTrue(all(isinstance(v, int) for v in stat.counts.values()))
     self.assertIsInstance(memory.pressure(), Pressure)
+
+  def check_device_key(self, key: tuple[int, int]) -> None:
+    self.assertIsInstance(key, tuple)
+    self.assertEqual(len(key), 2)
+    for number in key:
+      self.check_unsigned(number)
+
+  def test_io_stat_contract(self) -> None:
+    def check_stat(stat: IoStat) -> None:
+      self.assertIsInstance(stat, IoStat)
+      for key, device in stat.devices.items():
+        self.check_device_key(key)
+        self.assertIsInstance(device, IoDeviceStat)
+        for name in (
+          "read_bytes",
+          "write_bytes",
+          "discard_bytes",
+          "read_operations",
+          "write_operations",
+          "discard_operations",
+        ):
+          value = getattr(device, name)
+          if value is not None:
+            self.check_unsigned(value)
+          with self.assertRaises(AttributeError):
+            setattr(device, name, 0)
+      with self.assertRaises(TypeError):
+        cast("Any", stat.devices)[(8, 0)] = 0
+      with self.assertRaises(AttributeError):
+        cast("Any", stat).devices = {}
+
+    self.check_optional("io.stat", self.group.io().stat, check_stat)
+
+  def test_io_weight_contract(self) -> None:
+    def check_weight(weight: IoWeight) -> None:
+      self.assertIsInstance(weight, IoWeight)
+      self.check_unsigned(weight.default_weight)
+      self.assertTrue(1 <= weight.default_weight <= 10_000)
+      for key, value in weight.devices.items():
+        self.check_device_key(key)
+        self.check_unsigned(value)
+        self.assertTrue(1 <= value <= 10_000)
+      with self.assertRaises(TypeError):
+        cast("Any", weight.devices)[(8, 0)] = 0
+      with self.assertRaises(AttributeError):
+        cast("Any", weight).default_weight = 0
+
+    self.check_optional("io.weight", self.group.io().weight, check_weight)
+
+  def test_io_max_contract(self) -> None:
+    def check_max(maximum: IoMax) -> None:
+      self.assertIsInstance(maximum, IoMax)
+      for key, device in maximum.devices.items():
+        self.check_device_key(key)
+        self.assertIsInstance(device, IoDeviceMax)
+        for limit in (
+          device.read_bps,
+          device.write_bps,
+          device.read_iops,
+          device.write_iops,
+        ):
+          self.check_limit(limit)
+        with self.assertRaises(AttributeError):
+          cast("Any", device).read_bps = 0
+      with self.assertRaises(TypeError):
+        cast("Any", maximum.devices)[(8, 0)] = 0
+      with self.assertRaises(AttributeError):
+        cast("Any", maximum).devices = {}
+
+    self.check_optional("io.max", self.group.io().max, check_max)
+
+  def test_io_latency_contract(self) -> None:
+    def check_latency(latency: IoLatency) -> None:
+      self.assertIsInstance(latency, IoLatency)
+      for key, value in latency.targets_ns.items():
+        self.check_device_key(key)
+        self.check_unsigned(value)
+        self.assertGreater(value, 0)
+        self.assertEqual(value % 1000, 0)
+      with self.assertRaises(TypeError):
+        cast("Any", latency.targets_ns)[(8, 0)] = 0
+      with self.assertRaises(AttributeError):
+        cast("Any", latency).targets_ns = {}
+
+    self.check_optional("io.latency", self.group.io().latency, check_latency)
+
+  def test_io_pressure_contract(self) -> None:
+    def check_pressure(pressure: Pressure) -> None:
+      self.assertIsInstance(pressure, Pressure)
+      for line in (pressure.some, pressure.full):
+        if line is not None:
+          for average in (line.avg10, line.avg60, line.avg300):
+            self.check_unsigned(average, float)
+            self.assertLessEqual(average, 1)
+          self.check_unsigned(line.total_ns)
+
+    self.check_optional("io.pressure", self.group.io().pressure, check_pressure)
+
+  def test_io_reader_retains_handle(self) -> None:
+    parent = Cgroup.from_path(self.group.path)
+    reader = parent.io()
+    del parent
+    self.assertIsInstance(reader, IoReader)
+    self.check_optional(
+      "io.stat", reader.stat, lambda value: self.assertIsInstance(value, IoStat)
+    )
 
   def test_core_contract(self) -> None:
     self.assertIn(

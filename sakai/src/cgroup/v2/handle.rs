@@ -15,6 +15,7 @@ use rustix::{
 use super::{
   core::Core,
   cpu::Cpu,
+  io::Io,
   memory::Memory,
   path::{CgroupPath, CgroupPathError},
   pids::Pids,
@@ -154,6 +155,9 @@ impl Cgroup {
   /// Borrows this handle to read memory controller interfaces.
   pub fn memory(&self) -> Memory<'_> { Memory { cgroup: self } }
 
+  /// Borrows this handle to read I/O controller interfaces.
+  pub fn io(&self) -> Io<'_> { Io { cgroup: self } }
+
   /// Borrows this handle to read process-number controller interfaces.
   pub fn pids(&self) -> Pids<'_> { Pids { cgroup: self } }
 
@@ -161,7 +165,7 @@ impl Cgroup {
   pub fn core(&self) -> Core<'_> { Core { cgroup: self } }
 
   pub(crate) fn read(&self, file: &'static str) -> Result<String, Error> {
-    super::io::read_file(&self.directory, file).map_err(|error| Error::read(self.path.join(file), error))
+    super::file::read_file(&self.directory, file).map_err(|error| Error::read(self.path.join(file), error))
   }
 
   pub(crate) fn parse<T: FromStr>(&self, file: &'static str) -> Result<T, Error>
@@ -187,6 +191,7 @@ mod tests {
     v2::{
       core::{CgroupEvents, CgroupStat, CgroupType},
       cpu::{CpuIdle, CpuStatLocal},
+      io::{IoLatency, IoMax, IoStat, IoWeight},
       memory::{MemoryCurrent, MemoryHigh, MemoryLow, MemoryMax, MemoryMin, MemoryPeak, MemoryStat},
       pids::{PidsCurrent, PidsEvents, PidsMax},
     },
@@ -230,6 +235,11 @@ mod tests {
     let cgroup = Cgroup { directory: assert_ok!(fs::open(&path, DIRECTORY_FLAGS, Mode::empty())), path: path.clone() };
     for (result, name) in [
       (cgroup.cpu().stat_local().map(|_| ()), CpuStatLocal::FILE_NAME),
+      (cgroup.io().stat().map(|_| ()), IoStat::FILE_NAME),
+      (cgroup.io().pressure().map(|_| ()), Pressure::IO_FILE_NAME),
+      (cgroup.io().weight().map(|_| ()), IoWeight::FILE_NAME),
+      (cgroup.io().max().map(|_| ()), IoMax::FILE_NAME),
+      (cgroup.io().latency().map(|_| ()), IoLatency::FILE_NAME),
       (cgroup.core().kind().map(|_| ()), CgroupType::FILE_NAME),
       (cgroup.core().events().map(|_| ()), CgroupEvents::FILE_NAME),
       (cgroup.core().stat().map(|_| ()), CgroupStat::FILE_NAME),
@@ -254,6 +264,37 @@ mod tests {
     }
     for pid in [0, u32::MAX] {
       assert!(matches!(Cgroup::from_pid(pid), Err(Error::Io(error)) if error.kind() == io::ErrorKind::InvalidInput));
+    }
+  }
+
+  #[test]
+  fn reads_io_fixtures_without_changing_configuration() {
+    for fixture in ["p3", "p3_older"] {
+      let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/cgroup/v2/fixtures").join(fixture);
+      let cgroup =
+        Cgroup { directory: assert_ok!(fs::open(&path, DIRECTORY_FLAGS, Mode::empty())), path: path.clone() };
+      let stat = assert_ok!(std::fs::read_to_string(path.join(IoStat::FILE_NAME)));
+      let pressure = assert_ok!(std::fs::read_to_string(path.join(Pressure::IO_FILE_NAME)));
+      let weight = assert_ok!(std::fs::read_to_string(path.join(IoWeight::FILE_NAME)));
+      let max = assert_ok!(std::fs::read_to_string(path.join(IoMax::FILE_NAME)));
+      assert_eq!(assert_ok!(cgroup.io().stat()), assert_ok!(stat.parse::<IoStat>()));
+      assert_eq!(assert_ok!(cgroup.io().pressure()), assert_ok!(pressure.parse::<Pressure>()));
+      assert_eq!(assert_ok!(cgroup.io().weight()), assert_ok!(weight.parse::<IoWeight>()));
+      assert_eq!(assert_ok!(cgroup.io().max()), assert_ok!(max.parse::<IoMax>()));
+      match fixture {
+        | "p3" => {
+          let latency = assert_ok!(std::fs::read_to_string(path.join(IoLatency::FILE_NAME)));
+          assert_eq!(assert_ok!(cgroup.io().latency()), assert_ok!(latency.parse::<IoLatency>()));
+          assert_eq!(assert_ok!(std::fs::read_to_string(path.join(IoLatency::FILE_NAME))), latency);
+        },
+        | _ => assert!(
+          matches!(cgroup.io().latency(), Err(Error::FileMissing { path: missing }) if missing == path.join(IoLatency::FILE_NAME))
+        ),
+      }
+      for (name, before) in [(Pressure::IO_FILE_NAME, pressure), (IoWeight::FILE_NAME, weight), (IoMax::FILE_NAME, max)]
+      {
+        assert_eq!(assert_ok!(std::fs::read_to_string(path.join(name))), before);
+      }
     }
   }
 

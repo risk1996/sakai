@@ -15,7 +15,7 @@ pub use cgroup::v2;
 pub use error::Error;
 pub use limit::MaxOr;
 pub use pressure::{Pressure, PressureLine};
-pub use unit::{Bytes, Count, EventRate, NonZeroTime, Pages, Ratio, Time};
+pub use unit::{Bytes, BytesPerSecond, Count, EventRate, NonZeroTime, OperationsPerSecond, Pages, Ratio, Time};
 #[cfg(target_os = "linux")]
 pub use v2::Cgroup;
 pub use v2::cpu::{CpuWeight, Nice, Weight};

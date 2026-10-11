@@ -72,6 +72,18 @@ and `.dying_subsystems` mappings from controller names to integer object counts.
 Missing subsystem counters are absent from the maps. Every reading is volatile;
 missing files, including root exemptions, raise `InterfaceMissingError`.
 
+`group.io()` exposes `.stat()`, `.pressure()`, `.weight()`, `.max()`, and
+`.latency()`. I/O snapshots use read-only device mappings keyed by `(major, minor)`
+integer tuples. `.stat().devices` contains immutable byte and operation counters;
+missing counters remain `None`. `.weight()` exposes `.default_weight` and numeric
+`.devices` overrides. `.max().devices` contains `MaxOr[int]` limits named
+`.read_bps`, `.write_bps` (bytes per second), `.read_iops`, and `.write_iops`
+(operations per second). `.latency().targets_ns` maps configured devices to
+nonzero nanosecond targets; disabled targets are omitted. Device maps can be
+empty, and every read is a separate snapshot. Optional files and root exemptions
+raise `InterfaceMissingError` with their interface path. Pressure uses the same
+`Pressure` snapshot as CPU and memory, and reading it never writes a PSI trigger.
+
 Native classes, methods, and snapshot attributes carry Python `__doc__`
 strings generated from their Rust documentation comments. Use `help(Cgroup)`
 or inspect an individual method such as `Cgroup.current.__doc__`.
