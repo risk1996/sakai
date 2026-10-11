@@ -56,7 +56,7 @@
 # Commit
 
 Follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
-For implementation commits, the scope should be comma separated programming languages,
+For implementation commits, the scope should be comma-separated programming languages,
 e.g. `feat(rust,python): implement new feature`.
 
 ## Note
