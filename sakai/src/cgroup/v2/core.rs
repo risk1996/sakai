@@ -54,6 +54,7 @@ impl CgroupType {
 /// version of the library does not recognize.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, strum::EnumString, strum::Display)]
 #[strum(serialize_all = "snake_case")]
+#[non_exhaustive]
 pub enum CgroupController {
   Cpu,
   Cpuset,

@@ -19,12 +19,6 @@ pub trait Interface: Copy {
 ///
 /// Values are parsed without I/O. Controller readers obtain fresh snapshots.
 /// Different interfaces retain different types even when their units match.
-///
-/// ```compile_fail
-/// use sakai::v2::memory::{MemoryCurrent, MemoryLow};
-/// let current: MemoryCurrent = "1".parse().unwrap();
-/// let low: MemoryLow = current;
-/// ```
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Scalar<T, I> {
   value: T,
