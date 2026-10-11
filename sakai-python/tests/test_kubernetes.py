@@ -51,8 +51,7 @@ class KubernetesResourceTest(unittest.TestCase):
     )
     weight = self.group.cpu().weight()
     self.assertFalse(weight.is_idle)
-    # The binding calls this field "shares", but it contains cpu.weight (v2).
-    self.assertEqual(weight.shares, expected_weight)
+    self.assertEqual(weight.weight, expected_weight)
 
   def test_memory_limit(self) -> None:
     limit_bytes = int(os.environ["MEMORY_LIMIT_BYTES"])

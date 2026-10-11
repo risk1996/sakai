@@ -4,7 +4,9 @@
   - in this case, the cgroup v2 kernel interface and its semantics.
 - Follow the existing code for reference and keeping the code style consistent.
 - Place all `use` statements at the top of their module, including test modules; never put them inside functions.
-- Prioritize function purity and immutability, avoid side effects, use declarative and functional paradigm instead of imperative, avoid `let mut` whenever possible.
+- Prefer pure functions and immutable values. Local mutation is appropriate for
+  parser builders, ordered fallback, and resource management when it makes
+  ownership and validation clearer than a functional expression.
 - Use `&self` for read-only instance methods, including getters, predicates,
   and derived-metric convenience functions, even when the receiver is `Copy`.
   Borrowing expresses inspection and avoids whole-receiver copies without
@@ -23,6 +25,8 @@
     updating internal handling; downstream matches need a fallback.
   - use `uom` whenever there is a dimension of the return type (e.g. time, bytes, count, etc.), say no to primitive obsession,
   - use `nutype` for creating a newtype whenever you need validation.
+    Expose explicit `AsRef` and `into_inner` conversions for validated domain
+    values. Reserve `Deref` for types with smart-pointer semantics.
 - Be concise, avoid repetition, automate as much as possible:
   - use `strum` for common operations with enums.
   - Put stable domain identifiers on their owning struct or enum as associated constants.
@@ -36,8 +40,11 @@
     Tests may retain literal expectations to independently verify the contract.
   - Extract shared meaning, not merely equal values. Avoid a global constants
     collection, new abstractions, or generators for incidental repetition.
-- Avoid free-floating functions, `impl` on related struct or enum instead.
-- Use `match` instead of `if` whenever possible.
+- Put domain operations on their owning struct or enum. Module-level helpers
+  are appropriate when there is no meaningful receiver; do not add a stateless
+  namespace struct just to group functions.
+- Use `match` to distinguish enum variants or multiple alternatives. Use
+  `if`/`else` and `if let` for straightforward predicates and conditional work.
 - Tests:
   - avoid creating multiple tests for similar outcomes, use table test instead,
   - use `indoc!` for multi-line strings, move to fixtures and `include_str!` if it surpasses 20 lines,
@@ -77,8 +84,11 @@
 
 # Shell Scripts
 
-- The ideal number of shell script lines is zero. Write Rust code instead of Bash scripts whenever possible.
-- Bash is OK for a one-off job, but should never considered to be something committed to the repository.
+- Keep shell orchestration short: development tasks and CI may sequence
+  external tools, configure their environment, and arrange cleanup in shell.
+- Put maintained domain logic, parsing, and growing workflows in the existing
+  Rust `xtask`, rather than adding standalone Bash scripts. One-off shell
+  commands are appropriate for local verification.
 
 # Versions and Tooling
 
