@@ -89,5 +89,9 @@ mod parse;
 /// Shared pressure stall information for CPU, memory, and I/O.
 pub mod pressure;
 mod scalar;
+// Keep the packaged consumer examples covered by the workspace doctests.
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+mod readme {}
 /// Quantities that preserve the units of cgroup values.
 pub mod unit;

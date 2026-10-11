@@ -10,6 +10,10 @@ own toolchain requirements. The Ubuntu CI job checks and tests all crate
 targets and features and runs doctests on the minimum Rust version.
 Repository tests and lints use the development toolchain.
 
+Crate installation and consumer examples are in [sakai/README.md](sakai/README.md).
+Release preparation, bootstrap publishing, and CD are described in
+[the release runbook](design/releases.md).
+
 ```rust,no_run
 use sakai::{Cgroup, Error};
 

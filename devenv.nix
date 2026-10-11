@@ -25,17 +25,21 @@
 
   packages = [
     inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}.coderabbit-cli
+    pkgs.actionlint
     pkgs.cargo-audit
     pkgs.cargo-auditable
     pkgs.cargo-deny
     pkgs.cargo-nextest
+    pkgs.cargo-semver-checks
     pkgs.coreutils
     pkgs.curl
     pkgs.k3d
     pkgs.kubectl
     pkgs.pkg-config
     pkgs.protobuf
+    pkgs.release-plz
     pkgs.rtk
+    pkgs.secretspec
   ] ++ lib.optionals (pkgs.stdenv.hostPlatform.isLinux && pkgs.stdenv.hostPlatform.isx86_64) [
     pkgs.qemu
     (pkgs.runCommand "vmtest" { } ''
@@ -59,12 +63,14 @@
       "check:clippy"
       "check:test"
       "check:doc"
+      "check:workflow"
     ];
     "check:fmt".exec = "cargo fmt --all -- --check";
     "check:clippy".exec = "cargo clippy --workspace --all-targets --all-features --locked -- -D warnings";
     "check:test".exec = "cargo nextest run --workspace --all-targets --all-features --locked";
     # nextest does not execute documentation tests.
     "check:doc".exec = "cargo test --workspace --all-features --doc --locked";
+    "check:workflow".exec = "actionlint";
     # Explicit opt-in: security checks fetch current advisories and registry data.
     "check:security".after = [ "check:audit" "check:deny" ];
     "check:audit".exec = "cargo audit --file Cargo.lock";

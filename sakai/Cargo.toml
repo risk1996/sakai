@@ -4,6 +4,11 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+description = "Read-only Linux cgroup v2 metrics with portable parsers and typed snapshots"
+repository = "https://github.com/risk1996/sakai"
+readme = "README.md"
+keywords = ["cgroup", "linux", "metrics", "resources", "monitoring"]
+categories = ["os::linux-apis", "parsing"]
 
 [lints]
 workspace = true

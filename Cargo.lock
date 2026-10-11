@@ -1962,6 +1962,7 @@ dependencies = [
  "fs2",
  "httpdate",
  "reqwest",
+ "semver",
  "serde",
  "serde_json",
  "tempfile",
