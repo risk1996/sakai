@@ -289,6 +289,8 @@ devenv shell -- rtk cargo metadata --manifest-path "$verification_dir/consumer/C
 For isolated Linux checks, use a running container engine. Derive its Rust
 image version from the resolved development compiler. Only the temporary
 verification directory is mounted; the source checkout is unavailable.
+Fetch both locked resolutions when their generated lockfiles differ, so the
+offline consumer check does not rely on the crate's dependency cache alone.
 
 ```sh
 rust_version="$(devenv shell -- rtk rustc --version | rtk awk '{print $2}')"
@@ -297,7 +299,11 @@ rtk docker run --rm \
   --workdir "/verification/sakai-${crate_version}" \
   --env CARGO_HOME=/verification/linux-cargo \
   --env CARGO_TARGET_DIR=/verification/linux-target \
-  "rust:${rust_version}-bookworm" cargo fetch --locked
+  "rust:${rust_version}-bookworm" sh -c \
+  'cargo fetch --locked &&
+  if ! cmp -s Cargo.lock /verification/consumer/Cargo.lock; then
+    cargo fetch --manifest-path /verification/consumer/Cargo.toml --locked
+  fi'
 rtk docker run --rm --network none \
   --mount "type=bind,src=$verification_dir,dst=/verification" \
   --workdir "/verification/sakai-${crate_version}" \
