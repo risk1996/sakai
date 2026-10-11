@@ -187,6 +187,12 @@ impl Release {
       Command::new("cargo").args(["publish", "--package", "sakai", "--dry-run", "--locked"]).status()?.success(),
       "Cargo publishing dry run failed"
     );
+    // Publishing uses a temporary archive location. Produce the retained
+    // candidate with Cargo's documented packaging command instead.
+    ensure!(
+      Command::new("cargo").args(["package", "--package", "sakai", "--locked"]).status()?.success(),
+      "Cargo packaging failed"
+    );
     let archive = format!("sakai-{}.crate", package.version);
     let sha256 = Self::checksum(&metadata.target_directory.join("package").join(&archive))?;
     Ok(Candidate { version: package.version.clone(), tag: tag_name, commit, archive, sha256 })
