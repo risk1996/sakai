@@ -17,6 +17,10 @@ not a final release candidate. README/package metadata and release automation
 are deferred. Repeat artifact checks after changing packaged files or metadata,
 and repeat the release-commit checks before upload.
 
+The current release target is `0.1.0-alpha.1`, inherited by every workspace
+package. The `0.1.0` artifact results below describe the earlier baseline;
+repeat packaging checks for the alpha release.
+
 CI remains Linux-only. Existing Linux 5.15/6.18 smoke coverage is sufficient
 for this preparation; an additional full/intermediate-kernel matrix run is
 not a release requirement. These decisions do not change the existing CI jobs.
@@ -94,8 +98,8 @@ repeated for the changed source.
   [Rust 1.85 release](https://blog.rust-lang.org/2025/02/20/Rust-1.85.0.html),
   [Cargo rust-version guidance](https://doc.rust-lang.org/cargo/reference/rust-version.html).
 - [x] Review the version number and SemVer implications of public enums,
-  trait implementations, types, and error behavior. The current workspace and
-  normalized package both use `0.1.0`; there are no local release tags or a
+  trait implementations, types, and error behavior. The baseline workspace and
+  normalized package both used `0.1.0`; there were no local release tags or a
   previous published baseline selected for a compatibility comparison.
   For the initial `0.1` line, incompatible API changes require `0.2.0`;
   compatible additions/fixes can remain in `0.1.x`. The follow-up marks

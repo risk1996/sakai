@@ -21,6 +21,12 @@ information, registry uploads (including TestPyPI), credentials, publishers,
 and release automation remain deferred. No macOS CI or additional kernel matrix
 is required; existing Linux 5.15/6.18 smoke coverage is sufficient here.
 
+The current release target is `0.1.0a1` on PyPI. Maturin derives this from
+Cargo's workspace version `0.1.0-alpha.1`; no separate Python version is set.
+The `0.1.0` metadata and archive digests below describe the earlier baseline,
+and must be reverified for the alpha release. Repeat commands use the alpha
+version.
+
 The proposed wheel matrix is regular CPython 3.11–3.15 on Linux x86_64 and
 aarch64, glibc ≥2.17 (`manylinux2014`). Both architectures were verified locally,
 but the release support promise still needs owner confirmation. Musl, other
@@ -311,8 +317,8 @@ maturin sdist --manifest-path sakai-python/Cargo.toml --out /verification/dist
 twine check /verification/dist/*
 check-wheel-contents /verification/dist/*.whl
 abi3audit --strict --verbose /verification/dist/*.whl
-auditwheel show /verification/dist/sakai-0.1.0-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl
-auditwheel show /verification/dist/sakai-0.1.0-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+auditwheel show /verification/dist/sakai-0.1.0a1-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl
+auditwheel show /verification/dist/sakai-0.1.0a1-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
 sha256sum /verification/dist/*
 ```
 
@@ -349,7 +355,7 @@ with each unsupported platform (`win_amd64`, `macosx_11_0_x86_64`,
 `musllinux_1_2_x86_64`, `manylinux_2_17_ppc64le`) and expect no matching wheel:
 
 ```text
-pip download --no-cache-dir --no-index --no-deps --only-binary=:all: --find-links /verification/dist --platform <platform> --python-version 3.11 --implementation cp --abi abi3 --dest /tmp/downloads sakai==0.1.0
+pip download --no-cache-dir --no-index --no-deps --only-binary=:all: --find-links /verification/dist --platform <platform> --python-version 3.11 --implementation cp --abi abi3 --dest /tmp/downloads sakai==0.1.0a1
 ```
 
 Repeat with the x86_64 manylinux platform, `--implementation pp`, and
