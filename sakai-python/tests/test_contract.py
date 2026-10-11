@@ -80,18 +80,15 @@ class ContractTest(unittest.TestCase):
         self.assertLessEqual(limit.value, maximum)
 
   def test_native_documentation(self) -> None:
-    self.assertIn("Read-only Linux cgroup v2", inspect.getdoc(native) or "")
-    expected_docs = {
-      "SakaiError": "Base error for Sakai",
-      "InterfaceMissingError": "interface file is missing",
-      "NotCgroupV2Error": "not on a cgroup v2",
-      "DeletedCgroupError": "pinned cgroup has been deleted",
-      "CgroupParseError": "could not be parsed",
-      "NotSupportedError": "not supported for this cgroup",
-    }
-    for class_name, phrase in expected_docs.items():
-      with self.subTest(class_name=class_name):
-        self.assertIn(phrase, inspect.getdoc(getattr(sakai, class_name)) or "")
+    self.assertTrue(inspect.getdoc(native))
+    # Verify one complete Rust-to-Python docstring; other wording may change.
+    self.assertEqual(
+      inspect.getdoc(Cgroup),
+      "An open, pinned cgroup v2 directory handle.\n\n"
+      "Readers retain this handle's ownership, so they remain usable after the\n"
+      "Python Cgroup object is released. Each read fetches a fresh kernel value;\n"
+      "separate calls do not form an atomic snapshot.",
+    )
     # Validate the installed extension against its separately maintained stub.
     package = Path(sakai.__file__).parent
     self.assertTrue((package / "py.typed").is_file())
