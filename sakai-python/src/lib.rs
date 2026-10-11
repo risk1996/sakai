@@ -7,7 +7,7 @@ mod linux;
 use pyo3::{exceptions::PyImportError, prelude::*};
 
 #[cfg(not(target_os = "linux"))]
-#[pymodule]
+#[pymodule(gil_used = true)]
 fn _sakai(_module: &Bound<'_, PyModule>) -> PyResult<()> {
   Err(PyImportError::new_err("sakai requires Linux cgroup v2"))
 }

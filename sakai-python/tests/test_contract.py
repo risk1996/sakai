@@ -93,7 +93,10 @@ class ContractTest(unittest.TestCase):
       with self.subTest(class_name=class_name):
         self.assertIn(phrase, inspect.getdoc(getattr(sakai, class_name)) or "")
     # Validate the installed extension against its separately maintained stub.
-    stub = ast.parse(Path(sakai.__file__).with_name("_sakai.pyi").read_text())
+    package = Path(sakai.__file__).parent
+    self.assertTrue((package / "py.typed").is_file())
+    self.assertEqual(Path(native.__file__).parent, package)
+    stub = ast.parse((package / "_sakai.pyi").read_text())
     classes = [node for node in stub.body if isinstance(node, ast.ClassDef)]
     self.assertTrue(classes)
     self.assertEqual({node.name for node in classes}, set(sakai.__all__))

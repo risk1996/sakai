@@ -926,7 +926,7 @@ impl CoreReader {
 }
 
 /// Read-only Linux cgroup v2 bindings backed by sakai.
-#[pymodule]
+#[pymodule(gil_used = true)]
 fn _sakai(module: &Bound<'_, PyModule>) -> PyResult<()> {
   module.add("SakaiError", module.py().get_type::<SakaiError>())?;
   module.add("InterfaceMissingError", module.py().get_type::<InterfaceMissingError>())?;
