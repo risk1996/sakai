@@ -1,0 +1,1 @@
+mlx4_0 hca_handle.max=5 hca_handle.alloc_fail=7 hca_object.max=0 hca_object.alloc_fail=1 future=nope

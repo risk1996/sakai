@@ -3,7 +3,8 @@
 Implement the read-only cgroup v2 surface in priority order. Finish all CPU
 items before starting memory. The implemented P0–P4 interfaces are in the
 initial release scope on both the Rust and Python sides. P5 adds read-only event
-delivery on both sides; P6 and later work is deferred.
+delivery on both sides; P6 adds the remaining read-only controllers. P7 and later
+work is deferred.
 
 An interface item is complete when it has a typed public reader, key-based
 parsing where applicable, fixtures for supported and missing/older-kernel
@@ -92,11 +93,11 @@ files. Treat that as `FileMissing`, not a parse failure or panic.
 
 ## P6 — Remaining v2 controllers
 
-- [ ] `hugetlb.*` — typed per-page-size usage, limit, event, and reservation
+- [x] `hugetlb.*` — typed per-page-size usage, limit, event, and reservation
       interfaces.
-- [ ] `rdma.*` — typed per-device RDMA current and maximum resources.
-- [ ] `dmem.*` — typed device-memory capacity and usage interfaces.
-- [ ] `misc.*` — typed miscellaneous-resource current, maximum, and event
+- [x] `rdma.*` — typed per-device RDMA current and maximum resources.
+- [x] `dmem.*` — typed device-memory capacity and usage interfaces.
+- [x] `misc.*` — typed miscellaneous-resource current, maximum, and event
       interfaces.
 
 ## P7 — Compatibility and mutation (after read metrics)

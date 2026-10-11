@@ -25,11 +25,15 @@ pub use path::{CgroupPath, CgroupPathError};
 pub mod core;
 pub mod cpu;
 pub mod cpuset;
+pub mod dmem;
+pub mod hugetlb;
 pub mod io;
 pub mod memory;
+pub mod misc;
 #[cfg(target_os = "linux")]
 pub mod notification;
 pub mod pids;
+pub mod rdma;
 
 #[cfg(target_os = "linux")]
 mod file;

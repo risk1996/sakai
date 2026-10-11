@@ -1,0 +1,2 @@
+mlx4_0 hca_handle=1 hca_object=20
+ocrdma1 hca_object=23 future=nope hca_handle=0

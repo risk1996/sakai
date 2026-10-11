@@ -97,6 +97,61 @@ configuration exemptions, raise `InterfaceMissingError`. Every call reads fresh
 values through a retained pinned handle; reads never migrate memory or change
 placement. See the [kernel cpuset documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpuset-interface-files).
 
+`group.hugetlb()` reads huge-page interfaces for a canonical binary page-size
+label such as `"2MB"` or `"1GB"`. These are HugeTLB pages, separate from
+transparent huge pages. `.current(size)` and `.reserved_current(size)` return
+bytes; `.max(size)` and `.reserved_max(size)` return `MaxOr[int]` byte limits.
+Reservation accounting includes reserved pages and faults without prior
+reservations, so it does not measure unused reservations alone. `.events(size)`
+and `.events_local(size)` return immutable `.max` failure counts with hierarchical
+and local scope. `.numa_stat(size)` reports byte `.total` and a read-only `.nodes`
+mapping from NUMA IDs to byte usage; it requires Linux 5.17. Invalid or
+noncanonical labels raise `ValueError`; unavailable sizes and root interfaces
+raise `InterfaceMissingError`. See [Linux HugeTLB interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#hugetlb).
+
+`group.rdma()` reads `.current()` and `.peak()` as immutable `RdmaCurrent`
+snapshots with read-only `.devices` mappings keyed by kernel RDMA device names.
+Each device exposes integer `.hca_handle` and `.hca_object` resource counts.
+`.max()` has the same device keys and `MaxOr[int]` resource limits. Device pools
+may disappear when resources are released; an empty map is valid. `.events()`
+and `.events_local()` map devices to `.hca_handle` and `.hca_object` event objects,
+each with integer `.max` and `.alloc_fail` counters. Peak and event interfaces
+require Linux 7.2; local max counts hits at this cgroup’s own limit, while local
+alloc_fail counts failed requests originating here, including ancestor limits.
+These interfaces are absent at the root; missing files on older kernels raise `InterfaceMissingError`.
+See [Linux RDMA interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#rdma).
+
+`group.dmem()` provides `.capacity()` and `.current()` byte snapshots with
+read-only `.regions` mappings keyed by driver-defined device-memory region names.
+`.min()`, `.low()`, and `.max()` return `DmemLimits`, whose `.regions` values are
+`MaxOr[int]` bytes. Min and low describe hard and best-effort protection; max is
+the hard allocation limit. This controller requires Linux 6.14, its kernel
+configuration and a registering device driver. Capacity exists only at the root;
+protection and limit files exist only below it. Missing files raise
+`InterfaceMissingError`, while an empty map means no regions were reported.
+See [Linux device-memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#dmem).
+
+`group.misc()` reads `.capacity()`, `.current()`, and `.peak()` with immutable
+`.resources` mappings from hardware-dependent resource names, such as `sev`, to
+integer resource counts. These values are counts, not bytes. `.max()` maps the
+same names to `MaxOr[int]` resource limits; limits can exceed machine capacity.
+`.events()` and `.events_local()` map resource names to max-boundary failure
+counts. Hierarchical events aggregate limit-hit locations in the subtree; local
+events count failures at this cgroup's own limit, including descendant requests.
+A request rejected at an ancestor's limit is counted there. Capacity is root-only;
+max and events are non-root. Events require Linux 5.16, root current requires
+Linux 6.8, and peak and local events require Linux 6.11. Empty files are valid;
+omitted resource names remain absent, distinct from a measured zero.
+See [Linux misc interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#misc).
+
+All four readers retain the pinned handle, perform fresh read-only I/O, and
+return separate, volatile snapshots. Mapping properties and nested snapshot
+objects are immutable; reading them performs no I/O. Ancestor limits and
+hardware capacity can further constrain allocations. Controller availability,
+kernel configuration, versions and root exemptions can omit files; the exception
+policy above applies to every reader. These readers never allocate resources,
+change configuration or reset peaks.
+
 Native classes, methods, and snapshot attributes carry Python `__doc__`
 strings generated from their Rust documentation comments. Use `help(Cgroup)`
 or inspect an individual method such as `Cgroup.current.__doc__`.

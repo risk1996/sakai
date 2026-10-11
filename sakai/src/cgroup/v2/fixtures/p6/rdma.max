@@ -1,0 +1,2 @@
+ocrdma1 hca_object=max hca_handle=3
+mlx4_0 hca_handle=2 hca_object=2000

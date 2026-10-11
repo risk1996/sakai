@@ -1,0 +1,289 @@
+//! Device-memory accounting, capacity, and per-region configuration snapshots.
+//!
+//! Region names are opaque driver-defined identifiers, not paths to open.
+//! Every value is measured in bytes, independently of device or system page size.
+//! Since Linux 6.14; see the [versioned Linux interfaces](https://www.kernel.org/doc/html/v6.14/admin-guide/cgroup-v2.html#dmem).
+
+use std::{collections::BTreeMap, str::FromStr};
+
+#[cfg(target_os = "linux")]
+use super::Cgroup;
+#[cfg(target_os = "linux")]
+use crate::Error;
+use crate::{
+  error::{ParseError, ParseValueError},
+  limit::MaxOr,
+  parse::{KeyedFields, ParseBytes, ParseCgroup},
+  unit::Bytes,
+};
+
+/// A borrowed view of one cgroup's device-memory controller.
+///
+/// Each method performs fresh read-only I/O; separate reads are not atomic.
+/// Since Linux 6.14 and requires `CONFIG_CGROUP_DMEM` and controller availability.
+/// Missing files return [`crate::Error::FileMissing`], including older kernels
+/// and root exemptions. Capacity is root-only; protection and limit files are
+/// non-root. The kernel also exposes current usage at the root, although the
+/// interface guide describes it as non-root.
+///
+/// See [Linux 6.14 DMEM source](https://github.com/torvalds/linux/blob/v6.14/kernel/cgroup/dmem.c).
+#[cfg(target_os = "linux")]
+#[derive(Debug, Clone, Copy)]
+pub struct Dmem<'a> {
+  pub(crate) cgroup: &'a Cgroup,
+}
+
+#[cfg(target_os = "linux")]
+impl Dmem<'_> {
+  /// Reads registered region capacities in bytes from the root-only interface.
+  ///
+  /// Capacity includes device memory reserved for kernel use, so it is not
+  /// necessarily available to cgroups. Since Linux 6.14; see [Linux DMEM](https://www.kernel.org/doc/html/v6.14/admin-guide/cgroup-v2.html#dmem).
+  ///
+  /// # Errors
+  ///
+  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  pub fn capacity(&self) -> Result<DmemCapacity, Error> { self.cgroup.parse(DmemCapacity::FILE_NAME) }
+
+  /// Reads volatile hierarchical usage for each registered region in bytes.
+  ///
+  /// Since Linux 6.14; see [Linux DMEM](https://www.kernel.org/doc/html/v6.14/admin-guide/cgroup-v2.html#dmem).
+  ///
+  /// # Errors
+  ///
+  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  pub fn current(&self) -> Result<DmemCurrent, Error> { self.cgroup.parse(DmemCurrent::FILE_NAME) }
+
+  /// Reads configured hard eviction protections in bytes, or `max`.
+  ///
+  /// Effective protection depends on ancestors and sibling demand. Since Linux
+  /// 6.14; see [Linux DMEM](https://www.kernel.org/doc/html/v6.14/admin-guide/cgroup-v2.html#dmem).
+  ///
+  /// # Errors
+  ///
+  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  pub fn min(&self) -> Result<DmemLimits, Error> { self.cgroup.parse(DmemLimits::MIN_FILE_NAME) }
+
+  /// Reads configured best-effort eviction protections in bytes, or `max`.
+  ///
+  /// Effective protection depends on ancestors and sibling demand. Since Linux
+  /// 6.14; see [Linux DMEM](https://www.kernel.org/doc/html/v6.14/admin-guide/cgroup-v2.html#dmem).
+  ///
+  /// # Errors
+  ///
+  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  pub fn low(&self) -> Result<DmemLimits, Error> { self.cgroup.parse(DmemLimits::LOW_FILE_NAME) }
+
+  /// Reads configured hierarchical usage limits in bytes, or `max`.
+  ///
+  /// `max` removes this cgroup's limit; ancestor limits still apply. Since Linux
+  /// 6.14; see [Linux DMEM](https://www.kernel.org/doc/html/v6.14/admin-guide/cgroup-v2.html#dmem).
+  ///
+  /// # Errors
+  ///
+  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  pub fn max(&self) -> Result<DmemLimits, Error> { self.cgroup.parse(DmemLimits::MAX_FILE_NAME) }
+}
+
+/// A snapshot of registered device-memory region capacities in bytes.
+///
+/// The root-only `dmem.capacity` interface includes memory reserved for kernel
+/// use; these amounts are not guarantees of allocatable cgroup memory. An empty
+/// map means no regions were reported. Region membership can change between
+/// reads; arbitrary driver-defined names are retained without interpretation.
+/// Getters inspect this stored snapshot without I/O.
+///
+/// Since Linux 6.14; see [Linux DMEM](https://www.kernel.org/doc/html/v6.14/admin-guide/cgroup-v2.html#dmem).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct DmemCapacity {
+  regions: BTreeMap<String, Bytes>,
+}
+
+impl DmemCapacity {
+  /// The root-only cgroup v2 capacity interface filename, since Linux 6.14.
+  pub const FILE_NAME: &'static str = "dmem.capacity";
+
+  /// Returns capacities in bytes keyed by opaque region name.
+  #[must_use]
+  pub const fn regions(&self) -> &BTreeMap<String, Bytes> { &self.regions }
+}
+
+impl FromStr for DmemCapacity {
+  type Err = ParseError<ParseValueError>;
+
+  fn from_str(contents: &str) -> Result<Self, Self::Err> { Ok(Self { regions: parse_regions(contents)? }) }
+}
+
+/// A volatile snapshot of device-memory usage for this cgroup and descendants.
+///
+/// Amounts are bytes, not counts of device or system pages. Zero means a
+/// reported region has no usage; an absent region means it was not reported.
+/// An empty map is valid. Region names and usage can change between reads;
+/// getters inspect this stored snapshot without I/O. Separately read capacity
+/// and configuration values need not describe the same instant.
+///
+/// Since Linux 6.14; see [Linux DMEM](https://www.kernel.org/doc/html/v6.14/admin-guide/cgroup-v2.html#dmem).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct DmemCurrent {
+  regions: BTreeMap<String, Bytes>,
+}
+
+impl DmemCurrent {
+  /// The cgroup v2 current device-memory usage filename, since Linux 6.14.
+  pub const FILE_NAME: &'static str = "dmem.current";
+
+  /// Returns hierarchical usage in bytes keyed by opaque region name.
+  #[must_use]
+  pub const fn regions(&self) -> &BTreeMap<String, Bytes> { &self.regions }
+}
+
+impl FromStr for DmemCurrent {
+  type Err = ParseError<ParseValueError>;
+
+  fn from_str(contents: &str) -> Result<Self, Self::Err> { Ok(Self { regions: parse_regions(contents)? }) }
+}
+
+/// A configuration snapshot from `dmem.max`, `dmem.min`, or `dmem.low`.
+///
+/// Amounts are bytes; all three interfaces can report `max`. For `dmem.max`,
+/// it means no limit at this cgroup, while ancestor limits still apply. For
+/// `dmem.min` and `dmem.low`, it requests protection without a numeric upper
+/// boundary. The effective hard (`min`) or best-effort (`low`) eviction
+/// protection depends on ancestor protection and sibling demand; these are
+/// configured values, not calculated effective protections. Zero is valid.
+/// The files are absent at the root. An empty map is valid; region names and
+/// configuration may change between reads. Getters inspect stored values.
+///
+/// Since Linux 6.14; see [Linux DMEM](https://www.kernel.org/doc/html/v6.14/admin-guide/cgroup-v2.html#dmem)
+/// and the [versioned implementation](https://github.com/torvalds/linux/blob/v6.14/kernel/cgroup/dmem.c).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct DmemLimits {
+  regions: BTreeMap<String, MaxOr<Bytes>>,
+}
+
+impl DmemLimits {
+  /// The non-root best-effort eviction protection filename, since Linux 6.14.
+  pub const LOW_FILE_NAME: &'static str = "dmem.low";
+  /// The non-root hard device-memory limit filename, since Linux 6.14.
+  pub const MAX_FILE_NAME: &'static str = "dmem.max";
+  /// The non-root hard eviction protection filename, since Linux 6.14.
+  pub const MIN_FILE_NAME: &'static str = "dmem.min";
+
+  /// Returns configured byte amounts or `max`, keyed by opaque region name.
+  #[must_use]
+  pub const fn regions(&self) -> &BTreeMap<String, MaxOr<Bytes>> { &self.regions }
+}
+
+impl FromStr for DmemLimits {
+  type Err = ParseError<ParseValueError>;
+
+  fn from_str(contents: &str) -> Result<Self, Self::Err> { Ok(Self { regions: parse_regions(contents)? }) }
+}
+
+fn parse_regions<T>(contents: &str) -> Result<BTreeMap<String, T>, ParseError<ParseValueError>>
+where
+  T: ParseCgroup<ParseBytes, Error = ParseValueError>, {
+  KeyedFields::parse(contents, |_| "bytes")?
+    .iter()
+    .map(|(region, value)| Ok((region.to_owned(), T::parse_field(contents, "bytes", value)?)))
+    .collect()
+}
+
+#[cfg(test)]
+mod tests {
+  #[cfg(target_os = "linux")]
+  use std::{fmt::Debug, io};
+
+  use assertables::{assert_err, assert_ok};
+  use uom::si::information::byte;
+
+  use super::*;
+  use crate::parse::tests::{
+    Cases,
+    Failure::{Excess, Invalid, Missing},
+  };
+
+  fn regions(values: &[(&str, u64)]) -> BTreeMap<String, Bytes> {
+    values.iter().map(|(name, value)| ((*name).into(), Bytes::new::<byte>(*value))).collect()
+  }
+
+  #[cfg(target_os = "linux")]
+  fn check_read<T>(cgroup: &Cgroup, filename: &str, read: impl FnOnce() -> Result<T, Error>)
+  where
+    T: FromStr + Debug + PartialEq,
+    T::Err: Debug, {
+    let path = cgroup.path().join(filename);
+    match std::fs::read_to_string(&path) {
+      | Ok(raw) => {
+        assert_eq!(assert_ok!(read()), assert_ok!(raw.parse::<T>()));
+        assert_eq!(assert_ok!(std::fs::read_to_string(&path)), raw);
+      },
+      | Err(error) if error.kind() == io::ErrorKind::NotFound => {
+        assert!(matches!(read(), Err(Error::FileMissing { path: missing }) if missing == path));
+      },
+      | Err(error) => panic!("fixture read failed at {path:?}: {error}"),
+    }
+  }
+
+  #[cfg(target_os = "linux")]
+  #[test]
+  fn reads_region_fixtures_without_writes_and_preserves_missing_paths() {
+    for fixture in ["p6_dmem", "p6_dmem_root", "p6_dmem_older"] {
+      let cgroup = Cgroup::fixture(&format!("fixtures/{fixture}"));
+      let reader = Dmem { cgroup: &cgroup };
+      check_read(&cgroup, DmemCapacity::FILE_NAME, || reader.capacity());
+      check_read(&cgroup, DmemCurrent::FILE_NAME, || reader.current());
+      check_read(&cgroup, DmemLimits::MIN_FILE_NAME, || reader.min());
+      check_read(&cgroup, DmemLimits::LOW_FILE_NAME, || reader.low());
+      check_read(&cgroup, DmemLimits::MAX_FILE_NAME, || reader.max());
+    }
+  }
+
+  #[test]
+  fn parses_region_capacity_and_usage_in_bytes() {
+    for (input, expected) in [
+      (
+        include_str!("fixtures/p6_dmem_root/dmem.capacity"),
+        regions(&[("drm/0000:03:00.0/vram0", 8_514_437_120), ("drm/0000:03:00.0/stolen", 67_108_864)]),
+      ),
+      (
+        include_str!("fixtures/p6_dmem/dmem.current"),
+        regions(&[("drm/0000:03:00.0/vram0", 12_550_144), ("drm/0000:03:00.0/stolen", 0), ("future/device", u64::MAX)]),
+      ),
+      (" \n", BTreeMap::new()),
+    ] {
+      assert_eq!(assert_ok!(input.parse::<DmemCapacity>()), DmemCapacity { regions: expected.clone() });
+      assert_eq!(assert_ok!(input.parse::<DmemCurrent>()), DmemCurrent { regions: expected });
+    }
+    for input in ["device", "device max", "device -1", "device nope", "device 18446744073709551616", "device 1 extra"] {
+      assert_err!(input.parse::<DmemCapacity>());
+      assert_err!(input.parse::<DmemCurrent>());
+    }
+  }
+
+  #[test]
+  fn parses_limits_and_protections_with_max() {
+    for name in ["max", "min", "low"] {
+      let input = match name {
+        | "max" => include_str!("fixtures/p6_dmem/dmem.max"),
+        | "min" => include_str!("fixtures/p6_dmem/dmem.min"),
+        | _ => include_str!("fixtures/p6_dmem/dmem.low"),
+      };
+      assert_eq!(assert_ok!(input.parse::<DmemLimits>()), DmemLimits {
+        regions: BTreeMap::from([
+          ("drm/0000:03:00.0/vram0".into(), MaxOr::Value(Bytes::new::<byte>(1_073_741_824))),
+          ("drm/0000:03:00.0/stolen".into(), MaxOr::Max),
+          ("future/device".into(), MaxOr::Value(Bytes::new::<byte>(0))),
+        ]),
+      });
+    }
+    Cases::<DmemLimits>::check([
+      ("", Ok(DmemLimits::default())),
+      ("device", Err(Missing("bytes"))),
+      ("device -1", Err(Invalid("bytes", "-1"))),
+      ("device nope", Err(Invalid("bytes", "nope"))),
+      ("device 18446744073709551616", Err(Invalid("bytes", "18446744073709551616"))),
+      ("device 1 extra", Err(Excess)),
+    ]);
+  }
+}
