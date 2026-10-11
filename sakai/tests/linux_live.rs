@@ -542,7 +542,8 @@ fn reads_remaining_controllers_and_reports_unavailable_interfaces() {
     | Err(error) => panic!("cgroup discovery failed: {error}"),
   };
   assert_ok!(check_remaining_controllers(&group));
-  let root = assert_ok!(Cgroup::from_path(std::path::Path::new("/sys/fs/cgroup")));
+  let membership = assert_ok!(CgroupPath::current());
+  let root = assert_ok!(Cgroup::from_path(membership.mount_point()));
   assert_ok!(check_remaining_controllers(&root));
 }
 
