@@ -4,7 +4,10 @@ import ast
 import errno
 import inspect
 import os
+import select
+import sys
 import tempfile
+import threading
 import unittest
 from collections.abc import Callable, Mapping
 from pathlib import Path
@@ -16,11 +19,14 @@ from sakai import (
   Cgroup,
   CgroupEvents,
   CgroupStat,
+  ChangeNotification,
+  ConfigurationWatcher,
   CpuList,
   CpuMax,
   CpusetPartition,
   CpusetReader,
   CpuStat,
+  EventPoller,
   InterfaceMissingError,
   IoDeviceMax,
   IoDeviceStat,
@@ -155,6 +161,145 @@ class ContractTest(unittest.TestCase):
     for name in ("", ".", "..", "../other", "a/b"):
       with self.subTest(name=name), self.assertRaises(OSError):
         self.group.child(name)
+
+  def test_notification_interface_validation(self) -> None:
+    for create in (self.group.poll_events, self.group.watch_configuration):
+      for invalid in ("", "../cpu.max", "/cpu.max", "cpu.pressure", "memory.current"):
+        with (
+          self.subTest(method=create.__name__, interface=invalid),
+          self.assertRaises(ValueError),
+        ):
+          create(invalid)
+
+  def test_event_monitors_and_timeouts(self) -> None:
+    def check_monitor(monitor: EventPoller) -> None:
+      self.assertIsInstance(monitor, EventPoller)
+      self.check_unsigned(monitor.fileno())
+      os.fstat(monitor.fileno())
+      poll = select.poll()
+      poll.register(monitor, select.POLLPRI | select.POLLERR)
+      self.assertIsInstance(poll.poll(0), list)
+      self.assertIsInstance(monitor.wait(0), bool)
+      for invalid in (-1, float("nan"), float("inf"), float("-inf"), 1e19, 1e100):
+        with self.subTest(timeout=invalid), self.assertRaises(ValueError):
+          monitor.wait(invalid)
+
+    for interface in (
+      "cgroup.events",
+      "memory.events",
+      "memory.events.local",
+      "memory.swap.events",
+      "pids.events",
+      "cpuset.cpus.partition",
+    ):
+      self.check_optional(
+        interface,
+        lambda interface=interface: self.group.poll_events(interface),
+        check_monitor,
+      )
+
+  def test_configuration_monitors_and_timeouts(self) -> None:
+    def check_monitor(monitor: ConfigurationWatcher) -> None:
+      self.assertIsInstance(monitor, ConfigurationWatcher)
+      self.check_unsigned(monitor.fileno())
+      os.fstat(monitor.fileno())
+      self.assertIsInstance(select.select([monitor], [], [], 0), tuple)
+      notification = monitor.wait(0)
+      if notification is not None:
+        self.assertIsInstance(notification, ChangeNotification)
+        for name in ("modified", "removed", "overflowed"):
+          self.assertIsInstance(getattr(notification, name), bool)
+          with self.assertRaises(AttributeError):
+            setattr(notification, name, False)
+      for invalid in (-1, float("nan"), float("inf"), float("-inf"), 1e19, 1e100):
+        with self.subTest(timeout=invalid), self.assertRaises(ValueError):
+          monitor.wait(invalid)
+
+    for interface in (
+      "cgroup.type",
+      "cgroup.subtree_control",
+      "cpu.max",
+      "cpu.weight",
+      "cpu.uclamp.max",
+      "cpu.uclamp.min",
+      "cpu.max.burst",
+      "cpu.weight.nice",
+      "cpu.idle",
+      "memory.max",
+      "memory.high",
+      "memory.low",
+      "memory.min",
+      "memory.oom.group",
+      "memory.swap.max",
+      "memory.swap.high",
+      "memory.zswap.max",
+      "memory.zswap.writeback",
+      "pids.max",
+      "io.weight",
+      "io.max",
+      "io.latency",
+      "cpuset.cpus",
+      "cpuset.mems",
+      "cpuset.cpus.partition",
+    ):
+      self.check_optional(
+        interface,
+        lambda interface=interface: self.group.watch_configuration(interface),
+        check_monitor,
+      )
+
+  def test_notification_descriptor_ownership(self) -> None:
+    for method, interface in (
+      ("poll_events", "cgroup.events"),
+      ("watch_configuration", "cgroup.type"),
+    ):
+      with self.subTest(method=method):
+        parent = Cgroup.from_path(self.group.path)
+        try:
+          monitor = getattr(parent, method)(interface)
+        except InterfaceMissingError as error:
+          self.assertEqual(error.path, self.group.path / interface)
+          continue
+        descriptor = monitor.fileno()
+        del parent
+        os.fstat(descriptor)
+        monitor.wait(0)
+        del monitor
+        with self.assertRaises(OSError) as caught:
+          os.fstat(descriptor)
+        self.assertEqual(caught.exception.errno, errno.EBADF)
+
+  def test_configuration_wait_releases_gil(self) -> None:
+    try:
+      monitor = self.group.watch_configuration("cgroup.type")
+    except InterfaceMissingError:
+      self.skipTest("cgroup.type is unavailable")
+    started = threading.Event()
+    progress = 0
+
+    def worker() -> None:
+      nonlocal progress
+      started.wait()
+      for _ in range(10_000):
+        progress += 1
+
+    thread = threading.Thread(target=worker)
+    thread.start()
+    previous_interval = sys.getswitchinterval()
+    try:
+      # Prevent an interpreter switch after a GIL-holding wait returns from
+      # making the worker appear to have progressed during the wait.
+      sys.setswitchinterval(1.0)
+      started.set()
+      before = progress
+      result = monitor.wait(0.1)
+      after = progress
+      self.assertIsNone(result)
+      self.assertGreater(after, before)
+    finally:
+      sys.setswitchinterval(previous_interval)
+      started.set()
+      thread.join()
 
   def test_cpu_contract(self) -> None:
     cpu = self.group.cpu()

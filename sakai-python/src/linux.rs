@@ -30,10 +30,12 @@ use uom::si::{information::byte, ratio::ratio, time::nanosecond};
 use self::{
   cpuset::{CpuList, CpusetPartition, CpusetReader, MemoryNodeList},
   io::{IoDeviceMax, IoDeviceStat, IoLatency, IoMax, IoReader, IoStat, IoWeight},
+  notification::{ChangeNotification, ConfigurationWatcher, EventPoller},
 };
 
 mod cpuset;
 mod io;
+mod notification;
 
 create_exception!(_sakai, SakaiError, PyException, "Base error for Sakai cgroup operations.");
 create_exception!(
@@ -192,6 +194,38 @@ impl Cgroup {
 
   /// Return a reader for core cgroup topology interfaces.
   fn core(&self) -> CoreReader { CoreReader { owner: Arc::clone(&self.owner) } }
+
+  /// Open a read-only poll monitor for a supported event interface.
+  ///
+  /// Accepts cgroup.events, memory.events, memory.events.local,
+  /// memory.swap.events, pids.events, and cpuset.cpus.partition. Unknown names raise ValueError;
+  /// unavailable interfaces raise InterfaceMissingError with their path.
+  /// The monitor owns its descriptor after this Cgroup is released. It
+  /// acknowledges the initial state when opened; notifications are coalesced
+  /// hints to perform a fresh reader call, not counter or state snapshots.
+  /// PSI pressure files are excluded because installing a trigger requires
+  /// a write. See https://docs.kernel.org/admin-guide/cgroup-v2.html.
+  fn poll_events(&self, py: Python<'_>, interface: &str) -> PyResult<EventPoller> {
+    let interface = interface.parse().map_err(|error| PyValueError::new_err(format!("{error}")))?;
+    PythonError::read(py, &self.owner, move |owner| owner.poll_events(interface)).map(Into::into)
+  }
+
+  /// Open an inotify monitor for a supported configuration interface.
+  ///
+  /// Accepts configuration filenames documented in the package README,
+  /// never arbitrary paths or usage/statistic files. Unknown names raise
+  /// ValueError; missing files raise InterfaceMissingError with their path.
+  /// The monitor owns its descriptors after this Cgroup is released.
+  /// Changes are coalesced hints: read the configuration again after a
+  /// notification, and rescan after queue overflow. Reported removal ends the
+  /// watch. Interface disappearance may go unreported; use bounded waits and
+  /// fresh reads to check lifecycle. Registration requires /proc/self/fd access.
+  /// This operation never writes configuration or installs PSI triggers.
+  /// See https://man7.org/linux/man-pages/man7/inotify.7.html.
+  fn watch_configuration(&self, py: Python<'_>, interface: &str) -> PyResult<ConfigurationWatcher> {
+    let interface = interface.parse().map_err(|error| PyValueError::new_err(format!("{error}")))?;
+    PythonError::read(py, &self.owner, move |owner| owner.watch_configuration(interface)).map(Into::into)
+  }
 
   fn __repr__(&self) -> String { format!("Cgroup({:?})", self.owner.path()) }
 }
@@ -938,6 +972,9 @@ fn _sakai(module: &Bound<'_, PyModule>) -> PyResult<()> {
   module.add("CgroupParseError", module.py().get_type::<CgroupParseError>())?;
   module.add("NotSupportedError", module.py().get_type::<NotSupportedError>())?;
   module.add_class::<Cgroup>()?;
+  module.add_class::<EventPoller>()?;
+  module.add_class::<ConfigurationWatcher>()?;
+  module.add_class::<ChangeNotification>()?;
   module.add_class::<MaxOr>()?;
   module.add_class::<CpuReader>()?;
   module.add_class::<MemoryReader>()?;
@@ -985,7 +1022,7 @@ mod tests {
 
   use assertables::{assert_err, assert_in_delta, assert_ok};
   use pyo3::{
-    exceptions::{PyAttributeError, PyFileNotFoundError, PyPermissionError, PyTypeError},
+    exceptions::{PyAttributeError, PyBrokenPipeError, PyFileNotFoundError, PyPermissionError, PyTypeError},
     types::{PyBytes, PyFloat, PyInt},
   };
 
@@ -1277,9 +1314,11 @@ mod tests {
           assert!(translated.to_string().contains("invalid quota"));
         }
       }
-      for (errno, exception_type) in
-        [(2, py.get_type::<PyFileNotFoundError>()), (13, py.get_type::<PyPermissionError>())]
-      {
+      for (errno, exception_type) in [
+        (2, py.get_type::<PyFileNotFoundError>()),
+        (13, py.get_type::<PyPermissionError>()),
+        (32, py.get_type::<PyBrokenPipeError>()),
+      ] {
         let translated = PythonError::from_core(py, Error::Io(io::Error::from_raw_os_error(errno)));
         assert!(translated.is_instance(py, &exception_type));
         assert!(!translated.is_instance_of::<SakaiError>(py));

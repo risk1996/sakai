@@ -68,6 +68,50 @@ Configured lists and partition state are absent at the hierarchy root. Reads
 never change affinity or migrate memory. See the
 [kernel cpuset documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpuset-interface-files).
 
+Linux notification handles observe changes independently of snapshot readers:
+
+```rust,no_run
+use std::time::Duration;
+use sakai::{Cgroup, Error, v2::notification::{EventInterface, ConfigurationInterface}};
+
+fn observe(cgroup: &Cgroup) -> Result<(), Error> {
+  let mut events = cgroup.poll_events(EventInterface::MemoryEvents)?;
+  let mut limits = cgroup.watch_configuration(ConfigurationInterface::MemoryMax)?;
+  if events.wait(Some(Duration::from_secs(1)))? {
+    println!("{:?}", cgroup.memory().events()?);
+  }
+  if let Some(change) = limits.wait(Some(Duration::from_secs(1)))? {
+    if change.modified() || change.overflowed() {
+      println!("{:?}", cgroup.memory().max()?);
+    }
+  }
+  Ok(())
+}
+```
+
+`poll_events` supports cgroup, memory, swap, and process-limit events and cpuset
+partition changes. It primes and acknowledges `POLLPRI` notifications by reading
+the same read-only descriptor. `watch_configuration` uses inotify to observe
+writes to supported configuration files, plus watch removal and queue overflow.
+Automatic changes to effective placement do not imply a configuration write.
+Both handles own their descriptors and survive dropping the original `Cgroup`;
+`AsFd` supports external polling. Watch registration uses the pinned interface,
+so a stale diagnostic path does not redirect it. Inotify registration requires
+the caller's `/proc/self/fd` to be accessible.
+
+Notifications are coalesced hints to read again, not a count, a value snapshot,
+or an atomic transaction. Register before taking the initial snapshot. Overflow
+requires resynchronizing by reading again; a reported removal requires reopening
+a new watch if the interface becomes available again. Kernfs interface removal
+does not guarantee an inotify deletion event, so a watch can remain idle after
+cgroup deletion. Use bounded waits and fresh reads to check lifecycle.
+`None` waits indefinitely and a
+zero duration checks immediately. Interrupted waits return their OS error.
+Missing optional files return `FileMissing` as on ordinary reads. PSI triggers
+require writes and are excluded; pressure reads retain their existing semantics.
+See [kernel event notifications](https://docs.kernel.org/admin-guide/cgroup-v2.html#un-populated-notification)
+and [inotify(7)](https://man7.org/linux/man-pages/man7/inotify.7.html).
+
 Times use `u64` nanoseconds with checked conversion from kernel microseconds.
 Counts have a separate `uom` kind. Ratios use `f64` to preserve fractional
 percentages. Integer quantity arithmetic truncates; use fractional operands

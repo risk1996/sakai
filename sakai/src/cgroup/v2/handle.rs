@@ -18,6 +18,7 @@ use super::{
   cpuset::Cpuset,
   io::Io,
   memory::Memory,
+  notification::{ConfigurationInterface, ConfigurationWatcher, EventInterface, EventPoller},
   path::{CgroupPath, CgroupPathError},
   pids::Pids,
 };
@@ -233,6 +234,41 @@ impl Cgroup {
   ///
   /// See [`crate::v2::core`] for the supported readers and [Linux cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html#controllers).
   pub fn core(&self) -> Core<'_> { Core { cgroup: self } }
+
+  /// Opens a read-only subscription to one evented cgroup interface.
+  ///
+  /// An initial read establishes the notification baseline. Later calls to
+  /// [`EventPoller::wait`] acknowledge changes on that same descriptor without
+  /// changing this handle's fresh-read semantics. Notifications can coalesce;
+  /// read the corresponding typed snapshot after each notification.
+  /// Pressure interfaces require writable trigger registration and are excluded.
+  /// See [cgroups(7)](https://man7.org/linux/man-pages/man7/cgroups.7.html).
+  ///
+  /// # Errors
+  ///
+  /// Returns [`Error::FileMissing`] for an absent interface, [`Error::NotSupported`]
+  /// for an unsupported operation, or [`Error::Io`] for open or initial-read
+  /// failures. Contents are acknowledged without parsing them.
+  pub fn poll_events(&self, interface: EventInterface) -> Result<EventPoller, Error> {
+    EventPoller::open(&self.directory, self.path.join(interface.filename()), interface)
+  }
+
+  /// Watches writes to one configuration interface using inotify.
+  ///
+  /// The watch follows the opened interface inode, including after cgroup
+  /// renames; it does not reopen the diagnostic path or follow replacement files.
+  /// Registration requires a mounted `/proc` to resolve the opened descriptor.
+  /// Notifications can coalesce and do not contain values; read the corresponding
+  /// typed snapshot after a change. See [inotify(7)](https://man7.org/linux/man-pages/man7/inotify.7.html).
+  ///
+  /// # Errors
+  ///
+  /// Returns [`Error::FileMissing`] for an absent interface, [`Error::NotSupported`]
+  /// for an unsupported operation, or [`Error::Io`] for permission, procfs,
+  /// inotify resource-limit, or other operating-system failures.
+  pub fn watch_configuration(&self, interface: ConfigurationInterface) -> Result<ConfigurationWatcher, Error> {
+    ConfigurationWatcher::open(&self.directory, self.path.join(interface.filename()), interface)
+  }
 
   pub(crate) fn read(&self, file: &'static str) -> Result<String, Error> {
     super::file::read_file(&self.directory, file).map_err(|error| Error::read(self.path.join(file), error))
