@@ -217,7 +217,9 @@ impl Cgroup {
   /// ValueError; missing files raise InterfaceMissingError with their path.
   /// The monitor owns its descriptors after this Cgroup is released.
   /// Changes are coalesced hints: read the configuration again after a
-  /// notification, and rescan after queue overflow. Removal ends the watch.
+  /// notification, and rescan after queue overflow. Reported removal ends the
+  /// watch. Interface disappearance may go unreported; use bounded waits and
+  /// fresh reads to check lifecycle. Registration requires /proc/self/fd access.
   /// This operation never writes configuration or installs PSI triggers.
   /// See https://man7.org/linux/man-pages/man7/inotify.7.html.
   fn watch_configuration(&self, py: Python<'_>, interface: &str) -> PyResult<ConfigurationWatcher> {

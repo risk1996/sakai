@@ -76,10 +76,10 @@ use sakai::{Cgroup, Error, v2::notification::{EventInterface, ConfigurationInter
 
 fn observe(cgroup: &Cgroup) -> Result<(), Error> {
   let mut events = cgroup.poll_events(EventInterface::MemoryEvents)?;
+  let mut limits = cgroup.watch_configuration(ConfigurationInterface::MemoryMax)?;
   if events.wait(Some(Duration::from_secs(1)))? {
     println!("{:?}", cgroup.memory().events()?);
   }
-  let mut limits = cgroup.watch_configuration(ConfigurationInterface::MemoryMax)?;
   if let Some(change) = limits.wait(Some(Duration::from_secs(1)))? {
     if change.modified() || change.overflowed() {
       println!("{:?}", cgroup.memory().max()?);
