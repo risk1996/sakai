@@ -2,9 +2,12 @@
 
 use std::{path::PathBuf, sync::Arc};
 
-use pyo3::prelude::*;
+use pyo3::{exceptions::PyValueError, prelude::*};
 
-use super::{CoreReader, CpuReader, CpusetReader, IoReader, MemoryReader, PidsReader, PythonError};
+use super::{
+  ConfigurationWatcher, CoreReader, CpuReader, CpusetReader, EventPoller, IoReader, MemoryReader, PidsReader,
+  PythonError,
+};
 
 pub(super) struct PythonPath;
 
@@ -86,6 +89,38 @@ impl Cgroup {
 
   /// Return a reader for core cgroup topology interfaces.
   fn core(&self) -> CoreReader { CoreReader { owner: Arc::clone(&self.owner) } }
+
+  /// Open a read-only poll monitor for a supported event interface.
+  ///
+  /// Accepts cgroup.events, memory.events, memory.events.local,
+  /// memory.swap.events, pids.events, and cpuset.cpus.partition. Unknown names raise ValueError;
+  /// unavailable interfaces raise InterfaceMissingError with their path.
+  /// The monitor owns its descriptor after this Cgroup is released. It
+  /// acknowledges the initial state when opened; notifications are coalesced
+  /// hints to perform a fresh reader call, not counter or state snapshots.
+  /// PSI pressure files are excluded because installing a trigger requires
+  /// a write. See https://docs.kernel.org/admin-guide/cgroup-v2.html.
+  fn poll_events(&self, py: Python<'_>, interface: &str) -> PyResult<EventPoller> {
+    let interface = interface.parse().map_err(|error| PyValueError::new_err(format!("{error}")))?;
+    PythonError::read(py, &self.owner, move |owner| owner.poll_events(interface)).map(Into::into)
+  }
+
+  /// Open an inotify monitor for a supported configuration interface.
+  ///
+  /// Accepts configuration filenames documented in the package README,
+  /// never arbitrary paths or usage/statistic files. Unknown names raise
+  /// ValueError; missing files raise InterfaceMissingError with their path.
+  /// The monitor owns its descriptors after this Cgroup is released.
+  /// Changes are coalesced hints: read the configuration again after a
+  /// notification, and rescan after queue overflow. Reported removal ends the
+  /// watch. Interface disappearance may go unreported; use bounded waits and
+  /// fresh reads to check lifecycle. Registration requires /proc/self/fd access.
+  /// This operation never writes configuration or installs PSI triggers.
+  /// See https://man7.org/linux/man-pages/man7/inotify.7.html.
+  fn watch_configuration(&self, py: Python<'_>, interface: &str) -> PyResult<ConfigurationWatcher> {
+    let interface = interface.parse().map_err(|error| PyValueError::new_err(format!("{error}")))?;
+    PythonError::read(py, &self.owner, move |owner| owner.watch_configuration(interface)).map(Into::into)
+  }
 
   fn __repr__(&self) -> String { format!("Cgroup({:?})", self.owner.path()) }
 }

@@ -14,6 +14,7 @@ use self::{
   io::{IoDeviceMax, IoDeviceStat, IoLatency, IoMax, IoReader, IoStat, IoWeight},
   limit::MaxOr,
   memory::{MemoryEventCounts, MemoryNumaStat, MemoryReader, MemoryStat, SwapEvents, SwapReader, ZswapReader},
+  notification::{ChangeNotification, ConfigurationWatcher, EventPoller},
   pids::{PidsEvents, PidsReader},
   pressure::{Pressure, PressureLine},
 };
@@ -26,6 +27,7 @@ mod handle;
 mod io;
 mod limit;
 mod memory;
+mod notification;
 mod pids;
 mod pressure;
 
@@ -39,6 +41,9 @@ fn _sakai(module: &Bound<'_, PyModule>) -> PyResult<()> {
   module.add("CgroupParseError", module.py().get_type::<CgroupParseError>())?;
   module.add("NotSupportedError", module.py().get_type::<NotSupportedError>())?;
   module.add_class::<Cgroup>()?;
+  module.add_class::<EventPoller>()?;
+  module.add_class::<ConfigurationWatcher>()?;
+  module.add_class::<ChangeNotification>()?;
   module.add_class::<MaxOr>()?;
   module.add_class::<CpuReader>()?;
   module.add_class::<MemoryReader>()?;

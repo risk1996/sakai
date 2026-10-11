@@ -45,10 +45,7 @@ impl Io<'_> {
   ///
   /// # Errors
   ///
-  /// Returns [`crate::Error::FileMissing`] if the interface is absent,
-  /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Operation`]
-  /// for other operating-system failures.
+  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn stat(&self) -> Result<IoStat, Error> { self.cgroup.parse(IoStat::FILE_NAME) }
 
   /// I/O PSI rolling averages and cumulative stall time; never writes a trigger.
@@ -57,10 +54,7 @@ impl Io<'_> {
   ///
   /// # Errors
   ///
-  /// Returns [`crate::Error::FileMissing`] if the interface is absent,
-  /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Operation`]
-  /// for other operating-system failures.
+  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn pressure(&self) -> Result<Pressure, Error> { self.cgroup.parse(Pressure::IO_FILE_NAME) }
 
   /// Default scheduling weight and explicit per-device overrides.
@@ -69,10 +63,7 @@ impl Io<'_> {
   ///
   /// # Errors
   ///
-  /// Returns [`crate::Error::FileMissing`] if the interface is absent,
-  /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Operation`]
-  /// for other operating-system failures.
+  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn weight(&self) -> Result<IoWeight, Error> { self.cgroup.parse(IoWeight::FILE_NAME) }
 
   /// Per-device byte-per-second and operation-per-second limits.
@@ -81,10 +72,7 @@ impl Io<'_> {
   ///
   /// # Errors
   ///
-  /// Returns [`crate::Error::FileMissing`] if the interface is absent,
-  /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Operation`]
-  /// for other operating-system failures.
+  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn max(&self) -> Result<IoMax, Error> { self.cgroup.parse(IoMax::FILE_NAME) }
 
   /// Per-device latency protection targets, where the kernel supports them.
@@ -93,10 +81,7 @@ impl Io<'_> {
   ///
   /// # Errors
   ///
-  /// Returns [`crate::Error::FileMissing`] if the interface is absent,
-  /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Operation`]
-  /// for other operating-system failures.
+  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn latency(&self) -> Result<IoLatency, Error> { self.cgroup.parse(IoLatency::FILE_NAME) }
 }
 

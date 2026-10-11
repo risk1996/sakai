@@ -1,6 +1,6 @@
 #![cfg(target_os = "linux")]
 
-use std::{fmt::Debug, fs, io, path::PathBuf, process::Command, str::FromStr};
+use std::{fmt::Debug, fs, io, path::PathBuf, process::Command, str::FromStr, time::Duration};
 
 use assertables::assert_ok;
 use sakai::{
@@ -17,9 +17,11 @@ use sakai::{
       MemoryOomGroup, MemoryPeak, MemoryStat, SwapCurrent, SwapEvents, SwapHigh, SwapMax, SwapPeak, ZswapCurrent,
       ZswapMax, ZswapWriteback,
     },
+    notification::{ConfigurationInterface, EventInterface},
     pids::{PidsCurrent, PidsEvents, PidsMax},
   },
 };
+use strum::IntoEnumIterator;
 use uom::si::information::byte;
 
 #[test]
@@ -86,6 +88,24 @@ fn reads_current_cgroup_without_privileges() {
   }
   assert_ok!(Cgroup::from_pid(std::process::id()));
   assert_ok!(cgroup.children());
+  for interface in EventInterface::iter() {
+    match cgroup.poll_events(interface) {
+      | Ok(mut events) => {
+        assert_ok!(events.wait(Some(Duration::ZERO)));
+      },
+      | Err(Error::FileMissing { path }) => assert_eq!(path, cgroup.path().join(interface.filename())),
+      | Err(error) => panic!("event subscription failed: {error}"),
+    }
+  }
+  for interface in ConfigurationInterface::iter() {
+    match cgroup.watch_configuration(interface) {
+      | Ok(mut configuration) => {
+        assert_ok!(configuration.wait(Some(Duration::ZERO)));
+      },
+      | Err(Error::FileMissing { path }) => assert_eq!(path, cgroup.path().join(interface.filename())),
+      | Err(error) => panic!("configuration subscription failed: {error}"),
+    }
+  }
 }
 
 #[test]
@@ -127,6 +147,16 @@ struct CgroupFixture {
 }
 
 impl CgroupFixture {
+  /// Configures a disposable interface, then verifies fresh reads do not change it.
+  fn configure<T>(&self, file: &str, input: &str, expected: T, read: impl FnOnce() -> Result<T, Error>)
+  where
+    T: Debug + PartialEq, {
+    let path = self.path.join(file);
+    assert_ok!(fs::write(&path, input), "path: {path:?}");
+    assert_eq!(assert_ok!(read(), "path: {path:?}"), expected, "path: {path:?}");
+    assert_eq!(assert_ok!(fs::read_to_string(&path)).trim(), input, "path: {path:?}");
+  }
+
   /// Creates a child in vmtest's fresh, disposable cgroup2 hierarchy.
   fn create() -> io::Result<Self> {
     let cgroup = CgroupPath::current().map_err(io::Error::other)?;
@@ -200,8 +230,7 @@ fn parses_live_delegated_controller_interfaces() {
   let finite = assert_ok!(reader.cpu().max());
   assert_eq!(finite, assert_ok!("25000 100000".parse::<CpuMax>()));
   assert_eq!(assert_ok!(fs::read_to_string(fixture.path.join(CpuMax::FILE_NAME))).trim(), "25000 100000");
-  assert_ok!(fs::write(fixture.path.join(CpuMax::FILE_NAME), "max 100000"));
-  assert_eq!(assert_ok!(reader.cpu().max()), assert_ok!("max 100000".parse::<CpuMax>()));
+  fixture.configure(CpuMax::FILE_NAME, "max 100000", assert_ok!("max 100000".parse::<CpuMax>()), || reader.cpu().max());
   assert_ok!(reader.cpu().stat());
   match reader.cpu().stat_local() {
     | Ok(_) | Err(Error::FileMissing { .. }) => {},
@@ -219,16 +248,12 @@ fn parses_live_delegated_controller_interfaces() {
       assert_eq!(assert_ok!(reader.cpuset().mems()), MemoryNodeList::default());
       // Configure a granted resource, then check a fresh read and unchanged file.
       // No process enters this fixture; these writes only exercise the test hierarchy.
-      let cpu = assert_ok!(reader.cpuset().cpus_effective()).ids().next().expect("online CPU");
-      let node = assert_ok!(reader.cpuset().mems_effective()).ids().next().expect("online memory node");
-      let cpu_path = fixture.path.join(CpuList::CPUS_FILE_NAME);
-      let node_path = fixture.path.join(MemoryNodeList::MEMS_FILE_NAME);
-      assert_ok!(fs::write(&cpu_path, cpu.to_string()));
-      assert_ok!(fs::write(&node_path, node.to_string()));
-      assert_eq!(assert_ok!(reader.cpuset().cpus()), assert_ok!(cpu.to_string().parse::<CpuList>()));
-      assert_eq!(assert_ok!(reader.cpuset().mems()), assert_ok!(node.to_string().parse::<MemoryNodeList>()));
-      assert_eq!(assert_ok!(fs::read_to_string(&cpu_path)).trim(), cpu.to_string());
-      assert_eq!(assert_ok!(fs::read_to_string(&node_path)).trim(), node.to_string());
+      let cpu = assert_ok!(reader.cpuset().cpus_effective()).ids().next().expect("online CPU").to_string();
+      let node = assert_ok!(reader.cpuset().mems_effective()).ids().next().expect("online memory node").to_string();
+      fixture.configure(CpuList::CPUS_FILE_NAME, &cpu, assert_ok!(cpu.parse::<CpuList>()), || reader.cpuset().cpus());
+      fixture.configure(MemoryNodeList::MEMS_FILE_NAME, &node, assert_ok!(node.parse::<MemoryNodeList>()), || {
+        reader.cpuset().mems()
+      });
     },
     | false => {},
   }
@@ -264,9 +289,9 @@ fn parses_live_delegated_controller_interfaces() {
     | Ok(_) => {
       for weight in [1, 100, 10_000] {
         let configuration = format!("default {weight}");
-        assert_ok!(fs::write(&weight_path, &configuration));
-        assert_eq!(assert_ok!(reader.io().weight()), assert_ok!(configuration.parse::<IoWeight>()));
-        assert_eq!(assert_ok!(fs::read_to_string(&weight_path)).trim(), configuration);
+        fixture.configure(IoWeight::FILE_NAME, &configuration, assert_ok!(configuration.parse::<IoWeight>()), || {
+          reader.io().weight()
+        });
       }
     },
     | Err(error) if error.kind() == io::ErrorKind::NotFound => {},
@@ -274,11 +299,8 @@ fn parses_live_delegated_controller_interfaces() {
   }
   assert_eq!(assert_ok!(reader.pids().current()).value().value, 0);
   assert_eq!(assert_ok!(reader.pids().max()).value(), MaxOr::Max);
-  let pids_max_path = fixture.path.join(PidsMax::FILE_NAME);
   for limit in ["0", "10", "max"] {
-    assert_ok!(fs::write(&pids_max_path, limit));
-    assert_eq!(assert_ok!(reader.pids().max()), assert_ok!(limit.parse::<PidsMax>()));
-    assert_eq!(assert_ok!(fs::read_to_string(&pids_max_path)).trim(), limit);
+    fixture.configure(PidsMax::FILE_NAME, limit, assert_ok!(limit.parse::<PidsMax>()), || reader.pids().max());
   }
   assert_eq!(assert_ok!(reader.pids().events()).max().value, 0);
   let events = assert_ok!(reader.core().events());
@@ -315,35 +337,70 @@ fn parses_live_delegated_controller_interfaces() {
   let current_bytes = assert_ok!(current_contents.trim().parse::<u64>());
   assert_eq!(assert_ok!(reader.memory().current()).value().get::<byte>(), current_bytes);
 
-  let max_path = fixture.path.join(MemoryMax::FILE_NAME);
-  let high_path = fixture.path.join(MemoryHigh::FILE_NAME);
-  let low_path = fixture.path.join(MemoryLow::FILE_NAME);
-  let min_path = fixture.path.join(MemoryMin::FILE_NAME);
-  let oom_group_path = fixture.path.join(MemoryOomGroup::FILE_NAME);
   assert_eq!(assert_ok!(reader.memory().max()).value(), MaxOr::Max);
   assert_eq!(assert_ok!(reader.memory().high()).value(), MaxOr::Max);
   assert_eq!(assert_ok!(reader.memory().low()).value(), Bytes::new::<byte>(0));
   assert_eq!(assert_ok!(reader.memory().min()).value(), Bytes::new::<byte>(0));
   assert!(!assert_ok!(reader.memory().oom_group()).value());
-  assert_ok!(fs::write(&oom_group_path, "1"));
-  assert!(assert_ok!(reader.memory().oom_group()).value());
-  assert_ok!(fs::write(&oom_group_path, "0"));
-  assert!(!assert_ok!(reader.memory().oom_group()).value());
-  assert_ok!(fs::write(&max_path, "67108864"));
-  assert_ok!(fs::write(&high_path, "33554432"));
-  assert_ok!(fs::write(&low_path, "16777216"));
-  assert_ok!(fs::write(&min_path, "8388608"));
-  assert_eq!(assert_ok!(fs::read_to_string(&max_path)).trim(), "67108864");
-  assert_eq!(assert_ok!(fs::read_to_string(&high_path)).trim(), "33554432");
-  assert_eq!(assert_ok!(fs::read_to_string(&low_path)).trim(), "16777216");
-  assert_eq!(assert_ok!(fs::read_to_string(&min_path)).trim(), "8388608");
-  assert_eq!(assert_ok!(reader.memory().max()).value(), MaxOr::Value(Bytes::new::<byte>(67_108_864)));
-  assert_eq!(assert_ok!(reader.memory().high()).value(), MaxOr::Value(Bytes::new::<byte>(33_554_432)));
-  assert_eq!(assert_ok!(reader.memory().low()).value(), Bytes::new::<byte>(16_777_216));
-  assert_eq!(assert_ok!(reader.memory().min()).value(), Bytes::new::<byte>(8_388_608));
+  for (input, expected) in [("1", true), ("0", false)] {
+    fixture
+      .configure(MemoryOomGroup::FILE_NAME, input, expected, || reader.memory().oom_group().map(|value| value.value()));
+  }
+  fixture.configure(MemoryMax::FILE_NAME, "67108864", MaxOr::Value(Bytes::new::<byte>(67_108_864)), || {
+    reader.memory().max().map(|value| value.value())
+  });
+  fixture.configure(MemoryHigh::FILE_NAME, "33554432", MaxOr::Value(Bytes::new::<byte>(33_554_432)), || {
+    reader.memory().high().map(|value| value.value())
+  });
+  fixture.configure(MemoryLow::FILE_NAME, "16777216", Bytes::new::<byte>(16_777_216), || {
+    reader.memory().low().map(|value| value.value())
+  });
+  fixture.configure(MemoryMin::FILE_NAME, "8388608", Bytes::new::<byte>(8_388_608), || {
+    reader.memory().min().map(|value| value.value())
+  });
   assert_eq!(assert_ok!(reader.core().kind()), CgroupType::Domain);
   assert_ok!(reader.core().controllers());
   assert_ok!(reader.core().subtree_control());
+
+  // Notifications only observe this disposable delegated test hierarchy.
+  assert_ok!(fs::write(fixture.path.join(CgroupController::SUBTREE_CONTROL_FILE_NAME), "+cpu"));
+  let notification_path = fixture.path.join("notifications");
+  assert_ok!(fs::create_dir(&notification_path));
+  let notification_group = assert_ok!(reader.child(std::ffi::OsStr::new("notifications")));
+  let mut events = assert_ok!(notification_group.poll_events(EventInterface::CgroupEvents));
+  let mut configuration = assert_ok!(notification_group.watch_configuration(ConfigurationInterface::CpuMax));
+  let notification_timeout = Some(Duration::from_secs(2));
+  assert!(!assert_ok!(events.wait(Some(Duration::ZERO))));
+  assert_eq!(assert_ok!(configuration.wait(Some(Duration::ZERO))), None);
+
+  for frozen in [true, false] {
+    assert_ok!(fs::write(notification_path.join("cgroup.freeze"), match frozen {
+      | true => "1",
+      | false => "0",
+    }));
+    assert!(assert_ok!(events.wait(notification_timeout)));
+    assert_eq!(assert_ok!(notification_group.core().events()).frozen(), Some(frozen));
+    assert!(!assert_ok!(events.wait(Some(Duration::ZERO))));
+  }
+  for contents in ["25000 100000", "max 100000"] {
+    assert_ok!(fs::write(notification_path.join(CpuMax::FILE_NAME), contents));
+    let change = assert_ok!(configuration.wait(notification_timeout)).expect("configuration notification");
+    assert!(change.modified());
+    assert!(!change.removed());
+    assert!(!change.overflowed());
+    assert_eq!(assert_ok!(notification_group.cpu().max()), assert_ok!(contents.parse::<CpuMax>()));
+    assert_eq!(assert_ok!(fs::read_to_string(notification_path.join(CpuMax::FILE_NAME))).trim(), contents);
+    assert_eq!(assert_ok!(configuration.wait(Some(Duration::ZERO))), None);
+  }
+  drop(events);
+  drop(notification_group);
+  assert_ok!(fs::remove_dir(&notification_path));
+  // Kernfs internal removal need not emit an inotify deletion event. A
+  // notification, when supplied by the kernel, must describe watch removal.
+  match assert_ok!(configuration.wait(Some(Duration::ZERO))) {
+    | Some(change) => assert!(change.removed()),
+    | None => {},
+  }
 }
 
 #[test]

@@ -18,6 +18,7 @@ use super::{
   cpuset::Cpuset,
   io::Io,
   memory::Memory,
+  notification::{ConfigurationInterface, ConfigurationWatcher, EventInterface, EventPoller},
   path::{CgroupPath, CgroupPathError},
   pids::Pids,
 };
@@ -267,6 +268,43 @@ impl Cgroup {
   /// See [`crate::v2::core`] for the supported readers and [Linux cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html#controllers).
   pub fn core(&self) -> Core<'_> { Core { cgroup: self } }
 
+  /// Opens a read-only subscription to one evented cgroup interface.
+  ///
+  /// An initial read establishes the notification baseline. Later calls to
+  /// [`EventPoller::wait`] acknowledge changes on that same descriptor without
+  /// changing this handle's fresh-read semantics. Notifications can coalesce;
+  /// read the corresponding typed snapshot after each notification.
+  /// Pressure interfaces require writable trigger registration and are excluded.
+  /// See [cgroups(7)](https://man7.org/linux/man-pages/man7/cgroups.7.html).
+  ///
+  /// # Errors
+  ///
+  /// Returns [`Error::FileMissing`] for an absent interface, [`Error::NotSupported`]
+  /// for an unsupported operation, or [`Error::Operation`] for other open or
+  /// initial-read failures, preserving the interface path and underlying cause.
+  /// Contents are acknowledged without parsing them.
+  pub fn poll_events(&self, interface: EventInterface) -> Result<EventPoller, Error> {
+    EventPoller::open(&self.directory, self.path.join(interface.filename()), interface)
+  }
+
+  /// Watches writes to one configuration interface using inotify.
+  ///
+  /// The watch follows the opened interface inode, including after cgroup
+  /// renames; it does not reopen the diagnostic path or follow replacement files.
+  /// Registration requires a mounted `/proc` to resolve the opened descriptor.
+  /// Notifications can coalesce and do not contain values; read the corresponding
+  /// typed snapshot after a change. See [inotify(7)](https://man7.org/linux/man-pages/man7/inotify.7.html).
+  ///
+  /// # Errors
+  ///
+  /// Returns [`Error::FileMissing`] for an absent interface, [`Error::NotSupported`]
+  /// for an unsupported operation, or [`Error::Operation`] for other interface-open
+  /// failures. Returns [`Error::Io`] for procfs, inotify resource-limit, or other
+  /// watch-registration failures.
+  pub fn watch_configuration(&self, interface: ConfigurationInterface) -> Result<ConfigurationWatcher, Error> {
+    ConfigurationWatcher::open(&self.directory, self.path.join(interface.filename()), interface)
+  }
+
   pub(crate) fn read(&self, file: &'static str) -> Result<String, Error> {
     super::file::read_file(&self.directory, file).map_err(|error| Error::read(self.path.join(file), error))
   }
@@ -283,7 +321,7 @@ impl Cgroup {
 
 #[cfg(test)]
 mod tests {
-  use std::error::Error as _;
+  use std::{error::Error as _, fmt::Debug};
 
   use assertables::{assert_err, assert_ok};
 
@@ -301,15 +339,39 @@ mod tests {
     },
   };
 
+  impl Cgroup {
+    // Internal fixtures only: public constructors always verify filesystem magic.
+    fn fixture(relative: &str) -> Self {
+      let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/cgroup/v2").join(relative);
+      Self { directory: assert_ok!(fs::open(&path, DIRECTORY_FLAGS, Mode::empty())), path }
+    }
+
+    fn check_fixture<T>(&self, name: &str, optional: bool, read: impl FnOnce() -> Result<T, Error>)
+    where
+      T: FromStr + Debug + PartialEq,
+      T::Err: Debug, {
+      let path = self.path().join(name);
+      match std::fs::read_to_string(&path) {
+        | Ok(raw) => {
+          assert_eq!(assert_ok!(read()), assert_ok!(raw.parse::<T>()), "path: {path:?}");
+          assert_eq!(assert_ok!(std::fs::read_to_string(&path)), raw);
+        },
+        | Err(error) if optional && error.kind() == io::ErrorKind::NotFound => {
+          assert!(matches!(read(), Err(Error::FileMissing { path: missing }) if missing == path));
+        },
+        | Err(error) => panic!("fixture read failed at {path:?}: {error}"),
+      }
+    }
+  }
+
   #[test]
   fn parse_failure_keeps_path_and_typed_source() {
-    let path = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/src/cgroup/v2"));
-    let cgroup = Cgroup { directory: assert_ok!(fs::open(&path, DIRECTORY_FLAGS, Mode::empty())), path: path.clone() };
+    let cgroup = Cgroup::fixture("");
     let error = assert_err!(cgroup.parse::<CpuIdle>("mod.rs"));
     let Error::Parse { path: actual, source } = &error else {
       panic!("expected parse failure, got {error:?}");
     };
-    assert_eq!(actual, &path.join("mod.rs"));
+    assert_eq!(actual, &cgroup.path().join("mod.rs"));
     let parsed = source.downcast_ref::<ParseError<ParseValueError>>().expect("original parse error");
     assert_eq!(error.source().map(ToString::to_string), Some(parsed.to_string()));
     assert!(matches!(parsed, ParseError::Invalid { field: "idle", .. }));
@@ -320,13 +382,12 @@ mod tests {
 
   #[test]
   fn cgroup_type_failure_keeps_raw_input_and_strum_source() {
-    let path = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/src/cgroup/v2/fixtures/invalid_type"));
-    let cgroup = Cgroup { directory: assert_ok!(fs::open(&path, DIRECTORY_FLAGS, Mode::empty())), path: path.clone() };
+    let cgroup = Cgroup::fixture("fixtures/invalid_type");
     let error = assert_err!(cgroup.core().kind());
     let Error::Parse { path: actual, .. } = &error else {
       panic!("expected parse failure, got {error:?}");
     };
-    assert_eq!(actual, &path.join(CgroupType::FILE_NAME));
+    assert_eq!(actual, &cgroup.path().join(CgroupType::FILE_NAME));
     assert!(error.to_string().contains("\"unknown\\n\""));
     let reason = error.source().and_then(std::error::Error::source).expect("strum parse reason");
     assert!(error.to_string().contains(&reason.to_string()));
@@ -334,9 +395,8 @@ mod tests {
 
   #[test]
   fn missing_interfaces_keep_their_path() {
-    let path = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/src/cgroup/v2"));
-    // Internal fixture only: public constructors always verify filesystem magic.
-    let cgroup = Cgroup { directory: assert_ok!(fs::open(&path, DIRECTORY_FLAGS, Mode::empty())), path: path.clone() };
+    let cgroup = Cgroup::fixture("");
+    let path = cgroup.path();
     for (result, name) in [
       (cgroup.cpu().stat_local().map(|_| ()), CpuStatLocal::FILE_NAME),
       (cgroup.cpuset().cpus().map(|_| ()), CpuList::CPUS_FILE_NAME),
@@ -379,36 +439,18 @@ mod tests {
   #[test]
   fn reads_placement_fixtures_and_root_exemptions() {
     for fixture in ["p4", "p4_older", "p4_root"] {
-      let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/cgroup/v2/fixtures").join(fixture);
-      let cgroup =
-        Cgroup { directory: assert_ok!(fs::open(&path, DIRECTORY_FLAGS, Mode::empty())), path: path.clone() };
-      for (name, read) in [
-        (CpuList::CPUS_FILE_NAME, cgroup.cpuset().cpus().map(|value| value.ranges().to_vec())),
-        (CpuList::EFFECTIVE_FILE_NAME, cgroup.cpuset().cpus_effective().map(|value| value.ranges().to_vec())),
-        (MemoryNodeList::MEMS_FILE_NAME, cgroup.cpuset().mems().map(|value| value.ranges().to_vec())),
-        (MemoryNodeList::EFFECTIVE_FILE_NAME, cgroup.cpuset().mems_effective().map(|value| value.ranges().to_vec())),
-      ] {
-        match std::fs::read_to_string(path.join(name)) {
-          | Ok(raw) => {
-            let expected = assert_ok!(raw.parse::<CpuList>()).ranges().to_vec();
-            assert_eq!(assert_ok!(read), expected);
-            assert_eq!(assert_ok!(std::fs::read_to_string(path.join(name))), raw);
-          },
-          | Err(error) if error.kind() == io::ErrorKind::NotFound => {
-            assert!(matches!(read, Err(Error::FileMissing { path: missing }) if missing == path.join(name)));
-          },
-          | Err(error) => panic!("fixture read failed: {error}"),
-        }
-      }
+      let cgroup = Cgroup::fixture(&format!("fixtures/{fixture}"));
+      let path = cgroup.path();
+      let cpuset = cgroup.cpuset();
+      cgroup.check_fixture(CpuList::CPUS_FILE_NAME, true, || cpuset.cpus());
+      cgroup.check_fixture(CpuList::EFFECTIVE_FILE_NAME, true, || cpuset.cpus_effective());
+      cgroup.check_fixture(MemoryNodeList::MEMS_FILE_NAME, true, || cpuset.mems());
+      cgroup.check_fixture(MemoryNodeList::EFFECTIVE_FILE_NAME, true, || cpuset.mems_effective());
       match fixture {
         | "p4_root" => assert!(
           matches!(cgroup.cpuset().partition(), Err(Error::FileMissing { path: missing }) if missing == path.join(CpusetPartition::FILE_NAME))
         ),
-        | _ => {
-          let raw = assert_ok!(std::fs::read_to_string(path.join(CpusetPartition::FILE_NAME)));
-          assert_eq!(assert_ok!(cgroup.cpuset().partition()), assert_ok!(raw.parse::<CpusetPartition>()));
-          assert_eq!(assert_ok!(std::fs::read_to_string(path.join(CpusetPartition::FILE_NAME))), raw);
-        },
+        | _ => cgroup.check_fixture(CpusetPartition::FILE_NAME, false, || cpuset.partition()),
       }
     }
   }
@@ -416,30 +458,18 @@ mod tests {
   #[test]
   fn reads_io_fixtures_without_changing_configuration() {
     for fixture in ["p3", "p3_older"] {
-      let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/cgroup/v2/fixtures").join(fixture);
-      let cgroup =
-        Cgroup { directory: assert_ok!(fs::open(&path, DIRECTORY_FLAGS, Mode::empty())), path: path.clone() };
-      let stat = assert_ok!(std::fs::read_to_string(path.join(IoStat::FILE_NAME)));
-      let pressure = assert_ok!(std::fs::read_to_string(path.join(Pressure::IO_FILE_NAME)));
-      let weight = assert_ok!(std::fs::read_to_string(path.join(IoWeight::FILE_NAME)));
-      let max = assert_ok!(std::fs::read_to_string(path.join(IoMax::FILE_NAME)));
-      assert_eq!(assert_ok!(cgroup.io().stat()), assert_ok!(stat.parse::<IoStat>()));
-      assert_eq!(assert_ok!(cgroup.io().pressure()), assert_ok!(pressure.parse::<Pressure>()));
-      assert_eq!(assert_ok!(cgroup.io().weight()), assert_ok!(weight.parse::<IoWeight>()));
-      assert_eq!(assert_ok!(cgroup.io().max()), assert_ok!(max.parse::<IoMax>()));
+      let cgroup = Cgroup::fixture(&format!("fixtures/{fixture}"));
+      let path = cgroup.path();
+      let io = cgroup.io();
+      cgroup.check_fixture(IoStat::FILE_NAME, false, || io.stat());
+      cgroup.check_fixture(Pressure::IO_FILE_NAME, false, || io.pressure());
+      cgroup.check_fixture(IoWeight::FILE_NAME, false, || io.weight());
+      cgroup.check_fixture(IoMax::FILE_NAME, false, || io.max());
       match fixture {
-        | "p3" => {
-          let latency = assert_ok!(std::fs::read_to_string(path.join(IoLatency::FILE_NAME)));
-          assert_eq!(assert_ok!(cgroup.io().latency()), assert_ok!(latency.parse::<IoLatency>()));
-          assert_eq!(assert_ok!(std::fs::read_to_string(path.join(IoLatency::FILE_NAME))), latency);
-        },
+        | "p3" => cgroup.check_fixture(IoLatency::FILE_NAME, false, || io.latency()),
         | _ => assert!(
           matches!(cgroup.io().latency(), Err(Error::FileMissing { path: missing }) if missing == path.join(IoLatency::FILE_NAME))
         ),
-      }
-      for (name, before) in [(Pressure::IO_FILE_NAME, pressure), (IoWeight::FILE_NAME, weight), (IoMax::FILE_NAME, max)]
-      {
-        assert_eq!(assert_ok!(std::fs::read_to_string(path.join(name))), before);
       }
     }
   }
@@ -447,8 +477,7 @@ mod tests {
   #[test]
   fn reads_process_and_state_fixtures() {
     for (fixture, frozen, has_subsystems) in [("p2", Some(false), true), ("p2_older", None, false)] {
-      let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/cgroup/v2/fixtures").join(fixture);
-      let cgroup = Cgroup { directory: assert_ok!(fs::open(&path, DIRECTORY_FLAGS, Mode::empty())), path };
+      let cgroup = Cgroup::fixture(&format!("fixtures/{fixture}"));
       let current = assert_ok!(cgroup.pids().current());
       let max = assert_ok!(cgroup.pids().max());
       let events = assert_ok!(cgroup.pids().events());

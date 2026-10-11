@@ -37,9 +37,7 @@ impl Cpuset<'_> {
   ///
   /// # Errors
   ///
-  /// Returns [`Error::FileMissing`] for an absent interface (including root
-  /// exemptions), [`Error::NotSupported`] for unsupported operations,
-  /// [`Error::Parse`] for invalid contents, or [`Error::Operation`] for other OS errors.
+  /// See the shared [interface-read errors](crate::v2#interface-read-errors); the root lacks this interface.
   pub fn cpus(&self) -> Result<CpuList, Error> { self.cgroup.parse(CpuList::CPUS_FILE_NAME) }
 
   /// Reads online CPU IDs actually granted to tasks in this cgroup.
@@ -50,9 +48,7 @@ impl Cpuset<'_> {
   ///
   /// # Errors
   ///
-  /// Returns [`Error::FileMissing`] for an absent interface,
-  /// [`Error::NotSupported`] for unsupported operations, [`Error::Parse`] for
-  /// invalid contents, or [`Error::Operation`] for other OS errors.
+  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn cpus_effective(&self) -> Result<CpuList, Error> { self.cgroup.parse(CpuList::EFFECTIVE_FILE_NAME) }
 
   /// Reads requested NUMA memory-node IDs; an empty list means inheritance.
@@ -63,9 +59,7 @@ impl Cpuset<'_> {
   ///
   /// # Errors
   ///
-  /// Returns [`Error::FileMissing`] for an absent interface (including root
-  /// exemptions), [`Error::NotSupported`] for unsupported operations,
-  /// [`Error::Parse`] for invalid contents, or [`Error::Operation`] for other OS errors.
+  /// See the shared [interface-read errors](crate::v2#interface-read-errors); the root lacks this interface.
   pub fn mems(&self) -> Result<MemoryNodeList, Error> { self.cgroup.parse(MemoryNodeList::MEMS_FILE_NAME) }
 
   /// Reads online memory-node IDs actually granted to tasks in this cgroup.
@@ -77,9 +71,7 @@ impl Cpuset<'_> {
   ///
   /// # Errors
   ///
-  /// Returns [`Error::FileMissing`] for an absent interface,
-  /// [`Error::NotSupported`] for unsupported operations, [`Error::Parse`] for
-  /// invalid contents, or [`Error::Operation`] for other OS errors.
+  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn mems_effective(&self) -> Result<MemoryNodeList, Error> {
     self.cgroup.parse(MemoryNodeList::EFFECTIVE_FILE_NAME)
   }
@@ -92,9 +84,7 @@ impl Cpuset<'_> {
   ///
   /// # Errors
   ///
-  /// Returns [`Error::FileMissing`] for an absent interface (including root
-  /// exemptions and older kernels), [`Error::NotSupported`] for unsupported
-  /// operations, [`Error::Parse`] for invalid contents, or [`Error::Operation`] for
-  /// other OS errors.
+  /// See the shared [interface-read errors](crate::v2#interface-read-errors);
+  /// the root and older kernels lack this interface.
   pub fn partition(&self) -> Result<CpusetPartition, Error> { self.cgroup.parse(CpusetPartition::FILE_NAME) }
 }
