@@ -127,15 +127,50 @@ class ContractTest(unittest.TestCase):
     classes = [node for node in stub.body if isinstance(node, ast.ClassDef)]
     self.assertTrue(classes)
     self.assertEqual({node.name for node in classes}, set(sakai.__all__))
+    self.assertEqual(len(sakai.__all__), len(set(sakai.__all__)))
+    self.assertEqual(
+      {name for name in vars(native) if not name.startswith("_")},
+      set(sakai.__all__),
+    )
     for declaration in classes:
       with self.subTest(class_name=declaration.name):
         cls = getattr(sakai, declaration.name)
+        self.assertIs(cls, getattr(native, declaration.name))
         # getdoc can inherit object/Exception docs when a class has no own docs.
         self.assertTrue((cls.__doc__ or "").strip())
-        for member in declaration.body:
-          if isinstance(member, ast.FunctionDef):
-            with self.subTest(member_name=member.name):
-              self.assertTrue(inspect.getdoc(getattr(cls, member.name)))
+        members = {
+          member.name: member
+          for member in declaration.body
+          if isinstance(member, ast.FunctionDef) and not member.name.startswith("_")
+        }
+        # Inspect own public descriptors; inherited Exception members and
+        # dynamic diagnostic attributes are covered by exception tests.
+        self.assertEqual(
+          {
+            name
+            for name, member in vars(cls).items()
+            if not name.startswith("_")
+            and (callable(member) or inspect.isdatadescriptor(member))
+          },
+          set(members),
+        )
+        for name, member in members.items():
+          with self.subTest(member_name=name):
+            actual = getattr(cls, name)
+            self.assertTrue(inspect.getdoc(actual))
+            is_property = any(
+              isinstance(decorator, ast.Name) and decorator.id == "property"
+              for decorator in member.decorator_list
+            )
+            if is_property:
+              self.assertTrue(inspect.isdatadescriptor(actual))
+            else:
+              self.assertTrue(callable(actual))
+              self.assertEqual(
+                list(inspect.signature(actual).parameters),
+                [arg.arg for arg in member.args.posonlyargs + member.args.args]
+                + [arg.arg for arg in member.args.kwonlyargs],
+              )
 
   def test_pinned_handle_and_pathlike(self) -> None:
     self.assertIsInstance(self.group.path, Path)
@@ -154,6 +189,21 @@ class ContractTest(unittest.TestCase):
     for pid in (0, 2**31):
       with self.subTest(pid=pid), self.assertRaises(OSError):
         Cgroup.from_pid(pid)
+
+  def test_disappeared_process_retains_errno_and_path(self) -> None:
+    # Linux limits PIDs below this valid i32 value, so it cannot exist.
+    with self.assertRaises(FileNotFoundError) as caught:
+      Cgroup.from_pid(2**31 - 1)
+    self.assertEqual(caught.exception.errno, errno.ENOENT)
+    self.assertEqual(caught.exception.filename, Path("/proc/2147483647"))
+
+  def test_missing_directory_retains_errno_and_filename(self) -> None:
+    with tempfile.TemporaryDirectory() as directory:
+      path = Path(directory) / "missing"
+      with self.assertRaises(FileNotFoundError) as caught:
+        Cgroup.from_path(path)
+      self.assertEqual(caught.exception.errno, errno.ENOENT)
+      self.assertEqual(caught.exception.filename, path)
 
   def test_invalid_path_and_child(self) -> None:
     with tempfile.TemporaryDirectory() as path, self.assertRaises(NotCgroupV2Error):
@@ -307,9 +357,9 @@ class ContractTest(unittest.TestCase):
     self.check_unsigned(stat.time.usage_ns)
     self.check_frozen(stat.time, "usage_ns")
     weight = cpu.weight()
-    self.assertEqual(weight.is_idle, weight.shares is None)
-    if weight.shares is not None:
-      self.assertTrue(1 <= weight.shares <= 10_000)
+    self.assertEqual(weight.is_idle, weight.weight is None)
+    if weight.weight is not None:
+      self.assertTrue(1 <= weight.weight <= 10_000)
     self.assertTrue(-20 <= cpu.weight_nice() <= 19)
     self.assertGreaterEqual(cpu.max_burst(), 0)
     self.assertIsInstance(cpu.idle(), bool)
@@ -651,6 +701,10 @@ class ContractTest(unittest.TestCase):
         with self.assertRaises(FileNotFoundError) as caught:
           self.group.child(name)
         self.assertEqual(caught.exception.errno, errno.ENOENT)
+        self.assertEqual(
+          os.fsencode(caught.exception.filename),
+          os.fsencode(self.group.path) + b"/sakai-nonexistent-\xff",
+        )
 
 
 if __name__ == "__main__":

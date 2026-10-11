@@ -176,8 +176,11 @@ pushing a new tag is **not** a rehearsal: it starts the publishing path.
 
 If an upload succeeded but a later step failed, rerun the failed jobs for the
 same tag. Artifact IDs preserve the original candidate across attempts.
-Only an identical unyanked archive can be skipped; API outages/authorization
-errors fail rather than masquerading as a missing version. GitHub release
+Only an identical unyanked archive can be skipped. Post-upload verification
+retries missing versions and transient network, timeout, rate-limit, and server
+errors within a fixed attempt budget. Authorization errors, malformed metadata,
+checksum conflicts, and yanked versions fail immediately; exhausted retries
+retain useful diagnostics rather than masquerading as a missing version. GitHub release
 creation is likewise idempotent only for matching, non-draft notes. Never
 overwrite an existing registry version, change a release tag, or weaken a
 gate to recover. Correct unreleased source and use a new version when needed.

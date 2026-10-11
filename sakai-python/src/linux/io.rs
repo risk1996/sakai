@@ -12,7 +12,7 @@ use sakai::v2::io::{
 };
 use uom::si::{frequency::hertz, information::byte, information_rate::byte_per_second, time::nanosecond};
 
-use super::{MaxOr, Pressure, PythonError, PythonLimitValue};
+use super::{MaxOr, Pressure, PythonError, limit::PythonLimitValue};
 
 type DeviceKey = (u32, u32);
 
@@ -203,7 +203,7 @@ pub(super) struct IoLatency {
 
 impl From<CoreIoLatency> for IoLatency {
   fn from(value: CoreIoLatency) -> Self {
-    Self { targets_ns: IoValues::devices(value.devices(), |value| value.get::<nanosecond>()) }
+    Self { targets_ns: IoValues::devices(value.devices(), |value| value.as_ref().get::<nanosecond>()) }
   }
 }
 

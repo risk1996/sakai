@@ -28,6 +28,7 @@ enum Command {
 }
 
 #[tokio::main]
+/// Dispatch explicitly selected developer tasks; shell entry does not initiate a release.
 async fn main() -> Result<()> {
   match Xtask::parse().command {
     | Command::Release(command) => command.run().await,

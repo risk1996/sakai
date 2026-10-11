@@ -501,10 +501,13 @@ mod tests {
     );
     assert_ok!(symlink("/etc/passwd", fixture.file(events.filename())));
     assert_ok!(symlink("/etc/passwd", fixture.file(config.filename())));
-    assert!(matches!(EventPoller::open(&directory, fixture.file(events.filename()), events), Err(Error::Io(_))));
+    assert!(matches!(
+      EventPoller::open(&directory, fixture.file(events.filename()), events),
+      Err(Error::Operation { path, source, .. }) if path == fixture.file(events.filename()) && source.raw_os_error() == Some(rustix::io::Errno::LOOP.raw_os_error())
+    ));
     assert!(matches!(
       ConfigurationWatcher::open(&directory, fixture.file(config.filename()), config),
-      Err(Error::Io(_))
+      Err(Error::Operation { path, source, .. }) if path == fixture.file(config.filename()) && source.raw_os_error() == Some(rustix::io::Errno::LOOP.raw_os_error())
     ));
   }
 

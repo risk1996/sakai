@@ -12,7 +12,8 @@
 //!   availability, kernel configuration or version, and hierarchy-root exemptions.
 //! - [`crate::Error::NotSupported`] if the kernel reports an unsupported operation.
 //! - [`crate::Error::Parse`] if the interface contents are invalid.
-//! - [`crate::Error::Io`] for other operating-system failures.
+//! - [`crate::Error::Operation`] for other operating-system failures, retaining the
+//!   operation, diagnostic path, and source error.
 //!
 //! Reader-specific availability and root exemptions are documented on each interface.
 
