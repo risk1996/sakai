@@ -6,7 +6,7 @@ import inspect
 import os
 import tempfile
 import unittest
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any, TypeVar, cast, get_origin
 
@@ -44,6 +44,7 @@ from sakai import (
 )
 
 _Result = TypeVar("_Result")
+_Key = TypeVar("_Key")
 
 
 class ContractTest(unittest.TestCase):
@@ -52,7 +53,11 @@ class ContractTest(unittest.TestCase):
     cls.group = Cgroup.current()
 
   def check_optional(
-    self, name: str, read: Callable[[], _Result], check: Callable[[_Result], None]
+    self,
+    name: str,
+    read: Callable[[], _Result],
+    check: Callable[[_Result], None],
+    value_type: type[_Result] | None = None,
   ) -> None:
     with self.subTest(interface=name):
       try:
@@ -60,7 +65,22 @@ class ContractTest(unittest.TestCase):
       except InterfaceMissingError as error:
         self.assertEqual(error.path, self.group.path / name)
       else:
+        if value_type is not None:
+          self.assertIsInstance(value, value_type)
         check(value)
+
+  def check_frozen(self, value: object, *names: str) -> None:
+    for name in names:
+      with self.subTest(property=name), self.assertRaises(AttributeError):
+        setattr(value, name, 0)
+
+  def check_readonly(self, value: Mapping[_Key, object], key: _Key) -> None:
+    with self.assertRaises(TypeError):
+      cast("Any", value)[key] = 0
+
+  def pinned_reader(self, make: Callable[[Cgroup], _Result]) -> _Result:
+    parent = Cgroup.from_path(self.group.path)
+    return make(parent)
 
   def check_unsigned(
     self, value: float, value_type: type[int] | type[float] = int
@@ -117,9 +137,7 @@ class ContractTest(unittest.TestCase):
     self.assertEqual(
       Cgroup.from_path(os.fsencode(self.group.path)).path, self.group.path
     )
-    parent = Cgroup.from_path(self.group.path)
-    reader = parent.cpu()
-    del parent
+    reader = self.pinned_reader(Cgroup.cpu)
     self.assertIsInstance(reader.stat(), CpuStat)
     self.assertIsInstance(self.group.children(), list)
 
@@ -142,8 +160,7 @@ class ContractTest(unittest.TestCase):
     cpu = self.group.cpu()
     stat = cpu.stat()
     self.check_unsigned(stat.time.usage_ns)
-    with self.assertRaises(AttributeError):
-      cast("Any", stat.time).usage_ns = 5
+    self.check_frozen(stat.time, "usage_ns")
     weight = cpu.weight()
     self.assertEqual(weight.is_idle, weight.shares is None)
     if weight.shares is not None:
@@ -189,8 +206,7 @@ class ContractTest(unittest.TestCase):
     self.assertIsInstance(stat, MemoryStat)
     self.assertIn("anon", stat.bytes)
     self.assertIn("file", stat.bytes)
-    with self.assertRaises(TypeError):
-      cast("Any", stat.bytes)["anon"] = 0
+    self.check_readonly(stat.bytes, "anon")
     self.assertTrue(all(isinstance(v, int) for v in stat.pages.values()))
     self.assertTrue(all(isinstance(v, int) for v in stat.counts.values()))
     self.assertIsInstance(memory.pressure(), Pressure)
@@ -218,12 +234,9 @@ class ContractTest(unittest.TestCase):
           value = getattr(device, name)
           if value is not None:
             self.check_unsigned(value)
-          with self.assertRaises(AttributeError):
-            setattr(device, name, 0)
-      with self.assertRaises(TypeError):
-        cast("Any", stat.devices)[(8, 0)] = 0
-      with self.assertRaises(AttributeError):
-        cast("Any", stat).devices = {}
+          self.check_frozen(device, name)
+      self.check_readonly(stat.devices, (8, 0))
+      self.check_frozen(stat, "devices")
 
     self.check_optional("io.stat", self.group.io().stat, check_stat)
 
@@ -236,10 +249,8 @@ class ContractTest(unittest.TestCase):
         self.check_device_key(key)
         self.check_unsigned(value)
         self.assertTrue(1 <= value <= 10_000)
-      with self.assertRaises(TypeError):
-        cast("Any", weight.devices)[(8, 0)] = 0
-      with self.assertRaises(AttributeError):
-        cast("Any", weight).default_weight = 0
+      self.check_readonly(weight.devices, (8, 0))
+      self.check_frozen(weight, "default_weight")
 
     self.check_optional("io.weight", self.group.io().weight, check_weight)
 
@@ -256,12 +267,9 @@ class ContractTest(unittest.TestCase):
           device.write_iops,
         ):
           self.check_limit(limit)
-        with self.assertRaises(AttributeError):
-          cast("Any", device).read_bps = 0
-      with self.assertRaises(TypeError):
-        cast("Any", maximum.devices)[(8, 0)] = 0
-      with self.assertRaises(AttributeError):
-        cast("Any", maximum).devices = {}
+        self.check_frozen(device, "read_bps")
+      self.check_readonly(maximum.devices, (8, 0))
+      self.check_frozen(maximum, "devices")
 
     self.check_optional("io.max", self.group.io().max, check_max)
 
@@ -273,10 +281,8 @@ class ContractTest(unittest.TestCase):
         self.check_unsigned(value)
         self.assertGreater(value, 0)
         self.assertEqual(value % 1000, 0)
-      with self.assertRaises(TypeError):
-        cast("Any", latency.targets_ns)[(8, 0)] = 0
-      with self.assertRaises(AttributeError):
-        cast("Any", latency).targets_ns = {}
+      self.check_readonly(latency.targets_ns, (8, 0))
+      self.check_frozen(latency, "targets_ns")
 
     self.check_optional("io.latency", self.group.io().latency, check_latency)
 
@@ -293,18 +299,14 @@ class ContractTest(unittest.TestCase):
     self.check_optional("io.pressure", self.group.io().pressure, check_pressure)
 
   def test_io_reader_retains_handle(self) -> None:
-    parent = Cgroup.from_path(self.group.path)
-    reader = parent.io()
-    del parent
+    reader = self.pinned_reader(Cgroup.io)
     self.assertIsInstance(reader, IoReader)
     self.check_optional(
       "io.stat", reader.stat, lambda value: self.assertIsInstance(value, IoStat)
     )
 
   def test_cpuset_lists_and_reader_ownership(self) -> None:
-    parent = Cgroup.from_path(self.group.path)
-    reader = parent.cpuset()
-    del parent
+    reader = self.pinned_reader(Cgroup.cpuset)
     self.assertIsInstance(reader, CpusetReader)
 
     def check_list(value: CpuList | MemoryNodeList) -> None:
@@ -324,34 +326,20 @@ class ContractTest(unittest.TestCase):
         previous = end
       if not value.ranges:
         self.assertFalse(value.contains(0))
-      with self.assertRaises(AttributeError):
-        cast("Any", value).ranges = ()
+      self.check_frozen(value, "ranges")
       with self.assertRaises(TypeError):
         cast("Any", value.ranges)[0] = (0, 0)
       for invalid in (-1, 2**32):
         with self.subTest(id=invalid), self.assertRaises(OverflowError):
           value.contains(invalid)
 
-    for name, read in (
-      ("cpuset.cpus", reader.cpus),
-      ("cpuset.cpus.effective", reader.cpus_effective),
+    for name, read, value_type in (
+      ("cpuset.cpus", reader.cpus, CpuList),
+      ("cpuset.cpus.effective", reader.cpus_effective, CpuList),
+      ("cpuset.mems", reader.mems, MemoryNodeList),
+      ("cpuset.mems.effective", reader.mems_effective, MemoryNodeList),
     ):
-
-      def check_cpus(value: CpuList) -> None:
-        self.assertIsInstance(value, CpuList)
-        check_list(value)
-
-      self.check_optional(name, read, check_cpus)
-    for name, read_nodes in (
-      ("cpuset.mems", reader.mems),
-      ("cpuset.mems.effective", reader.mems_effective),
-    ):
-
-      def check_nodes(value: MemoryNodeList) -> None:
-        self.assertIsInstance(value, MemoryNodeList)
-        check_list(value)
-
-      self.check_optional(name, read_nodes, check_nodes)
+      self.check_optional(name, read, check_list, value_type)
 
   def test_cpuset_partition_contract(self) -> None:
     def check_partition(value: CpusetPartition) -> None:
@@ -364,9 +352,7 @@ class ContractTest(unittest.TestCase):
         self.assertTrue(value.is_invalid)
       if value.state == "member":
         self.assertFalse(value.is_invalid)
-      for name in ("state", "is_invalid", "reason"):
-        with self.assertRaises(AttributeError):
-          setattr(value, name, 0)
+      self.check_frozen(value, "state", "is_invalid", "reason")
 
     self.check_optional(
       "cpuset.cpus.partition", self.group.cpuset().partition, check_partition
@@ -394,8 +380,7 @@ class ContractTest(unittest.TestCase):
         value = getattr(events, name)
         if value is not None:
           self.check_unsigned(value)
-      with self.assertRaises(AttributeError):
-        cast("Any", events).low = 0
+      self.check_frozen(events, "low")
 
     for name, read in (
       ("memory.events", memory.events),
@@ -421,8 +406,7 @@ class ContractTest(unittest.TestCase):
       self.assertTrue(events.high is None or events.high >= 0)
       self.check_unsigned(events.max)
       self.check_unsigned(events.fail)
-      with self.assertRaises(AttributeError):
-        cast("Any", events).fail = 0
+      self.check_frozen(events, "fail")
 
     self.check_optional("memory.swap.events", swap.events, check_events)
 
@@ -446,8 +430,7 @@ class ContractTest(unittest.TestCase):
     def check_events(events: PidsEvents) -> None:
       self.assertIsInstance(events, PidsEvents)
       self.check_unsigned(events.max)
-      with self.assertRaises(AttributeError):
-        cast("Any", events).max = 0
+      self.check_frozen(events, "max")
 
     self.check_optional("pids.events", pids.events, check_events)
 
@@ -457,8 +440,7 @@ class ContractTest(unittest.TestCase):
       self.assertIsInstance(events.populated, bool)
       if events.frozen is not None:
         self.assertIsInstance(events.frozen, bool)
-      with self.assertRaises(AttributeError):
-        cast("Any", events).populated = False
+      self.check_frozen(events, "populated")
 
     self.check_optional("cgroup.events", self.group.core().events, check_events)
     stat = self.group.core().stat()
@@ -469,10 +451,8 @@ class ContractTest(unittest.TestCase):
       self.assertTrue(all(isinstance(key, str) for key in mapping))
       for value in mapping.values():
         self.check_unsigned(value)
-      with self.assertRaises(TypeError):
-        cast("Any", mapping)["memory"] = 0
-    with self.assertRaises(AttributeError):
-      cast("Any", stat).descendants = 0
+      self.check_readonly(mapping, "memory")
+    self.check_frozen(stat, "descendants", "dying_descendants")
 
   def test_process_and_core_readers_retain_handle(self) -> None:
     parent = Cgroup.from_path(self.group.path)
@@ -500,18 +480,15 @@ class ContractTest(unittest.TestCase):
       self.assertIn("anon", stat.bytes)
       self.assertIn("file", stat.bytes)
       for values in (stat.bytes, stat.pages, stat.counts):
-        with self.assertRaises(TypeError):
-          cast("Any", values)["future"] = {}
+        self.check_readonly(values, "future")
         for field, nodes in values.items():
           with self.subTest(field=field):
             self.assertTrue(all(isinstance(node, int) for node in nodes))
             self.assertTrue(
               all(isinstance(value, int) and value >= 0 for value in nodes.values())
             )
-            with self.assertRaises(TypeError):
-              cast("Any", nodes)[0] = 0
-      with self.assertRaises(AttributeError):
-        cast("Any", stat).bytes = {}
+            self.check_readonly(nodes, 0)
+      self.check_frozen(stat, "bytes")
 
     self.check_optional("memory.numa_stat", self.group.memory().numa_stat, check_stat)
 

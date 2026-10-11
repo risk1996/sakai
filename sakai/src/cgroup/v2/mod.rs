@@ -3,6 +3,18 @@
 //! Snapshots implement string parsing on any OS. Handles and borrowed
 //! controller readers are available on Linux. See the
 //! [Linux cgroup v2 guide](https://docs.kernel.org/admin-guide/cgroup-v2.html).
+//!
+//! # Interface-read errors
+//!
+//! Linux interface readers report the following errors:
+//!
+//! - [`crate::Error::FileMissing`] if the interface is absent, including controller
+//!   availability, kernel configuration or version, and hierarchy-root exemptions.
+//! - [`crate::Error::NotSupported`] if the kernel reports an unsupported operation.
+//! - [`crate::Error::Parse`] if the interface contents are invalid.
+//! - [`crate::Error::Io`] for other operating-system failures.
+//!
+//! Reader-specific availability and root exemptions are documented on each interface.
 
 #[cfg(target_os = "linux")]
 pub use handle::Cgroup;

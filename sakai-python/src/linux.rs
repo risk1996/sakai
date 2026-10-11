@@ -852,7 +852,11 @@ impl From<CoreCgroupEvents> for CgroupEvents {
 #[pyclass(frozen, module = "sakai._sakai")]
 #[derive(Debug, PartialEq, Eq)]
 struct CgroupStat {
+  /// Visible descendant cgroup count, excluding this cgroup.
+  #[pyo3(get)]
   descendants: u64,
+  /// Deleted descendant cgroups awaiting final destruction.
+  #[pyo3(get)]
   dying_descendants: u64,
   subsystems: BTreeMap<String, u64>,
   dying_subsystems: BTreeMap<String, u64>,
@@ -875,24 +879,16 @@ impl From<CoreCgroupStat> for CgroupStat {
 
 #[pymethods]
 impl CgroupStat {
-  /// Visible descendant cgroup count, excluding this cgroup.
-  #[getter]
-  fn descendants(&self) -> u64 { self.descendants }
-
-  /// Deleted descendant cgroups awaiting final destruction.
-  #[getter]
-  fn dying_descendants(&self) -> u64 { self.dying_descendants }
-
   /// Read-only live subsystem counts at and beneath this cgroup.
   #[getter]
   fn subsystems(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
-    Ok(PyMappingProxy::new(py, self.subsystems.clone().into_py_dict(py)?.as_mapping()).unbind())
+    Ok(PyMappingProxy::new(py, (&self.subsystems).into_py_dict(py)?.as_mapping()).unbind())
   }
 
   /// Read-only dying subsystem counts at and beneath this cgroup.
   #[getter]
   fn dying_subsystems(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
-    Ok(PyMappingProxy::new(py, self.dying_subsystems.clone().into_py_dict(py)?.as_mapping()).unbind())
+    Ok(PyMappingProxy::new(py, (&self.dying_subsystems).into_py_dict(py)?.as_mapping()).unbind())
   }
 }
 
