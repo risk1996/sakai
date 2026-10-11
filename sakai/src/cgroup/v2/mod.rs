@@ -14,6 +14,8 @@ pub mod cpu;
 pub mod cpuset;
 pub mod io;
 pub mod memory;
+#[cfg(target_os = "linux")]
+pub mod notification;
 pub mod pids;
 
 #[cfg(target_os = "linux")]

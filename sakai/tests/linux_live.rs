@@ -1,6 +1,6 @@
 #![cfg(target_os = "linux")]
 
-use std::{fmt::Debug, fs, io, path::PathBuf, process::Command, str::FromStr};
+use std::{fmt::Debug, fs, io, path::PathBuf, process::Command, str::FromStr, time::Duration};
 
 use assertables::assert_ok;
 use sakai::{
@@ -17,9 +17,11 @@ use sakai::{
       MemoryOomGroup, MemoryPeak, MemoryStat, SwapCurrent, SwapEvents, SwapHigh, SwapMax, SwapPeak, ZswapCurrent,
       ZswapMax, ZswapWriteback,
     },
+    notification::{ConfigurationInterface, EventInterface},
     pids::{PidsCurrent, PidsEvents, PidsMax},
   },
 };
+use strum::IntoEnumIterator;
 use uom::si::information::byte;
 
 #[test]
@@ -86,6 +88,24 @@ fn reads_current_cgroup_without_privileges() {
   }
   assert_ok!(Cgroup::from_pid(std::process::id()));
   assert_ok!(cgroup.children());
+  for interface in EventInterface::iter() {
+    match cgroup.poll_events(interface) {
+      | Ok(mut events) => {
+        assert_ok!(events.wait(Some(Duration::ZERO)));
+      },
+      | Err(Error::FileMissing { path }) => assert_eq!(path, cgroup.path().join(interface.filename())),
+      | Err(error) => panic!("event subscription failed: {error}"),
+    }
+  }
+  for interface in ConfigurationInterface::iter() {
+    match cgroup.watch_configuration(interface) {
+      | Ok(mut configuration) => {
+        assert_ok!(configuration.wait(Some(Duration::ZERO)));
+      },
+      | Err(Error::FileMissing { path }) => assert_eq!(path, cgroup.path().join(interface.filename())),
+      | Err(error) => panic!("configuration subscription failed: {error}"),
+    }
+  }
 }
 
 #[test]
@@ -344,6 +364,46 @@ fn parses_live_delegated_controller_interfaces() {
   assert_eq!(assert_ok!(reader.core().kind()), CgroupType::Domain);
   assert_ok!(reader.core().controllers());
   assert_ok!(reader.core().subtree_control());
+
+  // Notifications only observe this disposable delegated test hierarchy.
+  assert_ok!(fs::write(fixture.path.join(CgroupController::SUBTREE_CONTROL_FILE_NAME), "+cpu"));
+  let notification_path = fixture.path.join("notifications");
+  assert_ok!(fs::create_dir(&notification_path));
+  let notification_group = assert_ok!(reader.child(std::ffi::OsStr::new("notifications")));
+  let mut events = assert_ok!(notification_group.poll_events(EventInterface::CgroupEvents));
+  let mut configuration = assert_ok!(notification_group.watch_configuration(ConfigurationInterface::CpuMax));
+  let notification_timeout = Some(Duration::from_secs(2));
+  assert!(!assert_ok!(events.wait(Some(Duration::ZERO))));
+  assert_eq!(assert_ok!(configuration.wait(Some(Duration::ZERO))), None);
+
+  for frozen in [true, false] {
+    assert_ok!(fs::write(notification_path.join("cgroup.freeze"), match frozen {
+      | true => "1",
+      | false => "0",
+    }));
+    assert!(assert_ok!(events.wait(notification_timeout)));
+    assert_eq!(assert_ok!(notification_group.core().events()).frozen(), Some(frozen));
+    assert!(!assert_ok!(events.wait(Some(Duration::ZERO))));
+  }
+  for contents in ["25000 100000", "max 100000"] {
+    assert_ok!(fs::write(notification_path.join(CpuMax::FILE_NAME), contents));
+    let change = assert_ok!(configuration.wait(notification_timeout)).expect("configuration notification");
+    assert!(change.modified());
+    assert!(!change.removed());
+    assert!(!change.overflowed());
+    assert_eq!(assert_ok!(notification_group.cpu().max()), assert_ok!(contents.parse::<CpuMax>()));
+    assert_eq!(assert_ok!(fs::read_to_string(notification_path.join(CpuMax::FILE_NAME))).trim(), contents);
+    assert_eq!(assert_ok!(configuration.wait(Some(Duration::ZERO))), None);
+  }
+  drop(events);
+  drop(notification_group);
+  assert_ok!(fs::remove_dir(&notification_path));
+  // Kernfs internal removal need not emit an inotify deletion event. A
+  // notification, when supplied by the kernel, must describe watch removal.
+  match assert_ok!(configuration.wait(Some(Duration::ZERO))) {
+    | Some(change) => assert!(change.removed()),
+    | None => {},
+  }
 }
 
 #[test]

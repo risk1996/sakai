@@ -2,8 +2,8 @@
 
 Implement the read-only cgroup v2 surface in priority order. Finish all CPU
 items before starting memory. The implemented P0–P4 interfaces are in the
-initial release scope on both the Rust and Python sides; P5 and later work is
-deferred.
+initial release scope on both the Rust and Python sides. P5 adds read-only event
+delivery on both sides; P6 and later work is deferred.
 
 An interface item is complete when it has a typed public reader, key-based
 parsing where applicable, fixtures for supported and missing/older-kernel
@@ -86,9 +86,9 @@ files. Treat that as `FileMissing`, not a parse failure or panic.
 
 ## P5 — Event delivery
 
-- [ ] Add `poll` support for evented interfaces without changing read
+- [x] Add `poll` support for evented interfaces without changing read
       semantics.
-- [ ] Add inotify-based change notification for configuration interfaces.
+- [x] Add inotify-based change notification for configuration interfaces.
 
 ## P6 — Remaining v2 controllers
 
