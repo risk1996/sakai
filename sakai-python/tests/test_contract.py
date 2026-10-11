@@ -16,7 +16,10 @@ from sakai import (
   Cgroup,
   CgroupEvents,
   CgroupStat,
+  CpuList,
   CpuMax,
+  CpusetPartition,
+  CpusetReader,
   CpuStat,
   InterfaceMissingError,
   IoDeviceMax,
@@ -28,6 +31,7 @@ from sakai import (
   IoWeight,
   MaxOr,
   MemoryEventCounts,
+  MemoryNodeList,
   MemoryNumaStat,
   MemoryStat,
   NotCgroupV2Error,
@@ -295,6 +299,77 @@ class ContractTest(unittest.TestCase):
     self.assertIsInstance(reader, IoReader)
     self.check_optional(
       "io.stat", reader.stat, lambda value: self.assertIsInstance(value, IoStat)
+    )
+
+  def test_cpuset_lists_and_reader_ownership(self) -> None:
+    parent = Cgroup.from_path(self.group.path)
+    reader = parent.cpuset()
+    del parent
+    self.assertIsInstance(reader, CpusetReader)
+
+    def check_list(value: CpuList | MemoryNodeList) -> None:
+      self.assertIsInstance(value.ranges, tuple)
+      previous = -1
+      for pair in value.ranges:
+        self.assertIsInstance(pair, tuple)
+        self.assertEqual(len(pair), 2)
+        start, end = pair
+        self.check_unsigned(start)
+        self.check_unsigned(end)
+        self.assertLessEqual(start, end)
+        self.assertLessEqual(end, 2**32 - 1)
+        self.assertGreater(start, previous)
+        self.assertTrue(value.contains(start))
+        self.assertTrue(value.contains(end))
+        previous = end
+      if not value.ranges:
+        self.assertFalse(value.contains(0))
+      with self.assertRaises(AttributeError):
+        cast("Any", value).ranges = ()
+      with self.assertRaises(TypeError):
+        cast("Any", value.ranges)[0] = (0, 0)
+      for invalid in (-1, 2**32):
+        with self.subTest(id=invalid), self.assertRaises(OverflowError):
+          value.contains(invalid)
+
+    for name, read in (
+      ("cpuset.cpus", reader.cpus),
+      ("cpuset.cpus.effective", reader.cpus_effective),
+    ):
+
+      def check_cpus(value: CpuList) -> None:
+        self.assertIsInstance(value, CpuList)
+        check_list(value)
+
+      self.check_optional(name, read, check_cpus)
+    for name, read_nodes in (
+      ("cpuset.mems", reader.mems),
+      ("cpuset.mems.effective", reader.mems_effective),
+    ):
+
+      def check_nodes(value: MemoryNodeList) -> None:
+        self.assertIsInstance(value, MemoryNodeList)
+        check_list(value)
+
+      self.check_optional(name, read_nodes, check_nodes)
+
+  def test_cpuset_partition_contract(self) -> None:
+    def check_partition(value: CpusetPartition) -> None:
+      self.assertIsInstance(value, CpusetPartition)
+      self.assertIn(value.state, {"member", "root", "isolated"})
+      self.assertIsInstance(value.is_invalid, bool)
+      if value.reason is not None:
+        self.assertIsInstance(value.reason, str)
+        self.assertTrue(value.reason)
+        self.assertTrue(value.is_invalid)
+      if value.state == "member":
+        self.assertFalse(value.is_invalid)
+      for name in ("state", "is_invalid", "reason"):
+        with self.assertRaises(AttributeError):
+          setattr(value, name, 0)
+
+    self.check_optional(
+      "cpuset.cpus.partition", self.group.cpuset().partition, check_partition
     )
 
   def test_core_contract(self) -> None:

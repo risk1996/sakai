@@ -11,6 +11,7 @@ pub use path::{CgroupPath, CgroupPathError};
 
 pub mod core;
 pub mod cpu;
+pub mod cpuset;
 pub mod io;
 pub mod memory;
 pub mod pids;

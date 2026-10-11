@@ -1,8 +1,8 @@
 # cgroup v2 metrics TODO
 
 Implement the read-only cgroup v2 surface in priority order. Finish all CPU
-items before starting memory. The implemented P0–P3 interfaces remain in the
-initial release scope on both the Rust and Python sides; P4 and later work is
+items before starting memory. The implemented P0–P4 interfaces are in the
+initial release scope on both the Rust and Python sides; P5 and later work is
 deferred.
 
 An interface item is complete when it has a typed public reader, key-based
@@ -78,11 +78,11 @@ files. Treat that as `FileMissing`, not a parse failure or panic.
 
 ## P4 — CPU and memory placement
 
-- [ ] `cpuset.cpus` — configured CPU ID list.
-- [ ] `cpuset.cpus.effective` — effective CPU ID list.
-- [ ] `cpuset.mems` — configured memory-node ID list.
-- [ ] `cpuset.mems.effective` — effective memory-node ID list.
-- [ ] `cpuset.cpus.partition` — partition state.
+- [x] `cpuset.cpus` — configured CPU ID list.
+- [x] `cpuset.cpus.effective` — effective CPU ID list.
+- [x] `cpuset.mems` — configured memory-node ID list.
+- [x] `cpuset.mems.effective` — effective memory-node ID list.
+- [x] `cpuset.cpus.partition` — partition state.
 
 ## P5 — Event delivery
 
