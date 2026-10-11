@@ -60,19 +60,19 @@ pub struct IoDeviceMax {
 impl IoDeviceMax {
   /// Read bandwidth limit in bytes per second (`rbps`).
   #[must_use]
-  pub const fn read_bandwidth(self) -> MaxOr<BytesPerSecond> { self.read_bandwidth }
+  pub const fn read_bandwidth(&self) -> MaxOr<BytesPerSecond> { self.read_bandwidth }
 
   /// Write bandwidth limit in bytes per second (`wbps`).
   #[must_use]
-  pub const fn write_bandwidth(self) -> MaxOr<BytesPerSecond> { self.write_bandwidth }
+  pub const fn write_bandwidth(&self) -> MaxOr<BytesPerSecond> { self.write_bandwidth }
 
   /// Read operation limit in operations per second (`riops`).
   #[must_use]
-  pub const fn read_iops(self) -> MaxOr<OperationsPerSecond> { self.read_iops }
+  pub const fn read_iops(&self) -> MaxOr<OperationsPerSecond> { self.read_iops }
 
   /// Write operation limit in operations per second (`wiops`).
   #[must_use]
-  pub const fn write_iops(self) -> MaxOr<OperationsPerSecond> { self.write_iops }
+  pub const fn write_iops(&self) -> MaxOr<OperationsPerSecond> { self.write_iops }
 
   fn from_fields(fields: KeyedFields<'_>) -> Result<Self, ParseError<ParseValueError>> {
     Ok(Self {

@@ -25,11 +25,11 @@ impl CpuMax {
 
   /// Returns the configured CPU quota.
   #[must_use]
-  pub const fn quota(self) -> MaxOr<NonZeroTime> { self.quota }
+  pub const fn quota(&self) -> MaxOr<NonZeroTime> { self.quota }
 
   /// Returns the quota period.
   #[must_use]
-  pub const fn period(self) -> NonZeroTime { self.period }
+  pub const fn period(&self) -> NonZeroTime { self.period }
 
   /// Returns the CPU bandwidth implied by this cgroup's quota and period.
   ///
@@ -37,7 +37,7 @@ impl CpuMax {
   /// This does not account for ancestor limits, affinity, or scheduling policy.
   /// Large quotas may lose precision when converted to a floating-point ratio.
   #[must_use]
-  pub fn cpu_count(self) -> MaxOr<Ratio> {
+  pub fn cpu_count(&self) -> MaxOr<Ratio> {
     match self.quota {
       | MaxOr::Max => MaxOr::Max,
       #[expect(clippy::cast_precision_loss, reason = "the public ratio uses f64; large quotas may lose precision")]

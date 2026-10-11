@@ -17,7 +17,7 @@ pub(crate) enum Failure<'a> {
 }
 
 impl Failure<'_> {
-  fn check(self, input: &str, error: ParseError<ParseValueError>) {
+  fn check(&self, input: &str, error: ParseError<ParseValueError>) {
     let (raw, actual) = match &error {
       | ParseError::Field { raw, field, kind: FieldKind::Missing } => (raw, Failure::Missing(field)),
       | ParseError::Field { raw, field, kind: FieldKind::Excess } => {
@@ -27,7 +27,7 @@ impl Failure<'_> {
       | ParseError::Invalid { raw, field, value, .. } => (raw, Failure::Invalid(field, value)),
     };
     assert_eq!(raw.as_ref(), input);
-    assert_eq!(actual, self, "input: {input:?}: {error}");
+    assert_eq!(&actual, self, "input: {input:?}: {error}");
   }
 }
 

@@ -66,7 +66,7 @@ impl PidsEvents {
 
   /// Number of occurrences of the process limit being hit.
   #[must_use]
-  pub const fn max(self) -> Count { self.max }
+  pub const fn max(&self) -> Count { self.max }
 }
 
 impl FromStr for PidsEvents {

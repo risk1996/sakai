@@ -80,15 +80,15 @@ impl SwapEvents {
 
   /// Times swap usage exceeded the high threshold, when reported.
   #[must_use]
-  pub const fn high(self) -> Option<Count> { self.high }
+  pub const fn high(&self) -> Option<Count> { self.high }
 
   /// Times a swap allocation failed at the max boundary.
   #[must_use]
-  pub const fn max(self) -> Count { self.max }
+  pub const fn max(&self) -> Count { self.max }
 
   /// Swap allocation failures from the limit or system-wide exhaustion.
   #[must_use]
-  pub const fn fail(self) -> Count { self.fail }
+  pub const fn fail(&self) -> Count { self.fail }
 }
 
 impl FromStr for SwapEvents {

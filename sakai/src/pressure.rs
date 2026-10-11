@@ -32,13 +32,13 @@ impl Pressure {
 
   /// Returns pressure during which at least one task was stalled.
   #[must_use]
-  pub const fn some(self) -> PressureLine { self.some }
+  pub const fn some(&self) -> PressureLine { self.some }
 
   /// Returns pressure during which all non-idle tasks were stalled.
   ///
   /// Older CPU PSI interfaces do not report this line.
   #[must_use]
-  pub const fn full(self) -> Option<PressureLine> { self.full }
+  pub const fn full(&self) -> Option<PressureLine> { self.full }
 }
 
 /// A set of rolling averages and cumulative stall time from PSI.
@@ -53,19 +53,19 @@ pub struct PressureLine {
 impl PressureLine {
   /// Returns the average stalled-time ratio over the preceding 10 seconds.
   #[must_use]
-  pub const fn avg10(self) -> Ratio { self.avg10 }
+  pub const fn avg10(&self) -> Ratio { self.avg10 }
 
   /// Returns the average stalled-time ratio over the preceding 60 seconds.
   #[must_use]
-  pub const fn avg60(self) -> Ratio { self.avg60 }
+  pub const fn avg60(&self) -> Ratio { self.avg60 }
 
   /// Returns the average stalled-time ratio over the preceding 300 seconds.
   #[must_use]
-  pub const fn avg300(self) -> Ratio { self.avg300 }
+  pub const fn avg300(&self) -> Ratio { self.avg300 }
 
   /// Returns cumulative stall time.
   #[must_use]
-  pub const fn total(self) -> Time { self.total }
+  pub const fn total(&self) -> Time { self.total }
 
   fn from_fields(fields: &KeyedFields<'_>) -> Result<Self, ParseError<ParseValueError>> {
     Ok(Self {

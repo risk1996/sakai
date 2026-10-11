@@ -21,7 +21,7 @@ impl MemoryEvents {
 
   /// Returns the event counts, measured as numbers of occurrences.
   #[must_use]
-  pub const fn counts(self) -> MemoryEventCounts { self.counts }
+  pub const fn counts(&self) -> MemoryEventCounts { self.counts }
 }
 
 impl FromStr for MemoryEvents {
@@ -45,7 +45,7 @@ impl MemoryEventsLocal {
 
   /// Returns the local event counts, measured as numbers of occurrences.
   #[must_use]
-  pub const fn counts(self) -> MemoryEventCounts { self.counts }
+  pub const fn counts(&self) -> MemoryEventCounts { self.counts }
 }
 
 impl FromStr for MemoryEventsLocal {
@@ -72,31 +72,31 @@ pub struct MemoryEventCounts {
 impl MemoryEventCounts {
   /// Reclaims despite usage below the effective low boundary.
   #[must_use]
-  pub const fn low(self) -> Count { self.low }
+  pub const fn low(&self) -> Count { self.low }
 
   /// Throttling and direct reclaim after crossing the high boundary.
   #[must_use]
-  pub const fn high(self) -> Count { self.high }
+  pub const fn high(&self) -> Count { self.high }
 
   /// Attempts to cross the max boundary.
   #[must_use]
-  pub const fn max(self) -> Count { self.max }
+  pub const fn max(&self) -> Count { self.max }
 
   /// Allocations about to fail at the memory limit.
   #[must_use]
-  pub const fn oom(self) -> Count { self.oom }
+  pub const fn oom(&self) -> Count { self.oom }
 
   /// Processes killed by any OOM killer.
   #[must_use]
-  pub const fn oom_kill(self) -> Count { self.oom_kill }
+  pub const fn oom_kill(&self) -> Count { self.oom_kill }
 
   /// Group OOM kills, when reported by the kernel.
   #[must_use]
-  pub const fn oom_group_kill(self) -> Option<Count> { self.oom_group_kill }
+  pub const fn oom_group_kill(&self) -> Option<Count> { self.oom_group_kill }
 
   /// Network socket throttling events, when reported by the kernel.
   #[must_use]
-  pub const fn sock_throttled(self) -> Option<Count> { self.sock_throttled }
+  pub const fn sock_throttled(&self) -> Option<Count> { self.sock_throttled }
 }
 
 impl FromStr for MemoryEventCounts {

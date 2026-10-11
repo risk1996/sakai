@@ -67,15 +67,15 @@ pub struct CpuTimeStat {
 impl CpuTimeStat {
   /// Returns total CPU time consumed by the cgroup and its descendants.
   #[must_use]
-  pub const fn usage(self) -> Time { self.usage }
+  pub const fn usage(&self) -> Time { self.usage }
 
   /// Returns CPU time consumed in user mode.
   #[must_use]
-  pub const fn user(self) -> Time { self.user }
+  pub const fn user(&self) -> Time { self.user }
 
   /// Returns CPU time consumed in kernel mode.
   #[must_use]
-  pub const fn system(self) -> Time { self.system }
+  pub const fn system(&self) -> Time { self.system }
 
   fn from_fields(fields: &KeyedFields<'_>) -> Result<Self, ParseError<ParseValueError>> {
     Ok(Self {
@@ -99,19 +99,19 @@ pub struct CpuBandwidthStat {
 impl CpuBandwidthStat {
   /// Returns the number of elapsed enforcement periods.
   #[must_use]
-  pub const fn nr_periods(self) -> Count { self.nr_periods }
+  pub const fn nr_periods(&self) -> Count { self.nr_periods }
 
   /// Returns the number of periods in which the cgroup was throttled.
   #[must_use]
-  pub const fn nr_throttled(self) -> Count { self.nr_throttled }
+  pub const fn nr_throttled(&self) -> Count { self.nr_throttled }
 
   /// Returns the total time for which the cgroup was throttled.
   #[must_use]
-  pub const fn throttled(self) -> Time { self.throttled }
+  pub const fn throttled(&self) -> Time { self.throttled }
 
   /// Returns CPU burst counters when reported by the kernel.
   #[must_use]
-  pub const fn burst(self) -> Option<CpuBurstStat> { self.burst }
+  pub const fn burst(&self) -> Option<CpuBurstStat> { self.burst }
 
   fn from_fields(fields: &KeyedFields<'_>) -> Result<Self, ParseError<ParseValueError>> {
     let burst = if fields.contains_any(CpuStatField::bandwidth_burst_fields()) {
@@ -139,11 +139,11 @@ pub struct CpuBurstStat {
 impl CpuBurstStat {
   /// Returns the number of periods in which a burst occurred.
   #[must_use]
-  pub const fn nr_bursts(self) -> Count { self.nr_bursts }
+  pub const fn nr_bursts(&self) -> Count { self.nr_bursts }
 
   /// Returns cumulative CPU time consumed above quota during bursts.
   #[must_use]
-  pub const fn burst(self) -> Time { self.burst }
+  pub const fn burst(&self) -> Time { self.burst }
 
   fn from_fields(fields: &KeyedFields<'_>) -> Result<Self, ParseError<ParseValueError>> {
     Ok(Self {
