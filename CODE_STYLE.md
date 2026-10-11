@@ -34,6 +34,38 @@
   - use `indoc!` for multi-line strings, move to fixtures and `include_str!` if it surpasses 20 lines,
   - construct the expected struct and assert equality with the parsed struct, not asserting field-by-field.
 
+# Documentation
+
+- Document every public Rust function, struct, public struct field, enum, and
+  enum variant. Keep public modules, traits, type aliases, and constants
+  documented too, so the exported API has no missing rustdoc.
+- Use plain language to explain behavior, units, valid ranges, and whether
+  values describe this cgroup or its descendants. Explain snapshot volatility
+  and that getters inspect stored snapshots while interface reads perform fresh I/O.
+  Document errors for fallible readers, including missing interfaces, unsupported
+  operations, invalid contents, and other operating-system failures. Distinguish
+  missing optional counters from measured zero values.
+- Link directly to the relevant authoritative Linux kernel documentation or
+  Linux man page wherever one exists. For interfaces, fields, or behavior added
+  after the crate's documented Linux compatibility baseline, include a
+  "Since Linux x.y" note backed by a link to versioned upstream documentation
+  or source. Verify introduction versions against release-tagged sources;
+  account for kernel configuration, controller availability, root exemptions,
+  and distribution backports when describing availability.
+- Keep native Python docstrings in the Rust bindings (doc comments and exception
+  declarations) and expose them through PyO3. In Python documentation tests, compare exactly one complete
+  representative docstring: the top-level `Cgroup` class. For the module and
+  all other exported classes, methods, and properties, check that documentation
+  exists without matching its wording. Require each class's own nonempty
+  `__doc__`; inherited `object` or `Exception` documentation must not satisfy
+  that check. Rust documentation edits should not require updating Python text
+  expectations beyond the single `Cgroup` example.
+- Verify changed Rust docs with the project formatting and doctest checks,
+  and build rustdoc with `-D missing_docs -D rustdoc::broken_intra_doc_links`.
+  Include a Linux build when checking Linux-only APIs. Verify Python docstring
+  changes against the installed package outside the checkout, retaining coverage
+  of the exported API and its methods and properties.
+
 # Shell Scripts
 
 - The ideal number of shell script lines is zero. Write Rust code instead of Bash scripts whenever possible.

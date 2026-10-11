@@ -1,6 +1,7 @@
 ## Coding style
 
-Working with Rust, see @CODE_STYLE.md
+Follow @CODE_STYLE.md for coding and documentation conventions, including
+public Rust API docs and Python docstring tests.
 
 ## Decision tracking
 
