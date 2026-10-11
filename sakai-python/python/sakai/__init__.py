@@ -5,6 +5,8 @@ from ._sakai import Cgroup as Cgroup
 from ._sakai import CgroupEvents as CgroupEvents
 from ._sakai import CgroupParseError as CgroupParseError
 from ._sakai import CgroupStat as CgroupStat
+from ._sakai import ChangeNotification as ChangeNotification
+from ._sakai import ConfigurationWatcher as ConfigurationWatcher
 from ._sakai import CoreReader as CoreReader
 from ._sakai import CpuBandwidthStat as CpuBandwidthStat
 from ._sakai import CpuBurstStat as CpuBurstStat
@@ -18,6 +20,7 @@ from ._sakai import CpuStatLocal as CpuStatLocal
 from ._sakai import CpuTimeStat as CpuTimeStat
 from ._sakai import CpuWeight as CpuWeight
 from ._sakai import DeletedCgroupError as DeletedCgroupError
+from ._sakai import EventPoller as EventPoller
 from ._sakai import InterfaceMissingError as InterfaceMissingError
 from ._sakai import IoDeviceMax as IoDeviceMax
 from ._sakai import IoDeviceStat as IoDeviceStat

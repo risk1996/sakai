@@ -101,6 +101,93 @@ Native classes, methods, and snapshot attributes carry Python `__doc__`
 strings generated from their Rust documentation comments. Use `help(Cgroup)`
 or inspect an individual method such as `Cgroup.current.__doc__`.
 
+`group.poll_events(filename)` opens an `EventPoller` for `cgroup.events`,
+`memory.events`, `memory.events.local`, `memory.swap.events`, `pids.events`,
+or `cpuset.cpus.partition`. Opening acknowledges the current state without
+parsing or returning it. `.wait(timeout)` returns `True` when an event hint is
+acknowledged and `False` on timeout. Read through the existing reader after
+each hint to obtain a fresh snapshot; notifications can coalesce, and they
+do not count changes. Memory and process event scope remains the scope of
+the selected file and mount options. Polling never writes a file. PSI pressure
+files are excluded because installing their threshold triggers requires writes.
+See the [kernel event interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html)
+and [poll manual](https://man7.org/linux/man-pages/man2/poll.2.html).
+
+```python
+events = group.poll_events("memory.events")
+previous = group.memory().events()
+if events.wait(timeout=1.0):
+  current = group.memory().events()
+  print(previous.oom_kill, current.oom_kill)
+```
+
+`group.watch_configuration(filename)` opens a `ConfigurationWatcher` using
+inotify for one of these configuration files:
+
+| Controller | Supported filenames |
+| --- | --- |
+| Core | `cgroup.type`, `cgroup.subtree_control` |
+| CPU | `cpu.max`, `cpu.weight`, `cpu.uclamp.max`, `cpu.uclamp.min`, `cpu.max.burst`, `cpu.weight.nice`, `cpu.idle` |
+| Memory | `memory.max`, `memory.high`, `memory.low`, `memory.min`, `memory.oom.group`, `memory.swap.max`, `memory.swap.high`, `memory.zswap.max`, `memory.zswap.writeback` |
+| Processes | `pids.max` |
+| I/O | `io.weight`, `io.max`, `io.latency` |
+| Placement | `cpuset.cpus`, `cpuset.mems`, `cpuset.cpus.partition` |
+
+`.wait(timeout)` returns an immutable `ChangeNotification` or `None` on
+timeout. `.modified` reports write or kernel content hints; `.removed` reports
+watch termination through removal, unmount, or invalidation;
+`.overflowed` reports lost inotify events. Flags can overlap. Read configuration
+again after modification, rescan after overflow, and recreate the watcher after
+removal if a replacement exists. Subsequent waits on a removed watch raise
+`BrokenPipeError`. The watch follows its inode through renames and does not
+follow replacements. Cgroup interface deletion does not guarantee an inotify
+event: a watch can remain idle after the interface disappears. Use bounded waits
+and fresh reader calls to check lifecycle; an indefinite wait may remain blocked
+after deletion. See the [kernfs removal implementation](https://github.com/torvalds/linux/blob/v5.15/fs/kernfs/dir.c#L1236-L1295).
+Inotify watches observable file activity; kernel-driven
+configuration changes that emit no fsnotify event are not guaranteed to appear.
+It does not monitor usage counters, descendants, or effective ancestor policy.
+See the [inotify manual](https://man7.org/linux/man-pages/man7/inotify.7.html).
+
+```python
+configuration = group.watch_configuration("cpu.max")
+change = configuration.wait(timeout=1.0)
+if change is not None:
+  if change.removed:
+    print("The watch ended")
+  elif change.modified or change.overflowed:
+    print(group.cpu().max().cpu_count)
+```
+
+Both monitor types own their descriptors after the original `Cgroup` is
+released and close them when the monitor object is released. They release the
+GIL while waiting. Timeouts use seconds: `None` waits indefinitely, `0` checks
+immediately, and finite nonnegative values bound the kernel wait. Negative,
+nonfinite, or unrepresentably large values raise `ValueError`. A concurrent
+wait on the same object raises `RuntimeError`; separate monitors can wait
+independently. Unknown filenames and paths raise `ValueError`; unavailable
+files, including root exemptions and unsupported optional controller files,
+raise `InterfaceMissingError` with their diagnostic path. Monitor errors use
+the same exception policy as readers. Event polling on a deleted cgroup can
+fail while acknowledging the interface, reporting an I/O or Sakai error.
+
+For an external event loop, `monitor.fileno()` borrows its descriptor. Keep
+the monitor alive and do not close or read the descriptor yourself. Register
+an `EventPoller` with `select.poll()` or epoll for **`POLLPRI | POLLERR`**;
+ordinary readable readiness on a cgroup event file is continuously true.
+Register a `ConfigurationWatcher` for ordinary readable readiness (`POLLIN`),
+which also works with `select.select()` and `selectors`. After readiness,
+call `.wait(0)` to acknowledge or consume hints, then perform fresh reads.
+
+```python
+import select
+
+poll = select.poll()
+poll.register(events, select.POLLPRI | select.POLLERR)
+if poll.poll(1000) and events.wait(0):  # select.poll's timeout is milliseconds
+  print(group.memory().events().oom_kill)
+```
+
 Ruff and Ty are supplied by the devenv Python profile. The Python sources use
 two-space indentation and the repository's `ruff.toml` enables Ruff's `ALL`
 rule set with narrow project-specific exceptions. Run lint, formatting, and
@@ -114,7 +201,8 @@ The devenv Python profile uses Python 3.15, and CI tests installed wheels and
 source distributions on Python 3.11 and 3.15.
 
 The package version is inherited from Cargo's workspace release version via
-Maturin's dynamic version metadata. The devenv Python interpreter is a development
+Maturin's dynamic version metadata, which converts Rust's `0.1.0-alpha.1` to
+Python's `0.1.0a1`. The devenv Python interpreter is a development
 tool choice; it does not change the package's minimum supported Python version.
 
 To build locally on Linux, use an explicit Python 3.11 or newer interpreter:

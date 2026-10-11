@@ -34,10 +34,7 @@ impl Swap<'_> {
   ///
   /// # Errors
   ///
-  /// Returns [`crate::Error::FileMissing`] if the interface is absent,
-  /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
-  /// for other operating-system failures.
+  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn current(&self) -> Result<SwapCurrent, Error> { self.cgroup.parse(SwapCurrent::FILE_NAME) }
 
   /// Peak swap usage since cgroup creation for this fresh descriptor.
@@ -49,10 +46,7 @@ impl Swap<'_> {
   ///
   /// # Errors
   ///
-  /// Returns [`crate::Error::FileMissing`] if the interface is absent,
-  /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
-  /// for other operating-system failures.
+  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn peak(&self) -> Result<SwapPeak, Error> { self.cgroup.parse(SwapPeak::FILE_NAME) }
 
   /// Hard swap limit configured for this cgroup.
@@ -61,10 +55,7 @@ impl Swap<'_> {
   ///
   /// # Errors
   ///
-  /// Returns [`crate::Error::FileMissing`] if the interface is absent,
-  /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
-  /// for other operating-system failures.
+  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn max(&self) -> Result<SwapMax, Error> { self.cgroup.parse(SwapMax::FILE_NAME) }
 
   /// Swap throttling limit configured for this cgroup.
@@ -73,10 +64,7 @@ impl Swap<'_> {
   ///
   /// # Errors
   ///
-  /// Returns [`crate::Error::FileMissing`] if the interface is absent,
-  /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
-  /// for other operating-system failures.
+  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn high(&self) -> Result<SwapHigh, Error> { self.cgroup.parse(SwapHigh::FILE_NAME) }
 
   /// Swap high, max, and allocation failure counters.
@@ -85,10 +73,7 @@ impl Swap<'_> {
   ///
   /// # Errors
   ///
-  /// Returns [`crate::Error::FileMissing`] if the interface is absent,
-  /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
-  /// for other operating-system failures.
+  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn events(&self) -> Result<SwapEvents, Error> { self.cgroup.parse(SwapEvents::FILE_NAME) }
 }
 

@@ -42,10 +42,7 @@ impl Cpu<'_> {
   ///
   /// # Errors
   ///
-  /// Returns [`crate::Error::FileMissing`] if the interface is absent,
-  /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
-  /// for other operating-system failures.
+  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn stat(&self) -> Result<CpuStat, Error> { self.cgroup.parse(CpuStat::FILE_NAME) }
 
   /// Live local runqueue throttling, including inherited bandwidth limits.
@@ -57,10 +54,7 @@ impl Cpu<'_> {
   ///
   /// # Errors
   ///
-  /// Returns [`crate::Error::FileMissing`] if the interface is absent,
-  /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
-  /// for other operating-system failures.
+  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn stat_local(&self) -> Result<CpuStatLocal, Error> { self.cgroup.parse(CpuStatLocal::FILE_NAME) }
 
   /// Configuration snapshot: idle scheduling or relative weight.
@@ -69,10 +63,7 @@ impl Cpu<'_> {
   ///
   /// # Errors
   ///
-  /// Returns [`crate::Error::FileMissing`] if the interface is absent,
-  /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
-  /// for other operating-system failures.
+  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn weight(&self) -> Result<CpuWeight, Error> { self.cgroup.parse(CpuWeight::FILE_NAME) }
 
   /// Configuration snapshot: coarse nice representation of weight.
@@ -81,10 +72,7 @@ impl Cpu<'_> {
   ///
   /// # Errors
   ///
-  /// Returns [`crate::Error::FileMissing`] if the interface is absent,
-  /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
-  /// for other operating-system failures.
+  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn weight_nice(&self) -> Result<Nice, Error> { self.cgroup.parse(Nice::FILE_NAME) }
 
   /// Configuration snapshot: this cgroup's quota and period, not ancestor limits.
@@ -93,10 +81,7 @@ impl Cpu<'_> {
   ///
   /// # Errors
   ///
-  /// Returns [`crate::Error::FileMissing`] if the interface is absent,
-  /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
-  /// for other operating-system failures.
+  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn max(&self) -> Result<CpuMax, Error> { self.cgroup.parse(CpuMax::FILE_NAME) }
 
   /// Configuration snapshot: CPU burst allowance.
@@ -108,10 +93,7 @@ impl Cpu<'_> {
   ///
   /// # Errors
   ///
-  /// Returns [`crate::Error::FileMissing`] if the interface is absent,
-  /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
-  /// for other operating-system failures.
+  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn max_burst(&self) -> Result<CpuMaxBurst, Error> { self.cgroup.parse(CpuMaxBurst::FILE_NAME) }
 
   /// Live PSI averages and totals. Never registers a pressure trigger.
@@ -120,10 +102,7 @@ impl Cpu<'_> {
   ///
   /// # Errors
   ///
-  /// Returns [`crate::Error::FileMissing`] if the interface is absent,
-  /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
-  /// for other operating-system failures.
+  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn pressure(&self) -> Result<Pressure, Error> { self.cgroup.parse(Pressure::CPU_FILE_NAME) }
 
   /// Configuration snapshot: requested utilization floor, not guaranteed bandwidth.
@@ -132,10 +111,7 @@ impl Cpu<'_> {
   ///
   /// # Errors
   ///
-  /// Returns [`crate::Error::FileMissing`] if the interface is absent,
-  /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
-  /// for other operating-system failures.
+  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn uclamp_min(&self) -> Result<CpuUclampMin, Error> { self.cgroup.parse(CpuUclampMin::FILE_NAME) }
 
   /// Configuration snapshot: requested utilization ceiling.
@@ -144,10 +120,7 @@ impl Cpu<'_> {
   ///
   /// # Errors
   ///
-  /// Returns [`crate::Error::FileMissing`] if the interface is absent,
-  /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
-  /// for other operating-system failures.
+  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn uclamp_max(&self) -> Result<CpuUclampMax, Error> { self.cgroup.parse(CpuUclampMax::FILE_NAME) }
 
   /// Configuration snapshot: whether the cgroup uses idle scheduling.
@@ -156,9 +129,6 @@ impl Cpu<'_> {
   ///
   /// # Errors
   ///
-  /// Returns [`crate::Error::FileMissing`] if the interface is absent,
-  /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
-  /// for other operating-system failures.
+  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn idle(&self) -> Result<CpuIdle, Error> { self.cgroup.parse(CpuIdle::FILE_NAME) }
 }

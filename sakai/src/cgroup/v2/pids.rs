@@ -35,10 +35,7 @@ impl Pids<'_> {
   ///
   /// # Errors
   ///
-  /// Returns [`crate::Error::FileMissing`] if the interface is absent,
-  /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
-  /// for other operating-system failures.
+  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn current(&self) -> Result<PidsCurrent, Error> { self.cgroup.parse(PidsCurrent::FILE_NAME) }
 
   /// Configured task limit in counts, or `max` for no limit at this cgroup.
@@ -47,10 +44,7 @@ impl Pids<'_> {
   ///
   /// # Errors
   ///
-  /// Returns [`crate::Error::FileMissing`] if the interface is absent,
-  /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
-  /// for other operating-system failures.
+  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn max(&self) -> Result<PidsMax, Error> { self.cgroup.parse(PidsMax::FILE_NAME) }
 
   /// Hierarchical process-limit event counts.
@@ -59,10 +53,7 @@ impl Pids<'_> {
   ///
   /// # Errors
   ///
-  /// Returns [`crate::Error::FileMissing`] if the interface is absent,
-  /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
-  /// for other operating-system failures.
+  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn events(&self) -> Result<PidsEvents, Error> { self.cgroup.parse(PidsEvents::FILE_NAME) }
 }
 
