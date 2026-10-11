@@ -16,6 +16,13 @@ from ._sakai import CpuTimeStat as CpuTimeStat
 from ._sakai import CpuWeight as CpuWeight
 from ._sakai import DeletedCgroupError as DeletedCgroupError
 from ._sakai import InterfaceMissingError as InterfaceMissingError
+from ._sakai import IoDeviceMax as IoDeviceMax
+from ._sakai import IoDeviceStat as IoDeviceStat
+from ._sakai import IoLatency as IoLatency
+from ._sakai import IoMax as IoMax
+from ._sakai import IoReader as IoReader
+from ._sakai import IoStat as IoStat
+from ._sakai import IoWeight as IoWeight
 from ._sakai import MaxOr as MaxOr
 from ._sakai import MemoryEventCounts as MemoryEventCounts
 from ._sakai import MemoryNumaStat as MemoryNumaStat
