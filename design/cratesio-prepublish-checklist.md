@@ -11,14 +11,37 @@ warns that a published version cannot be overwritten. Review the packaged
 crate, not only the working tree. Commands below name `sakai` explicitly
 because the workspace also contains `xtask` and `sakai-python`.
 
+Verification baseline: commit `ec70f57c04bb701fad382fb822a4d607b87838be`,
+reviewed on 2026-10-11. Dated results below describe that source commit,
+not a final release candidate. README/package metadata and release automation
+are deferred. Repeat artifact checks after changing packaged files or metadata,
+and repeat the release-commit checks before upload.
+
+CI remains Linux-only. Existing Linux 5.15/6.18 smoke coverage is sufficient
+for this preparation; an additional full/intermediate-kernel matrix run is
+not a release requirement. These decisions do not change the existing CI jobs.
+
 ## 1. Settle the crate contract and metadata
 
-- [ ] Decide which currently implemented cgroup v2 interfaces belong in the
-  first published API. Check that the public types, Linux-only handle gating,
+- [x] Review the currently implemented API: public types, Linux-only handle gating,
   parser availability on other platforms, missing-file behavior, read-only
-  guarantees, and non-atomic fresh reads are stable enough to document.
+  guarantees, and non-atomic fresh reads. On 2026-10-11, CPU, memory (including
+  swap/zswap), process-number, core, and I/O readers were reviewed. Handles
+  and borrowed reader views are Linux-gated; snapshot types and `FromStr`
+  implementations remain portable. Reads open fresh `RDONLY` descriptors,
+  never enable controllers or write PSI triggers, and report absent files as
+  `Error::FileMissing` with their path. Optional counters remain distinct from
+  zero; `CpuMax::cpu_count()` describes only this cgroup's quota/period.
+  Existing tests cover these contracts, including missing/older forms and
+  descriptor-relative reads. No API changes were made by this review.
   [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/checklist.html),
-  [current README](../README.md).
+  [crate root](../sakai/src/lib.rs),
+  [handle implementation](../sakai/src/cgroup/v2/handle.rs),
+  [file reads](../sakai/src/cgroup/v2/file.rs).
+- [ ] Settle which implemented interfaces belong in the first release.
+  `TODO.md` still says work below memory stays out of v0, while the public API
+  already includes P2 process/core and P3 I/O readers. Reconcile that scope
+  before freezing the API or writing the release README.
 - [ ] Confirm that `sakai` is available on crates.io immediately before
   release and that the intended crates.io account controls the name. Crate
   names are allocated first come, first served.
@@ -53,15 +76,30 @@ because the workspace also contains `xtask` and `sakai-python`.
   `x86_64-unknown-linux-gnu`, using the locked dependencies. `devenv test`
   also passed. The existing Ubuntu CI checks job now compiles and tests all crate
   targets and features and runs doctests on Rust 1.88.0; it runs repository
-  tests and lints with the development toolchain. Execution of CI and the
-  broader release checks remain gates below, including macOS verification
-  before publication.
+  tests and lints with the development toolchain. The baseline's Ubuntu
+  [checks job](https://github.com/risk1996/sakai/actions/runs/38108925883/job/114380216737)
+  passed, including all three MSRV steps. No additional MSRV work is required
+  for this preparation; rerun the existing CI checks on the release commit.
   [Rust 1.85 release](https://blog.rust-lang.org/2025/02/20/Rust-1.85.0.html),
   [Cargo rust-version guidance](https://doc.rust-lang.org/cargo/reference/rust-version.html).
-- [ ] Review the version number and SemVer promise, including changes to
-  public enums, trait implementations, types, and error behavior. Keep the
-  release notes/changelog and version tag aligned with `Cargo.toml`.
+- [x] Review the version number and SemVer implications of public enums,
+  trait implementations, types, and error behavior. The current workspace and
+  normalized package both use `0.1.0`; there are no local release tags or a
+  previous published baseline selected for a compatibility comparison.
+  For the initial `0.1` line, incompatible API changes require `0.2.0`;
+  compatible additions/fixes can remain in `0.1.x`. Public enums, including
+  error and memory-field enums, are exhaustive: adding variants can break
+  downstream matches. `CgroupController::Other` handles unknown kernel names
+  but does not make the enum non-exhaustive. Public `uom` aliases, generated
+  `nutype` methods, trait implementations, parser errors, and the public
+  `#[doc(hidden)]` scalar module are part of the compatibility surface.
+  In particular, hiding rustdoc does not make `scalar::Scalar`, `Interface`,
+  or its marker types private. Keep missing-file, optional-field, unit, and
+  fresh-read behavior compatible within that line.
   [Cargo SemVer reference](https://doc.rust-lang.org/cargo/reference/semver.html),
+  [scalar API](../sakai/src/scalar.rs), [errors](../sakai/src/error.rs).
+- [ ] Align the final version, release notes/changelog, and release tag with
+  `Cargo.toml` after settling release scope.
   [publishing guide](https://doc.rust-lang.org/cargo/reference/publishing.html).
 - [ ] Make the crate-local README and rustdoc examples compile against the
   released API. Show Linux gating explicitly: `Cgroup` is Linux-only, while
@@ -72,52 +110,100 @@ because the workspace also contains `xtask` and `sakai-python`.
 
 ## 2. Validate what Cargo will actually publish
 
-- [ ] Run the repository checks with `devenv test`; confirm format, Clippy,
-  unit/integration tests, and doctests pass on the release commit. Add the
-  chosen MSRV to CI and test the crate on both Linux and macOS, since the
-  published API promises portable parsers. Do not equate a macOS compile
-  with support for Linux-only cgroup handles.
-- [ ] Run Linux live tests and the supported kernel VM matrix, checking
-  optional files and older-kernel forms without requiring host cgroup writes.
-  Resolve any mismatch between documented and observed kernel behavior before
-  publication. [Repository test guidance](../README.md).
-- [ ] Check dependency advisories and review licenses of runtime and build
+- [x] Run the repository checks with `devenv test`. On 2026-10-11 the clean
+  baseline worktree passed formatting, Clippy, all 43 macOS workspace nextest
+  tests, and three crate doctests using Rust 1.99.0. Local macOS execution
+  verifies portable parsers; it does not execute Linux handle/live tests.
+  The baseline's Ubuntu checks job also passed Rust/Python gates and MSRV
+  checks. CI stays Linux-only; no macOS runner is required.
+- [x] Confirm existing Linux live and smoke-kernel coverage on the baseline.
+  The [Linux 5.15 job](https://github.com/risk1996/sakai/actions/runs/38108925883/job/114380505049)
+  and [Linux 6.18 job](https://github.com/risk1996/sakai/actions/runs/38108925883/job/114380505025)
+  passed. No additional matrix run was performed or is required for this
+  preparation. Continue using the existing smoke coverage on the release
+  commit. [Repository test guidance](../README.md).
+- [x] Check dependency advisories and review licenses of runtime and build
   dependencies; resolve material findings or record a concrete rationale.
+  Confirmed the existing [security job](https://github.com/risk1996/sakai/actions/runs/38108925883/job/114380216632)
+  passed on the baseline on 2026-10-11: `check:audit` scanned 216 locked
+  dependencies against 1,296 RustSec advisories, and `check:deny` passed the
+  advisory/license/source/bans policy in [deny.toml](../deny.toml), including
+  development dependencies and all targets. Its only reported warning was
+  duplicate `syn` 2.0.119/3.0.7, permitted by the existing multiple-version
+  warning policy; this is not an advisory or license failure. No new security
+  tooling or redundant local audit was added. Reuse
+  `devenv tasks run check:security` and the existing CI job for later commits.
   `cargo audit` checks the lockfile against RustSec advisories, but a clean
   report does not prove every dependency is safe.
   [RustSec cargo-audit](https://github.com/rustsec/rustsec/blob/main/cargo-audit/README.md).
-- [ ] Use `devenv shell -- rtk cargo package -p sakai --list --locked`
-  and inspect every included file. Include Rust sources, tests/fixtures used by
-  the package, README, license, and required manifests; exclude unrelated
-  workspace tools, generated output, caches, and secrets. Check the final
-  `.crate` size. [Cargo package](https://doc.rust-lang.org/cargo/commands/cargo-package.html).
-- [ ] Run `devenv shell -- rtk cargo package -p sakai --locked` and
+- [x] Use `devenv shell -- rtk cargo package -p sakai --list --locked`
+  and inspect the baseline archive's complete file list and size. Its 72
+  regular files include Cargo's generated manifests/lockfile/VCS information,
+  the MIT license, all Rust sources, parser/procfs fixtures, and
+  `tests/linux_live.rs`. There are no packaged Python bindings, `xtask`, CI
+  files, caches, build outputs, or credential files. A targeted scan found
+  no embedded checkout paths or common credential patterns; this is not an
+  exhaustive secret audit. The archive is 47,809 bytes (46.7 KiB).
+  [Cargo package](https://doc.rust-lang.org/cargo/commands/cargo-package.html).
+- [ ] Repeat file-list/archive inspection after adding final metadata and
+  the crate-local README. The baseline has no README and normalizes to
+  `readme = false`; the root README is not included automatically. Confirm
+  the eventual README and all required files are present before publication.
+- [x] Run `devenv shell -- rtk cargo package -p sakai --locked` and
   `devenv shell -- rtk cargo publish -p sakai --dry-run --locked` from a
-  clean release commit. Do not use `--allow-dirty`, `--no-verify`, or
+  clean baseline commit. Both passed on 2026-10-11; the dry run explicitly
+  aborted the upload. Cargo warned about absent descriptive metadata, which
+  remains deferred above. No warning suppression or verification bypass was
+  used. Do not use `--allow-dirty`, `--no-verify`, or
   `--no-metadata` to get past warnings. Cargo extracts and builds the package
   during verification; `--dry-run` performs checks without uploading.
   [Cargo package](https://doc.rust-lang.org/cargo/commands/cargo-package.html),
   [Cargo publish](https://doc.rust-lang.org/cargo/commands/cargo-publish.html).
-- [ ] Inspect `target/package/sakai-<version>.crate` itself, including
+- [x] Inspect `target/package/sakai-<version>.crate` itself, including
   Cargo's normalized manifest and `Cargo.lock`. Build and test from an
   extracted archive or fresh external consumer project with no access to the
   workspace. This catches accidental reliance on files, workspace members,
   patches, or paths that disappear when Cargo packages the crate.
+  The baseline normalized manifest contains `0.1.0`, Rust `1.88.0`, MIT,
+  explicit library/live-test targets, and registry dependency declarations;
+  no workspace inheritance, patches, or path dependencies remain. The
+  packaged lockfile contains only the crate and its dependency graph. Its
+  license is a regular file identical to the root license. After extraction
+  outside the checkout, macOS tests passed; an isolated Linux container with
+  no checkout mounted passed all 52 library unit/fixture tests and checked
+  all targets/features with networking disabled. Additional live/kernel runs
+  were deliberately not repeated.
   [Cargo package contents](https://doc.rust-lang.org/cargo/commands/cargo-package.html).
-- [ ] Confirm all regular dependencies are registry-resolvable; any future
+- [x] Confirm all regular dependencies are registry-resolvable; any future
   local `path` dependency also needs a published version requirement. Check
   the dependency ranges in a fresh consumer resolution, since a library's
   packaged lockfile does not pin dependencies for ordinary downstream builds.
+  Cargo metadata confirms all six regular dependencies (including Linux-only
+  `procfs`/`rustix`) use crates.io requirements. A fresh external consumer of
+  the extracted crate resolved online with its own lockfile and compiled on
+  macOS and isolated Linux. Its graph contains only that consumer, the extracted `sakai`, and
+  36 registry packages; no Python/xtask workspace member participates.
+  This checks current compatible resolution, not every historical version
+  admitted by each dependency range.
   [Cargo dependency rules](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html),
   [Cargo package contents](https://doc.rust-lang.org/cargo/commands/cargo-package.html).
-- [ ] Build rustdoc and run doctests from the packaged crate. Check that
+- [x] Build rustdoc and run doctests from the packaged crate. Check that
   docs.rs's default Linux target can document the public API without files
   outside the archive or network access; add docs.rs metadata only if a
   specific build setting is needed.
+  On the baseline, isolated aarch64 Linux with Rust 1.99.0 passed rustdoc
+  with `RUSTDOCFLAGS=-Dwarnings`, all three doctests, and all-target checks
+  offline. Dependencies were fetched before disabling container networking.
+  The docs.rs default `x86_64-unknown-linux-gnu` documentation build was also
+  checked offline using the existing Rust 1.88.0 target installation.
+  No docs.rs-specific metadata is needed for the current build.
   [docs.rs builds](https://docs.rs/about/builds),
   [docs.rs metadata](https://docs.rs/about/metadata).
 
 ## 3. Prepare the first upload and later automation
+
+Deferred until release preparation: no account, token, tag, workflow, or
+registry configuration was changed during the baseline verification.
 
 - [ ] Ensure the crates.io account has a verified email and access to the
   intended crate name. For the **first** release, prepare a personal API
@@ -150,3 +236,69 @@ and the manual first-release credential is ready. If a check changes the
 contents or manifest, repeat package inspection and the dry run. This checklist
 ends before the upload; checking the published crate, docs.rs page, and registry
 ownership belongs in the release runbook.
+
+## Repeat the baseline verification
+
+Use the existing Cargo, devenv, tar, and container tools. Run package commands
+from a clean change/release worktree. These commands do not upload anything;
+dependency resolution and image/dependency downloads do use the network.
+An extracted package test is useful beyond Cargo's automatic build verification
+because it executes fixture tests and doctests. A new consumer tests resolution
+without inheriting the library's lockfile.
+
+```sh
+devenv test
+devenv shell -- rtk cargo package -p sakai --list --locked
+devenv shell -- rtk cargo package -p sakai --locked
+devenv shell -- rtk cargo publish -p sakai --dry-run --locked
+
+crate_version="$(devenv shell -- rtk cargo metadata --no-deps --format-version 1 | rtk jq -r '.packages[] | select(.name == "sakai") | .version')"
+crate_archive="target/package/sakai-${crate_version}.crate"
+verification_dir="$(rtk mktemp -d)"
+rtk tar -tzvf "$crate_archive"
+rtk shasum -a 256 "$crate_archive"
+rtk tar -xzf "$crate_archive" -C "$verification_dir"
+crate_manifest="$verification_dir/sakai-${crate_version}/Cargo.toml"
+rtk cmp LICENSE "$verification_dir/sakai-${crate_version}/LICENSE"
+devenv shell -- rtk cargo metadata --manifest-path "$crate_manifest" --format-version 1 --locked
+devenv shell -- rtk cargo test --manifest-path "$crate_manifest" --lib --all-features --locked --offline
+devenv shell -- rtk cargo test --manifest-path "$crate_manifest" --doc --all-features --locked --offline
+
+devenv shell -- rtk cargo new --lib --vcs none "$verification_dir/consumer"
+devenv shell -- rtk cargo add --manifest-path "$verification_dir/consumer/Cargo.toml" sakai --path "$verification_dir/sakai-${crate_version}"
+devenv shell -- rtk cargo check --manifest-path "$verification_dir/consumer/Cargo.toml" --locked
+devenv shell -- rtk cargo metadata --manifest-path "$verification_dir/consumer/Cargo.toml" --format-version 1 --locked
+```
+
+For isolated Linux checks, use a running container engine. Derive its Rust
+image version from the resolved development compiler. Only the temporary
+verification directory is mounted; the source checkout is unavailable.
+
+```sh
+rust_version="$(devenv shell -- rtk rustc --version | rtk awk '{print $2}')"
+rtk docker run --rm \
+  --mount "type=bind,src=$verification_dir,dst=/verification" \
+  --workdir "/verification/sakai-${crate_version}" \
+  --env CARGO_HOME=/verification/linux-cargo \
+  --env CARGO_TARGET_DIR=/verification/linux-target \
+  "rust:${rust_version}-bookworm" cargo fetch --locked
+rtk docker run --rm --network none \
+  --mount "type=bind,src=$verification_dir,dst=/verification" \
+  --workdir "/verification/sakai-${crate_version}" \
+  --env CARGO_HOME=/verification/linux-cargo \
+  --env CARGO_TARGET_DIR=/verification/linux-target \
+  --env RUSTDOCFLAGS=-Dwarnings \
+  "rust:${rust_version}-bookworm" sh -c \
+  'cargo test --lib --all-features --locked --offline && cargo check --all-targets --all-features --locked --offline && cargo doc --no-deps --all-features --locked --offline && cargo test --doc --all-features --locked --offline && cargo check --manifest-path /verification/consumer/Cargo.toml --locked --offline'
+```
+
+On an x86-64 Linux host this also uses docs.rs's default target. For a separate
+cross-documentation check, use `cargo doc --target x86_64-unknown-linux-gnu`
+with that target installed. When selecting a rustup compiler inside devenv,
+set `RUSTC` and `RUSTDOC` to `rustup which --toolchain <version> rustc|rustdoc`,
+as the existing MSRV CI does; `rustup run` alone does not override devenv's
+compiler environment. Local macOS checks remain optional, outside CI.
+
+Baseline archive SHA-256:
+`24906d305f5e7a6cfaee0b0e75c7697827758b3230e780821e5ca2cda7a34c0d`.
+This identifies the inspected baseline bytes, not the eventual release archive.
