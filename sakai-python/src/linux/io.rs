@@ -115,6 +115,8 @@ impl From<CoreIoDeviceStat> for IoDeviceStat {
 #[pyclass(frozen, module = "sakai._sakai")]
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct IoWeight {
+  /// Default scheduling weight applied to devices without an override.
+  #[pyo3(get)]
   default_weight: u16,
   devices: BTreeMap<DeviceKey, u16>,
 }
@@ -130,14 +132,10 @@ impl From<CoreIoWeight> for IoWeight {
 
 #[pymethods]
 impl IoWeight {
-  /// Default scheduling weight applied to devices without an override.
-  #[getter]
-  fn default_weight(&self) -> u16 { self.default_weight }
-
   /// Read-only mapping of (major, minor) device keys to numeric weight overrides.
   #[getter]
   fn devices(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
-    Ok(PyMappingProxy::new(py, self.devices.clone().into_py_dict(py)?.as_mapping()).unbind())
+    Ok(PyMappingProxy::new(py, (&self.devices).into_py_dict(py)?.as_mapping()).unbind())
   }
 }
 

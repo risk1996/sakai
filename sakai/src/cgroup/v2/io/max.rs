@@ -132,6 +132,16 @@ mod tests {
     Failure::{Invalid, Missing},
   };
 
+  impl IoDeviceMax {
+    fn expected(bandwidth: [Option<u64>; 2], iops: [Option<u64>; 2]) -> Self {
+      let [read_bandwidth, write_bandwidth] = bandwidth
+        .map(|value| value.map_or(MaxOr::Max, |value| MaxOr::Value(BytesPerSecond::new::<byte_per_second>(value))));
+      let [read_iops, write_iops] =
+        iops.map(|value| value.map_or(MaxOr::Max, |value| MaxOr::Value(OperationsPerSecond::new::<hertz>(value))));
+      Self { read_bandwidth, write_bandwidth, read_iops, write_iops }
+    }
+  }
+
   #[test]
   fn parses_device_limits_and_preserves_small_rates() {
     Cases::<IoMax>::check([
@@ -139,44 +149,20 @@ mod tests {
         include_str!("../fixtures/p3/io.max"),
         Ok(IoMax {
           devices: BTreeMap::from([
-            (Device::new(8, 16), IoDeviceMax {
-              read_bandwidth: MaxOr::Value(BytesPerSecond::new::<byte_per_second>(2_097_152)),
-              write_bandwidth: MaxOr::Max,
-              read_iops: MaxOr::Max,
-              write_iops: MaxOr::Value(OperationsPerSecond::new::<hertz>(120)),
-            }),
-            (Device::new(8, 0), IoDeviceMax {
-              read_bandwidth: MaxOr::Value(BytesPerSecond::new::<byte_per_second>(1)),
-              write_bandwidth: MaxOr::Value(BytesPerSecond::new::<byte_per_second>(u64::MAX)),
-              read_iops: MaxOr::Value(OperationsPerSecond::new::<hertz>(1)),
-              write_iops: MaxOr::Value(OperationsPerSecond::new::<hertz>(u64::MAX)),
-            }),
+            (Device::new(8, 16), IoDeviceMax::expected([Some(2_097_152), None], [None, Some(120)])),
+            (Device::new(8, 0), IoDeviceMax::expected([Some(1), Some(u64::MAX)], [Some(1), Some(u64::MAX)])),
           ]),
         }),
       ),
       (
         include_str!("../fixtures/p3_older/io.max"),
-        Ok(IoMax {
-          devices: BTreeMap::from([(Device::new(8, 0), IoDeviceMax {
-            read_bandwidth: MaxOr::Max,
-            write_bandwidth: MaxOr::Max,
-            read_iops: MaxOr::Max,
-            write_iops: MaxOr::Max,
-          })]),
-        }),
+        Ok(IoMax { devices: BTreeMap::from([(Device::new(8, 0), IoDeviceMax::expected([None; 2], [None; 2]))]) }),
       ),
       ("", Ok(IoMax::default())),
       (" \n", Ok(IoMax::default())),
       (
         "8:0 rbps=0 wbps=0 riops=0 wiops=0",
-        Ok(IoMax {
-          devices: BTreeMap::from([(Device::new(8, 0), IoDeviceMax {
-            read_bandwidth: MaxOr::Value(BytesPerSecond::new::<byte_per_second>(0)),
-            write_bandwidth: MaxOr::Value(BytesPerSecond::new::<byte_per_second>(0)),
-            read_iops: MaxOr::Value(OperationsPerSecond::new::<hertz>(0)),
-            write_iops: MaxOr::Value(OperationsPerSecond::new::<hertz>(0)),
-          })]),
-        }),
+        Ok(IoMax { devices: BTreeMap::from([(Device::new(8, 0), IoDeviceMax::expected([Some(0); 2], [Some(0); 2]))]) }),
       ),
       ("8:0", Err(Missing("value"))),
       ("8:0 wbps=max riops=max wiops=max", Err(Missing("rbps"))),
