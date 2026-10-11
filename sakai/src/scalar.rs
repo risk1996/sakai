@@ -31,7 +31,7 @@ impl<T: Copy, I: Interface> Scalar<T, I> {
 
   /// Returns the snapshot in its declared units.
   #[must_use]
-  pub const fn value(self) -> T { self.value }
+  pub const fn value(&self) -> T { self.value }
 
   pub(crate) const fn new(value: T) -> Self { Self { value, interface: PhantomData } }
 }

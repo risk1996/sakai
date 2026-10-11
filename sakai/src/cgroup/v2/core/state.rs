@@ -24,14 +24,14 @@ impl CgroupEvents {
 
   /// Whether this cgroup or any descendant contains live processes.
   #[must_use]
-  pub const fn populated(self) -> bool { self.populated }
+  pub const fn populated(&self) -> bool { self.populated }
 
   /// Whether freezing has completed, if the kernel reports this state.
   ///
   /// Includes freezing imposed by ancestors; this is the observed state,
   /// which may lag a request written to `cgroup.freeze`.
   #[must_use]
-  pub const fn frozen(self) -> Option<bool> { self.frozen }
+  pub const fn frozen(&self) -> Option<bool> { self.frozen }
 }
 
 impl FromStr for CgroupEvents {

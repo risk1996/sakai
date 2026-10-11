@@ -5,6 +5,15 @@
 - Follow the existing code for reference and keeping the code style consistent.
 - Place all `use` statements at the top of their module, including test modules; never put them inside functions.
 - Prioritize function purity and immutability, avoid side effects, use declarative and functional paradigm instead of imperative, avoid `let mut` whenever possible.
+- Use `&self` for read-only instance methods, including getters, predicates,
+  and derived-metric convenience functions, even when the receiver is `Copy`.
+  Borrowing expresses inspection and avoids whole-receiver copies without
+  relying on inlining or release optimizations; those copies can remain in
+  debug builds and calls across crate boundaries. The convention also remains
+  suitable as snapshots grow or gain non-`Copy` fields. Return small `Copy`
+  quantities by value. Use `&mut self` when mutating the receiver and `self`
+  when deliberately consuming or transferring ownership, such as `into_*`
+  conversions.
 - Leave formatting to the project formatter; verify with `devenv tasks run check:fmt`.
 - Prioritize correctness and leveraging the awesome Rust type system:
   - use enum instead of string matching if the list of possible values is known and finite,

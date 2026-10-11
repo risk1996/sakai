@@ -67,11 +67,11 @@ impl Device {
 
   /// Returns the major device number.
   #[must_use]
-  pub const fn major(self) -> u32 { self.major }
+  pub const fn major(&self) -> u32 { self.major }
 
   /// Returns the minor device number.
   #[must_use]
-  pub const fn minor(self) -> u32 { self.minor }
+  pub const fn minor(&self) -> u32 { self.minor }
 
   fn parse(raw: &str, value: &str) -> Result<Self, ParseError<ParseValueError>> {
     let (major, minor) =

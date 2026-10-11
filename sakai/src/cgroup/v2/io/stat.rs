@@ -44,27 +44,27 @@ pub struct IoDeviceStat {
 impl IoDeviceStat {
   /// Cumulative bytes read (`rbytes`).
   #[must_use]
-  pub const fn read_bytes(self) -> Option<Bytes> { self.read_bytes }
+  pub const fn read_bytes(&self) -> Option<Bytes> { self.read_bytes }
 
   /// Cumulative bytes written (`wbytes`).
   #[must_use]
-  pub const fn write_bytes(self) -> Option<Bytes> { self.write_bytes }
+  pub const fn write_bytes(&self) -> Option<Bytes> { self.write_bytes }
 
   /// Cumulative bytes discarded (`dbytes`), when reported.
   #[must_use]
-  pub const fn discard_bytes(self) -> Option<Bytes> { self.discard_bytes }
+  pub const fn discard_bytes(&self) -> Option<Bytes> { self.discard_bytes }
 
   /// Cumulative read operations (`rios`).
   #[must_use]
-  pub const fn read_operations(self) -> Option<Count> { self.read_operations }
+  pub const fn read_operations(&self) -> Option<Count> { self.read_operations }
 
   /// Cumulative write operations (`wios`).
   #[must_use]
-  pub const fn write_operations(self) -> Option<Count> { self.write_operations }
+  pub const fn write_operations(&self) -> Option<Count> { self.write_operations }
 
   /// Cumulative discard operations (`dios`), when reported.
   #[must_use]
-  pub const fn discard_operations(self) -> Option<Count> { self.discard_operations }
+  pub const fn discard_operations(&self) -> Option<Count> { self.discard_operations }
 
   fn from_fields(fields: KeyedFields<'_>) -> Result<Self, ParseError<ParseValueError>> {
     Ok(Self {

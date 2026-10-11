@@ -75,7 +75,7 @@ pub(crate) enum Profile {
 }
 
 impl Profile {
-  fn matches(self, kernel: &Kernel) -> bool {
+  fn matches(&self, kernel: &Kernel) -> bool {
     match self {
       | Self::Smoke => kernel.smoke,
       | Self::Full => true,
