@@ -356,6 +356,8 @@ impl ConfigurationWatcher {
   /// precision, and zero checks readiness without blocking. Returns `None`
   /// when the timeout expires. Notifications can coalesce; the returned flags
   /// describe a batch, not a count of writes or the current configuration.
+  /// Each call consumes at most one read buffer; remaining queued events keep
+  /// the descriptor readable for the next call.
   /// After modification or overflow, reread the relevant typed snapshot.
   /// Observed removal is reported once and makes the watcher terminal.
   /// Interface disappearance need not emit an event; see [`Self`] for the
@@ -380,7 +382,7 @@ impl ConfigurationWatcher {
         loop {
           match reader.next() {
             | Ok(event) => notification.include(event.events()),
-            | Err(rustix::io::Errno::AGAIN) => return Ok(None),
+            | Err(rustix::io::Errno::AGAIN) => break,
             | Err(error) => return Err(io::Error::from(error).into()),
           }
           match reader.is_buffer_empty() {
@@ -389,7 +391,7 @@ impl ConfigurationWatcher {
           }
         }
         self.removed = notification.removed;
-        Ok(Some(notification))
+        Ok((notification != ChangeNotification::default()).then_some(notification))
       },
     }
   }

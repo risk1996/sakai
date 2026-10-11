@@ -5,9 +5,9 @@ import errno
 import inspect
 import os
 import select
+import sys
 import tempfile
 import threading
-import time
 import unittest
 from collections.abc import Callable
 from pathlib import Path
@@ -252,22 +252,35 @@ class ContractTest(unittest.TestCase):
         self.assertEqual(caught.exception.errno, errno.EBADF)
 
   def test_configuration_wait_releases_gil(self) -> None:
-    monitor = self.group.watch_configuration("cgroup.type")
+    try:
+      monitor = self.group.watch_configuration("cgroup.type")
+    except InterfaceMissingError:
+      self.skipTest("cgroup.type is unavailable")
     started = threading.Event()
-    completed = threading.Event()
+    progress = 0
 
     def worker() -> None:
+      nonlocal progress
       started.wait()
-      time.sleep(0.01)
-      completed.set()
+      for _ in range(10_000):
+        progress += 1
 
     thread = threading.Thread(target=worker)
     thread.start()
+    previous_interval = sys.getswitchinterval()
     try:
+      # Prevent an interpreter switch after a GIL-holding wait returns from
+      # making the worker appear to have progressed during the wait.
+      sys.setswitchinterval(1.0)
       started.set()
-      self.assertIsNone(monitor.wait(0.1))
-      self.assertTrue(completed.is_set())
+      before = progress
+      result = monitor.wait(0.1)
+      after = progress
+      self.assertIsNone(result)
+      self.assertGreater(after, before)
     finally:
+      sys.setswitchinterval(previous_interval)
+      started.set()
       thread.join()
 
   def test_cpu_contract(self) -> None:
