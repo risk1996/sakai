@@ -8,7 +8,9 @@ parsers and snapshot values remain available on other platforms.
 ## Rust crate publication
 
 Once the read surface and public API are ready, prepare `sakai` for its
-first crates.io release:
+first crates.io release. The implemented preparation and manual bootstrap
+sequence are documented in [releases.md](releases.md); the first upload,
+trusted-publisher registration, and tag push still require the owner:
 
 - Add package metadata and a README installation and usage
   example that matches the released API.

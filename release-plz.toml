@@ -1,0 +1,61 @@
+[workspace]
+# Release preparation follows Git tags, independent of registry destinations.
+# Only release-pr is invoked; the CD workflow owns uploads and GitHub releases.
+git_only = true
+git_tag_name = "v{{ version }}"
+git_release_enable = false
+dependencies_update = false
+features_always_increment_minor = false
+pr_name = "chore: release v{{ version }}"
+pr_body = """
+### Summary
+Prepare the next shared Sakai release.
+
+{% for release in releases %}
+{{ release.package }}: {{ release.previous_version }} → {{ release.next_version }}
+API compatibility: {{ release.semver_check }}
+{% if release.breaking_changes %}
+```text
+{{ release.breaking_changes }}
+```
+{% endif %}
+{% if release.changelog %}{{ release.changelog }}{% endif %}
+{% endfor %}
+
+### Why this is needed
+Keep the workspace version, package lockfile, and release notes together for review.
+
+### What to look out for in the review
+Check Rust and Python compatibility, the proposed version, and user-facing notes.
+Compatible additions and fixes may stay in 0.1.x; breaking changes require 0.2.0.
+Merge only after the required CI checks pass, then push the matching version tag.
+
+### Assistance
+Harness: release-plz (GitHub Actions)
+Model: None
+"""
+
+[[package]]
+name = "sakai"
+version_group = "sakai"
+changelog_path = "sakai/CHANGELOG.md"
+changelog_include = ["sakai-python"]
+
+[[package]]
+name = "sakai-python"
+version_group = "sakai"
+changelog_update = false
+
+[[package]]
+name = "xtask"
+release = false
+
+[changelog]
+protect_breaking_commits = true
+commit_parsers = [
+  { message = "^feat", group = "Added" },
+  { message = "^fix", group = "Fixed" },
+  { message = "^docs", group = "Documentation" },
+  { message = "^refactor", group = "Changed" },
+  { message = ".*", group = "Other" },
+]

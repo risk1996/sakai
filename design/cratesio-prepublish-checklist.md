@@ -14,7 +14,9 @@ because the workspace also contains `xtask` and `sakai-python`.
 Verification baseline: commit `ec70f57c04bb701fad382fb822a4d607b87838be`,
 reviewed on 2026-10-11. Dated results below describe that source commit,
 not a final release candidate. README/package metadata and release automation
-are deferred. Repeat artifact checks after changing packaged files or metadata,
+were deferred at that baseline. The current implementation and bootstrap
+sequence are in [releases.md](releases.md); account setup alone is not an upload.
+Repeat artifact checks after changing packaged files or metadata,
 and repeat the release-commit checks before upload.
 
 The current release target is `0.1.0-alpha.1`, inherited by every workspace
@@ -69,13 +71,15 @@ repeated for the changed source.
   packaged and built with `cargo package -p sakai --locked --offline`;
   the archive's regular license file, exact text, and normalized
   `license = "MIT"` were verified.
-  `description` is still absent and belongs to the metadata item below.
+  The descriptive metadata is covered by the item below.
   [Cargo manifest reference](https://doc.rust-lang.org/cargo/reference/manifest.html).
-- [ ] Fill in accurate `[package]` metadata: concise `description`, source
+- [x] Fill in accurate `[package]` metadata: concise `description`, source
   `repository`, crate-local `readme`, and useful `keywords`/`categories` if
   applicable. Set `documentation` only if using a site other than docs.rs;
   set `homepage` only if it is a distinct project site. Avoid a workspace-root
   README that the packaged crate cannot render correctly by itself.
+  Added a crate-local README, description, repository URL, keywords, and
+  categories on 2026-10-11. Final archive verification remains a separate gate.
   [Cargo manifest reference](https://doc.rust-lang.org/cargo/reference/manifest.html),
   [Rust API Guidelines on metadata](https://rust-lang.github.io/api-guidelines/documentation.html).
 - [x] Choose and document the minimum supported Rust version (MSRV), then set
@@ -121,10 +125,13 @@ repeated for the changed source.
 - [ ] Align the final version, release notes/changelog, and release tag with
   `Cargo.toml` after settling release scope.
   [publishing guide](https://doc.rust-lang.org/cargo/reference/publishing.html).
-- [ ] Make the crate-local README and rustdoc examples compile against the
+- [x] Make the crate-local README and rustdoc examples compile against the
   released API. Show Linux gating explicitly: `Cgroup` is Linux-only, while
   parsers and snapshot values are portable. Explain units, `MaxOr::Max`,
   controller-disabled files, and `CpuMax::cpu_count()`'s limited meaning.
+  The crate README is included in the workspace doctests. On 2026-10-11,
+  `devenv test` passed its examples on macOS, alongside 49 workspace tests,
+  formatting, and Clippy. Release CI covers the Linux-gated example too.
   [Rust API Guidelines on documentation](https://rust-lang.github.io/api-guidelines/documentation.html),
   [current crate root](../sakai/src/lib.rs).
 
@@ -233,12 +240,17 @@ registry configuration was changed during the baseline verification.
   unencrypted on disk.
   [Cargo publishing guide](https://doc.rust-lang.org/cargo/reference/publishing.html),
   [registry authentication](https://doc.rust-lang.org/cargo/reference/registry-authentication.html).
-- [ ] Prepare the tag-gated release workflow and protect its tag pattern, but
+- [x] Prepare the tag-gated release workflow and protect its tag pattern, but
   leave the first crate publication manual. The crates.io team says a crate
   must have an initial release before its Trusted Publisher can be configured.
   After that first release, register the exact repository/workflow identity
   and use the official auth action and job-scoped `id-token: write` for later
   releases. Keep publish credentials out of pull-request jobs.
+  Added `release.yml` with existing reusable CI, candidate/checksum gates,
+  protected `crates-io` publishing, and step-scoped SecretSpec env credentials.
+  The owner confirmed the tag ruleset and environment protection setup.
+  No production upload or OIDC token exchange has been performed; trusted
+  publisher registration and first real upload verification remain pending.
   [crates.io Trusted Publishing announcement](https://blog.rust-lang.org/2025/07/11/crates-io-development-update-2025-07/),
   [Rust Forge workflow guidance](https://forge.rust-lang.org/infra/docs/trusted-publishing.html).
 - [ ] Review the exact commit, version, release notes, and tag before the

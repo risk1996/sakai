@@ -14,6 +14,9 @@ devenv.local.yaml
 debug
 target
 
+# Prepared release archives and verification reports
+/dist/
+
 # Downloaded VM kernels and staged host test binaries
 tests/.cache/
 
