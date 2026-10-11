@@ -148,8 +148,9 @@ impl Core<'_> {
   /// # Errors
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
+  /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
   /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
-  /// if the read fails for another reason.
+  /// for other operating-system failures.
   pub fn events(&self) -> Result<CgroupEvents, Error> { self.cgroup.parse(CgroupEvents::FILE_NAME) }
 
   /// Volatile descendant and subsystem counts, including at the hierarchy root.
@@ -159,8 +160,9 @@ impl Core<'_> {
   /// # Errors
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
+  /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
   /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
-  /// if the read fails for another reason.
+  /// for other operating-system failures.
   pub fn stat(&self) -> Result<CgroupStat, Error> { self.cgroup.parse(CgroupStat::FILE_NAME) }
 
   /// Configuration snapshot; the hierarchy root may lack this file.
@@ -170,8 +172,9 @@ impl Core<'_> {
   /// # Errors
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
+  /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
   /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
-  /// if the read fails for another reason.
+  /// for other operating-system failures.
   pub fn kind(&self) -> Result<CgroupType, Error> {
     let contents = self.cgroup.read(CgroupType::FILE_NAME)?;
     contents.trim().parse().map_err(|source| Error::Parse {

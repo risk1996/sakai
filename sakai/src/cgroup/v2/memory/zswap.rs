@@ -34,8 +34,9 @@ impl Zswap<'_> {
   /// # Errors
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
+  /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
   /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
-  /// if the read fails for another reason.
+  /// for other operating-system failures.
   pub fn current(&self) -> Result<ZswapCurrent, Error> { self.cgroup.parse(ZswapCurrent::FILE_NAME) }
 
   /// Hard limit on this cgroup's compressed swap pool.
@@ -48,8 +49,9 @@ impl Zswap<'_> {
   /// # Errors
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
+  /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
   /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
-  /// if the read fails for another reason.
+  /// for other operating-system failures.
   pub fn max(&self) -> Result<ZswapMax, Error> { self.cgroup.parse(ZswapMax::FILE_NAME) }
 
   /// Whether disk swap writeback is enabled for this cgroup.
@@ -62,8 +64,9 @@ impl Zswap<'_> {
   /// # Errors
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
+  /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
   /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
-  /// if the read fails for another reason.
+  /// for other operating-system failures.
   pub fn writeback(&self) -> Result<ZswapWriteback, Error> { self.cgroup.parse(ZswapWriteback::FILE_NAME) }
 }
 

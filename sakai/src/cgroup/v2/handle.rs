@@ -205,27 +205,27 @@ impl Cgroup {
 
   /// Borrows this handle to read CPU controller interfaces.
   ///
-  /// See [`crate::v2::cpu`] for the supported readers and See [Linux cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html#controllers).
+  /// See [`crate::v2::cpu`] for the supported readers and [Linux cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html#controllers).
   pub fn cpu(&self) -> Cpu<'_> { Cpu { cgroup: self } }
 
   /// Borrows this handle to read memory controller interfaces.
   ///
-  /// See [`crate::v2::memory`] for the supported readers and See [Linux cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html#controllers).
+  /// See [`crate::v2::memory`] for the supported readers and [Linux cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html#controllers).
   pub fn memory(&self) -> Memory<'_> { Memory { cgroup: self } }
 
   /// Borrows this handle to read I/O controller interfaces.
   ///
-  /// See [`crate::v2::io`] for the supported readers and See [Linux cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html#controllers).
+  /// See [`crate::v2::io`] for the supported readers and [Linux cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html#controllers).
   pub fn io(&self) -> Io<'_> { Io { cgroup: self } }
 
   /// Borrows this handle to read process-number controller interfaces.
   ///
-  /// See [`crate::v2::pids`] for the supported readers and See [Linux cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html#controllers).
+  /// See [`crate::v2::pids`] for the supported readers and [Linux cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html#controllers).
   pub fn pids(&self) -> Pids<'_> { Pids { cgroup: self } }
 
   /// Borrows this handle to read core cgroup interfaces.
   ///
-  /// See [`crate::v2::core`] for the supported readers and See [Linux cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html#controllers).
+  /// See [`crate::v2::core`] for the supported readers and [Linux cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html#controllers).
   pub fn core(&self) -> Core<'_> { Core { cgroup: self } }
 
   pub(crate) fn read(&self, file: &'static str) -> Result<String, Error> {

@@ -36,8 +36,9 @@ impl Pids<'_> {
   /// # Errors
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
+  /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
   /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
-  /// if the read fails for another reason.
+  /// for other operating-system failures.
   pub fn current(&self) -> Result<PidsCurrent, Error> { self.cgroup.parse(PidsCurrent::FILE_NAME) }
 
   /// Configured task limit in counts, or `max` for no limit at this cgroup.
@@ -47,8 +48,9 @@ impl Pids<'_> {
   /// # Errors
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
+  /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
   /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
-  /// if the read fails for another reason.
+  /// for other operating-system failures.
   pub fn max(&self) -> Result<PidsMax, Error> { self.cgroup.parse(PidsMax::FILE_NAME) }
 
   /// Hierarchical process-limit event counts.
@@ -58,8 +60,9 @@ impl Pids<'_> {
   /// # Errors
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
+  /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
   /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
-  /// if the read fails for another reason.
+  /// for other operating-system failures.
   pub fn events(&self) -> Result<PidsEvents, Error> { self.cgroup.parse(PidsEvents::FILE_NAME) }
 }
 
@@ -69,7 +72,7 @@ impl Pids<'_> {
 /// volatile value can exceed `pids.max` after task migration or a limit
 /// reduction; no relationship with a separately read limit is enforced.
 ///
-/// See [Linux `pids.max` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#pid).
+/// See [Linux `pids.current` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#pid).
 pub type PidsCurrent = Scalar<Count, interface::PidsCurrent>;
 
 /// Configured task limit reported by `pids.max`, measured in kernel TIDs.
