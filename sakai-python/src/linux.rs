@@ -27,8 +27,12 @@ use sakai::{
 };
 use uom::si::{information::byte, ratio::ratio, time::nanosecond};
 
-use self::io::{IoDeviceMax, IoDeviceStat, IoLatency, IoMax, IoReader, IoStat, IoWeight};
+use self::{
+  cpuset::{CpuList, CpusetPartition, CpusetReader, MemoryNodeList},
+  io::{IoDeviceMax, IoDeviceStat, IoLatency, IoMax, IoReader, IoStat, IoWeight},
+};
 
+mod cpuset;
 mod io;
 
 create_exception!(_sakai, SakaiError, PyException, "Base error for Sakai cgroup operations.");
@@ -173,6 +177,9 @@ impl Cgroup {
 
   /// Return a reader for CPU controller interfaces.
   fn cpu(&self) -> CpuReader { CpuReader { owner: Arc::clone(&self.owner) } }
+
+  /// Return a reader for CPU and NUMA memory-node placement.
+  fn cpuset(&self) -> CpusetReader { CpusetReader { owner: Arc::clone(&self.owner) } }
 
   /// Return a reader for memory controller interfaces.
   fn memory(&self) -> MemoryReader { MemoryReader { owner: Arc::clone(&self.owner) } }
@@ -938,6 +945,10 @@ fn _sakai(module: &Bound<'_, PyModule>) -> PyResult<()> {
   module.add_class::<MaxOr>()?;
   module.add_class::<CpuReader>()?;
   module.add_class::<MemoryReader>()?;
+  module.add_class::<CpusetReader>()?;
+  module.add_class::<CpuList>()?;
+  module.add_class::<MemoryNodeList>()?;
+  module.add_class::<CpusetPartition>()?;
   module.add_class::<IoReader>()?;
   module.add_class::<IoStat>()?;
   module.add_class::<IoDeviceStat>()?;

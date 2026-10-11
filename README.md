@@ -55,6 +55,19 @@ targets are omitted by the kernel. Weight, maximum, and latency files are absent
 at the root; older kernels can also omit root I/O statistics. PSI reads never
 write triggers.
 
+`cgroup.cpuset()` reads configured and effective CPU and NUMA memory-node lists
+(`cpus`, `cpus_effective`, `mems`, `mems_effective`) and partition state
+(`partition`). `CpuList` and `MemoryNodeList` keep inclusive `u32` ID ranges
+compact, expose lazy `ids()` iteration and `contains()`, and distinguish CPU IDs
+from node IDs. Empty configured lists mean inheritance; empty effective lists
+mean no resources granted. Effective placement changes with hotplug and ancestor
+configuration and can differ from the requested placement. Partition snapshots
+preserve invalid roots and optional diagnostic reasons, including older forms
+without reasons. Isolation and diagnostic reasons were added in Linux 6.1.
+Configured lists and partition state are absent at the hierarchy root. Reads
+never change affinity or migrate memory. See the
+[kernel cpuset documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpuset-interface-files).
+
 Times use `u64` nanoseconds with checked conversion from kernel microseconds.
 Counts have a separate `uom` kind. Ratios use `f64` to preserve fractional
 percentages. Integer quantity arithmetic truncates; use fractional operands

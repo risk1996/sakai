@@ -84,6 +84,19 @@ empty, and every read is a separate snapshot. Optional files and root exemptions
 raise `InterfaceMissingError` with their interface path. Pressure uses the same
 `Pressure` snapshot as CPU and memory, and reading it never writes a PSI trigger.
 
+`group.cpuset()` provides `.cpus()`, `.cpus_effective()`, `.mems()`,
+`.mems_effective()`, and `.partition()`. CPU and memory-node snapshots use
+`CpuList` and `MemoryNodeList`, with immutable `.ranges` tuples of inclusive
+`(start, end)` ID pairs and `.contains(id)` membership checks. IDs are unsigned
+32-bit identifiers; large ranges stay compact. Empty configured lists mean
+inheritance, while empty effective lists mean no grant. Effective placement can
+change with hotplug and ancestor configuration. `CpusetPartition` exposes
+`.state` (`member`, `root`, or `isolated`), `.is_invalid`, and `.reason`, preserving
+older invalid states without reasons as `None`. Missing files, including root
+configuration exemptions, raise `InterfaceMissingError`. Every call reads fresh
+values through a retained pinned handle; reads never migrate memory or change
+placement. See the [kernel cpuset documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpuset-interface-files).
+
 Native classes, methods, and snapshot attributes carry Python `__doc__`
 strings generated from their Rust documentation comments. Use `help(Cgroup)`
 or inspect an individual method such as `Cgroup.current.__doc__`.

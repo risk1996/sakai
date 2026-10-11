@@ -8,8 +8,11 @@ from ._sakai import CgroupStat as CgroupStat
 from ._sakai import CoreReader as CoreReader
 from ._sakai import CpuBandwidthStat as CpuBandwidthStat
 from ._sakai import CpuBurstStat as CpuBurstStat
+from ._sakai import CpuList as CpuList
 from ._sakai import CpuMax as CpuMax
 from ._sakai import CpuReader as CpuReader
+from ._sakai import CpusetPartition as CpusetPartition
+from ._sakai import CpusetReader as CpusetReader
 from ._sakai import CpuStat as CpuStat
 from ._sakai import CpuStatLocal as CpuStatLocal
 from ._sakai import CpuTimeStat as CpuTimeStat
@@ -25,6 +28,7 @@ from ._sakai import IoStat as IoStat
 from ._sakai import IoWeight as IoWeight
 from ._sakai import MaxOr as MaxOr
 from ._sakai import MemoryEventCounts as MemoryEventCounts
+from ._sakai import MemoryNodeList as MemoryNodeList
 from ._sakai import MemoryNumaStat as MemoryNumaStat
 from ._sakai import MemoryReader as MemoryReader
 from ._sakai import MemoryStat as MemoryStat

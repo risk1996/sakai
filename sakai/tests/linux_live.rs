@@ -10,6 +10,7 @@ use sakai::{
     CgroupPath,
     core::{CgroupController, CgroupEvents, CgroupStat, CgroupType},
     cpu::{CpuIdle, CpuMax, CpuMaxBurst, CpuStat, CpuStatLocal, CpuUclampMax, CpuUclampMin, CpuWeight, Nice},
+    cpuset::{CpuList, CpusetPartition, MemoryNodeList},
     io::{IoLatency, IoMax, IoStat, IoWeight},
     memory::{
       MemoryCurrent, MemoryEvents, MemoryEventsLocal, MemoryHigh, MemoryLow, MemoryMax, MemoryMin, MemoryNumaStat,
@@ -33,6 +34,11 @@ fn reads_current_cgroup_without_privileges() {
   assert_ok!(cgroup.core().subtree_control());
   assert_ok!(cgroup.core().stat());
   for result in [
+    cgroup.cpuset().cpus().map(|_| ()),
+    cgroup.cpuset().cpus_effective().map(|_| ()),
+    cgroup.cpuset().mems().map(|_| ()),
+    cgroup.cpuset().mems_effective().map(|_| ()),
+    cgroup.cpuset().partition().map(|_| ()),
     cgroup.io().stat().map(|_| ()),
     cgroup.io().pressure().map(|_| ()),
     cgroup.io().weight().map(|_| ()),
@@ -142,7 +148,7 @@ impl CgroupFixture {
     let controllers = fs::read_to_string(parent.join(CgroupController::CONTROLLERS_FILE_NAME))?;
     fs::write(parent.join(CgroupController::SUBTREE_CONTROL_FILE_NAME), "+cpu")?;
     fs::write(parent.join(CgroupController::SUBTREE_CONTROL_FILE_NAME), "+pids")?;
-    for controller in ["memory", "io"] {
+    for controller in ["memory", "io", "cpuset"] {
       if controllers.split_ascii_whitespace().any(|available| available == controller) {
         fs::write(parent.join(CgroupController::SUBTREE_CONTROL_FILE_NAME), format!("+{controller}"))?;
       }
@@ -200,6 +206,31 @@ fn parses_live_delegated_controller_interfaces() {
   match reader.cpu().stat_local() {
     | Ok(_) | Err(Error::FileMissing { .. }) => {},
     | Err(error) => panic!("local CPU read failed: {error}"),
+  }
+
+  match assert_ok!(reader.core().controllers()).contains(&CgroupController::Cpuset) {
+    | true => {
+      fixture.check(CpuList::CPUS_FILE_NAME, false, reader.cpuset().cpus());
+      fixture.check(CpuList::EFFECTIVE_FILE_NAME, false, reader.cpuset().cpus_effective());
+      fixture.check(MemoryNodeList::MEMS_FILE_NAME, false, reader.cpuset().mems());
+      fixture.check(MemoryNodeList::EFFECTIVE_FILE_NAME, false, reader.cpuset().mems_effective());
+      fixture.check(CpusetPartition::FILE_NAME, true, reader.cpuset().partition());
+      assert_eq!(assert_ok!(reader.cpuset().cpus()), CpuList::default());
+      assert_eq!(assert_ok!(reader.cpuset().mems()), MemoryNodeList::default());
+      // Configure a granted resource, then check a fresh read and unchanged file.
+      // No process enters this fixture; these writes only exercise the test hierarchy.
+      let cpu = assert_ok!(reader.cpuset().cpus_effective()).ids().next().expect("online CPU");
+      let node = assert_ok!(reader.cpuset().mems_effective()).ids().next().expect("online memory node");
+      let cpu_path = fixture.path.join(CpuList::CPUS_FILE_NAME);
+      let node_path = fixture.path.join(MemoryNodeList::MEMS_FILE_NAME);
+      assert_ok!(fs::write(&cpu_path, cpu.to_string()));
+      assert_ok!(fs::write(&node_path, node.to_string()));
+      assert_eq!(assert_ok!(reader.cpuset().cpus()), assert_ok!(cpu.to_string().parse::<CpuList>()));
+      assert_eq!(assert_ok!(reader.cpuset().mems()), assert_ok!(node.to_string().parse::<MemoryNodeList>()));
+      assert_eq!(assert_ok!(fs::read_to_string(&cpu_path)).trim(), cpu.to_string());
+      assert_eq!(assert_ok!(fs::read_to_string(&node_path)).trim(), node.to_string());
+    },
+    | false => {},
   }
 
   fixture.check(CpuIdle::FILE_NAME, true, reader.cpu().idle());
@@ -393,5 +424,29 @@ fn root_memory_stat_is_readable_and_settings_are_missing() {
       },
       | Err(error) => panic!("failed to read {name}: {error}"),
     }
+  }
+}
+
+#[test]
+fn reads_root_placement_and_reports_configuration_exemptions() {
+  match std::env::var_os("SAKAI_VMTEST") {
+    | None => return,
+    | Some(_) => {},
+  }
+  let path = PathBuf::from("/sys/fs/cgroup");
+  let root = assert_ok!(Cgroup::from_path(&path));
+  match assert_ok!(root.core().controllers()).contains(&CgroupController::Cpuset) {
+    | true => {
+      assert_ok!(root.cpuset().cpus_effective());
+      assert_ok!(root.cpuset().mems_effective());
+      for (name, result) in [
+        (CpuList::CPUS_FILE_NAME, root.cpuset().cpus().map(|_| ())),
+        (MemoryNodeList::MEMS_FILE_NAME, root.cpuset().mems().map(|_| ())),
+        (CpusetPartition::FILE_NAME, root.cpuset().partition().map(|_| ())),
+      ] {
+        assert!(matches!(result, Err(Error::FileMissing { path: missing }) if missing == path.join(name)));
+      }
+    },
+    | false => {},
   }
 }

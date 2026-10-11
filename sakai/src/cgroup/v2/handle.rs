@@ -15,6 +15,7 @@ use rustix::{
 use super::{
   core::Core,
   cpu::Cpu,
+  cpuset::Cpuset,
   io::Io,
   memory::Memory,
   path::{CgroupPath, CgroupPathError},
@@ -208,6 +209,11 @@ impl Cgroup {
   /// See [`crate::v2::cpu`] for the supported readers and [Linux cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html#controllers).
   pub fn cpu(&self) -> Cpu<'_> { Cpu { cgroup: self } }
 
+  /// Borrows this handle to read CPU and NUMA memory-node placement.
+  ///
+  /// See [`crate::v2::cpuset`] and [Linux cpuset interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpuset-interface-files).
+  pub fn cpuset(&self) -> Cpuset<'_> { Cpuset { cgroup: self } }
+
   /// Borrows this handle to read memory controller interfaces.
   ///
   /// See [`crate::v2::memory`] for the supported readers and [Linux cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html#controllers).
@@ -255,6 +261,7 @@ mod tests {
     v2::{
       core::{CgroupEvents, CgroupStat, CgroupType},
       cpu::{CpuIdle, CpuStatLocal},
+      cpuset::{CpuList, CpusetPartition, MemoryNodeList},
       io::{IoLatency, IoMax, IoStat, IoWeight},
       memory::{MemoryCurrent, MemoryHigh, MemoryLow, MemoryMax, MemoryMin, MemoryPeak, MemoryStat},
       pids::{PidsCurrent, PidsEvents, PidsMax},
@@ -299,6 +306,11 @@ mod tests {
     let cgroup = Cgroup { directory: assert_ok!(fs::open(&path, DIRECTORY_FLAGS, Mode::empty())), path: path.clone() };
     for (result, name) in [
       (cgroup.cpu().stat_local().map(|_| ()), CpuStatLocal::FILE_NAME),
+      (cgroup.cpuset().cpus().map(|_| ()), CpuList::CPUS_FILE_NAME),
+      (cgroup.cpuset().cpus_effective().map(|_| ()), CpuList::EFFECTIVE_FILE_NAME),
+      (cgroup.cpuset().mems().map(|_| ()), MemoryNodeList::MEMS_FILE_NAME),
+      (cgroup.cpuset().mems_effective().map(|_| ()), MemoryNodeList::EFFECTIVE_FILE_NAME),
+      (cgroup.cpuset().partition().map(|_| ()), CpusetPartition::FILE_NAME),
       (cgroup.io().stat().map(|_| ()), IoStat::FILE_NAME),
       (cgroup.io().pressure().map(|_| ()), Pressure::IO_FILE_NAME),
       (cgroup.io().weight().map(|_| ()), IoWeight::FILE_NAME),
@@ -328,6 +340,43 @@ mod tests {
     }
     for pid in [0, u32::MAX] {
       assert!(matches!(Cgroup::from_pid(pid), Err(Error::Io(error)) if error.kind() == io::ErrorKind::InvalidInput));
+    }
+  }
+
+  #[test]
+  fn reads_placement_fixtures_and_root_exemptions() {
+    for fixture in ["p4", "p4_older", "p4_root"] {
+      let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/cgroup/v2/fixtures").join(fixture);
+      let cgroup =
+        Cgroup { directory: assert_ok!(fs::open(&path, DIRECTORY_FLAGS, Mode::empty())), path: path.clone() };
+      for (name, read) in [
+        (CpuList::CPUS_FILE_NAME, cgroup.cpuset().cpus().map(|value| value.ranges().to_vec())),
+        (CpuList::EFFECTIVE_FILE_NAME, cgroup.cpuset().cpus_effective().map(|value| value.ranges().to_vec())),
+        (MemoryNodeList::MEMS_FILE_NAME, cgroup.cpuset().mems().map(|value| value.ranges().to_vec())),
+        (MemoryNodeList::EFFECTIVE_FILE_NAME, cgroup.cpuset().mems_effective().map(|value| value.ranges().to_vec())),
+      ] {
+        match std::fs::read_to_string(path.join(name)) {
+          | Ok(raw) => {
+            let expected = assert_ok!(raw.parse::<CpuList>()).ranges().to_vec();
+            assert_eq!(assert_ok!(read), expected);
+            assert_eq!(assert_ok!(std::fs::read_to_string(path.join(name))), raw);
+          },
+          | Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            assert!(matches!(read, Err(Error::FileMissing { path: missing }) if missing == path.join(name)));
+          },
+          | Err(error) => panic!("fixture read failed: {error}"),
+        }
+      }
+      match fixture {
+        | "p4_root" => assert!(
+          matches!(cgroup.cpuset().partition(), Err(Error::FileMissing { path: missing }) if missing == path.join(CpusetPartition::FILE_NAME))
+        ),
+        | _ => {
+          let raw = assert_ok!(std::fs::read_to_string(path.join(CpusetPartition::FILE_NAME)));
+          assert_eq!(assert_ok!(cgroup.cpuset().partition()), assert_ok!(raw.parse::<CpusetPartition>()));
+          assert_eq!(assert_ok!(std::fs::read_to_string(path.join(CpusetPartition::FILE_NAME))), raw);
+        },
+      }
     }
   }
 
