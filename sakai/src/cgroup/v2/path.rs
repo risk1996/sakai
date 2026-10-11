@@ -67,6 +67,7 @@ impl AsRef<Path> for CgroupPath {
 
 /// An error discovering a process's cgroup v2 directory.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum CgroupPathError {
   /// Procfs could not be read or parsed.
   #[error(transparent)]

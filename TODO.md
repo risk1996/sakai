@@ -1,7 +1,9 @@
 # cgroup v2 metrics TODO
 
 Implement the read-only cgroup v2 surface in priority order. Finish all CPU
-items before starting memory; work below memory stays out of the v0 scope.
+items before starting memory. The implemented P0–P3 interfaces remain in the
+initial release scope on both the Rust and Python sides; P4 and later work is
+deferred.
 
 An interface item is complete when it has a typed public reader, key-based
 parsing where applicable, fixtures for supported and missing/older-kernel

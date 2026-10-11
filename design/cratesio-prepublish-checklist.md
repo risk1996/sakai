@@ -21,6 +21,16 @@ CI remains Linux-only. Existing Linux 5.15/6.18 smoke coverage is sufficient
 for this preparation; an additional full/intermediate-kernel matrix run is
 not a release requirement. These decisions do not change the existing CI jobs.
 
+API-boundary follow-up on 2026-10-11: `devenv --profile python test` passed
+Rust formatting/Clippy, 43 local workspace tests, seven public doctests, and
+Python lint/format/type checks. Rust 1.88 passed all seven doctests and the
+all-targets/all-features Linux cross-check. Linux Rust 1.99 / CPython 3.11
+passed 52 crate unit/fixture tests, 15 binding tests (including exception paths
+and P2/P3 conversions), and seven doctests. These are compiler/test checks of
+the API changes, not a new kernel-matrix run. The artifact results and digest
+below still identify the earlier baseline; package verification must be
+repeated for the changed source.
+
 ## 1. Settle the crate contract and metadata
 
 - [x] Review the currently implemented API: public types, Linux-only handle gating,
@@ -38,10 +48,11 @@ not a release requirement. These decisions do not change the existing CI jobs.
   [crate root](../sakai/src/lib.rs),
   [handle implementation](../sakai/src/cgroup/v2/handle.rs),
   [file reads](../sakai/src/cgroup/v2/file.rs).
-- [ ] Settle which implemented interfaces belong in the first release.
-  `TODO.md` still says work below memory stays out of v0, while the public API
-  already includes P2 process/core and P3 I/O readers. Reconcile that scope
-  before freezing the API or writing the release README.
+- [x] Settle which implemented interfaces belong in the first release.
+  The implemented P0–P3 interfaces, including process/core and I/O readers,
+  remain in the Rust and Python release surface. On 2026-10-11, the project
+  owner confirmed this scope and `TODO.md` was reconciled; P4 and later work
+  remains deferred.
 - [ ] Confirm that `sakai` is available on crates.io immediately before
   release and that the intended crates.io account controls the name. Crate
   names are allocated first come, first served.
@@ -87,15 +98,20 @@ not a release requirement. These decisions do not change the existing CI jobs.
   normalized package both use `0.1.0`; there are no local release tags or a
   previous published baseline selected for a compatibility comparison.
   For the initial `0.1` line, incompatible API changes require `0.2.0`;
-  compatible additions/fixes can remain in `0.1.x`. Public enums, including
-  error and memory-field enums, are exhaustive: adding variants can break
-  downstream matches. `CgroupController::Other` handles unknown kernel names
-  but does not make the enum non-exhaustive. Public `uom` aliases, generated
-  `nutype` methods, trait implementations, parser errors, and the public
-  `#[doc(hidden)]` scalar module are part of the compatibility surface.
-  In particular, hiding rustdoc does not make `scalar::Scalar`, `Interface`,
-  or its marker types private. Keep missing-file, optional-field, unit, and
-  fresh-read behavior compatible within that line.
+  compatible additions/fixes can remain in `0.1.x`. The follow-up marks
+  growable error, controller, and memory-field enums `#[non_exhaustive]`;
+  downstream matches require a fallback. Closed `MaxOr`, `CpuWeight`,
+  `CgroupType`, and `FieldKind` alternatives remain exhaustive. The scalar
+  module and CPU parser field enum are private; interface-specific snapshot
+  aliases, their methods and traits, public `uom` aliases, generated `nutype`
+  methods, and parser errors remain compatibility commitments. Keep
+  missing-file, optional-field, unit, and fresh-read behavior compatible
+  within that line. Public doctests compile consumer use of snapshot aliases
+  and reject storage/parser imports, mismatched interfaces, and exhaustive
+  downstream error matches. Python preserves its existing typed error
+  handling and maps future core variants to `SakaiError`. Stable Rust cannot
+  require an exhaustive external match on a non-exhaustive enum; internal
+  exhaustive matches remain compiler-checked.
   [Cargo SemVer reference](https://doc.rust-lang.org/cargo/reference/semver.html),
   [scalar API](../sakai/src/scalar.rs), [errors](../sakai/src/error.rs).
 - [ ] Align the final version, release notes/changelog, and release tag with

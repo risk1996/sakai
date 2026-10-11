@@ -91,6 +91,51 @@ pub type MemoryOomGroup = Scalar<bool, interface::MemoryOomGroup>;
 /// Hierarchical memory usage reported by `memory.current`.
 ///
 /// Usage is in bytes and can temporarily exceed configured limits.
+/// The public snapshot aliases support parsing, typed values, filenames, and
+/// value traits without exposing their shared storage implementation.
+///
+/// ```
+/// use std::{fmt::Debug, hash::Hash, str::FromStr};
+///
+/// use sakai::{
+///   Bytes, Count, MaxOr, Ratio, Time,
+///   error::{ParseError, ParseValueError},
+///   v2::{
+///     cpu::{CpuIdle, CpuMaxBurst, CpuUclampMax},
+///     memory::{MemoryCurrent, MemoryMax},
+///     pids::PidsCurrent,
+///   },
+/// };
+///
+/// struct Consumer;
+/// impl Consumer {
+///   fn parse<T>(input: &str) -> T
+///   where
+///     T: Copy + PartialEq + Debug + FromStr<Err = ParseError<ParseValueError>>, {
+///     input.parse().unwrap()
+///   }
+///
+///   fn hashable<T: Eq + Hash>(_: T) {}
+/// }
+///
+/// let current = Consumer::parse::<MemoryCurrent>("42");
+/// Consumer::hashable(current);
+/// let _: Bytes = current.value();
+/// let _: MaxOr<Bytes> = Consumer::parse::<MemoryMax>("max").value();
+/// let _: Count = Consumer::parse::<PidsCurrent>("1").value();
+/// let _: bool = Consumer::parse::<CpuIdle>("0").value();
+/// let _: Time = Consumer::parse::<CpuMaxBurst>("10").value();
+/// let _: MaxOr<Ratio> = Consumer::parse::<CpuUclampMax>("max").value();
+/// assert_eq!(MemoryCurrent::FILE_NAME, "memory.current");
+/// ```
+///
+/// Equal units do not make different interfaces interchangeable:
+///
+/// ```compile_fail,E0308
+/// use sakai::v2::memory::{MemoryCurrent, MemoryLow};
+/// let current: MemoryCurrent = "1".parse().unwrap();
+/// let low: MemoryLow = current;
+/// ```
 pub type MemoryCurrent = Scalar<Bytes, interface::MemoryCurrent>;
 
 /// Peak hierarchical memory usage reported by `memory.peak`.

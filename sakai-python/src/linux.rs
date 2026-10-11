@@ -97,6 +97,8 @@ impl PythonError {
         },
         | None => PyOSError::new_err(source.to_string()),
       },
+      // The core error enum can grow without breaking downstream matches.
+      | other => SakaiError::new_err(other.to_string()),
     }
   }
 

@@ -68,6 +68,7 @@ impl FromStr for MemoryStat {
 /// Keys in `memory.stat` whose values measure bytes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, strum::EnumString, strum::IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]
+#[non_exhaustive]
 pub enum MemoryStatByteField {
   Anon,
   File,
@@ -115,6 +116,7 @@ impl MemoryStatByteField {
 /// Keys in `memory.stat` whose values measure numbers of pages.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, strum::EnumString, strum::IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]
+#[non_exhaustive]
 pub enum MemoryStatPageField {
   Pswpin,
   Pswpout,
@@ -149,6 +151,7 @@ pub enum MemoryStatPageField {
 /// Keys in `memory.stat` whose values count events or hugepage objects.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, strum::EnumString, strum::IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]
+#[non_exhaustive]
 pub enum MemoryStatCountField {
   WorkingsetRefaultAnon,
   WorkingsetRefaultFile,

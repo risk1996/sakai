@@ -6,7 +6,18 @@ use std::{
 };
 
 /// A cgroup discovery, read, or parse failure.
+///
+/// Downstream matches must handle future error categories.
+///
+/// ```compile_fail,E0004
+/// use sakai::Error;
+/// match Error::NotSupported {
+///     Error::FileMissing { .. } | Error::NotSupported | Error::NotCgroupV2
+///     | Error::DeletedCgroup { .. } | Error::Parse { .. } | Error::Io(_) => (),
+/// }
+/// ```
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum Error {
   /// An interface is unavailable (controller disabled, root, or older kernel).
   #[error("cgroup interface is missing: {path}")]
@@ -47,6 +58,7 @@ impl Error {
 
 /// An error parsing a cgroup interface file.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum ParseError<E> {
   /// The file has a missing or excess field.
   #[error("cgroup content {raw:?} has {kind} field {field:?}")]
@@ -96,6 +108,7 @@ impl<E> ParseError<E> {
 
 /// A numeric field is malformed or outside the target type's supported range.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum ParseValueError {
   /// The field is not a valid integer in the input storage type.
   #[error(transparent)]

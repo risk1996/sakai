@@ -11,6 +11,17 @@
 //! # Ok(())
 //! # }
 //! ```
+//!
+//! Snapshot storage and parser field identifiers are implementation details;
+//! use the public interface-specific snapshot types instead.
+//!
+//! ```compile_fail,E0603
+//! use sakai::scalar::Scalar;
+//! ```
+//!
+//! ```compile_fail,E0432
+//! use sakai::v2::cpu::CpuStatField;
+//! ```
 pub use cgroup::v2;
 pub use error::Error;
 pub use limit::MaxOr;
@@ -25,6 +36,5 @@ pub mod error;
 pub mod limit;
 mod parse;
 pub mod pressure;
-#[doc(hidden)]
-pub mod scalar;
+mod scalar;
 pub mod unit;

@@ -192,7 +192,7 @@ impl FromStr for CpuBurstStat {
   Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, strum::EnumString, strum::Display, strum::IntoStaticStr,
 )]
 #[strum(serialize_all = "snake_case")]
-pub enum CpuStatField {
+enum CpuStatField {
   UsageUsec,
   UserUsec,
   SystemUsec,
@@ -208,11 +208,11 @@ impl CpuStatField {
     KeyedFields::parse(raw, |key| Self::from_str(key).map(Into::into).unwrap_or("value"))
   }
 
-  pub fn bandwidth_fields() -> [Self; 5] {
+  fn bandwidth_fields() -> [Self; 5] {
     [Self::NrPeriods, Self::NrThrottled, Self::ThrottledUsec, Self::NrBursts, Self::BurstUsec]
   }
 
-  pub fn bandwidth_burst_fields() -> [Self; 2] { [Self::NrBursts, Self::BurstUsec] }
+  fn bandwidth_burst_fields() -> [Self; 2] { [Self::NrBursts, Self::BurstUsec] }
 }
 
 #[cfg(test)]
