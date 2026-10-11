@@ -292,7 +292,7 @@ pub enum MemoryStatPageField {
   ///
   /// Since Linux 6.15; see the [upstream Linux 6.15 source](https://github.com/torvalds/linux/blob/v6.15/Documentation/admin-guide/cgroup-v2.rst).
   PgstealProactive,
-  /// Pages scanned on an inactive least-recently-used (LRU) list (`pgrefill`).
+  /// Pages scanned on an active least-recently-used (LRU) list (`pgrefill`).
   ///
   /// See [Linux memory.stat](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   Pgrefill,
