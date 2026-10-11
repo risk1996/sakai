@@ -112,4 +112,6 @@ files. Treat that as `FileMissing`, not a parse failure or panic.
 - [ ] cgroup v1
 - [ ] cgroup v2 write
 - [ ] Benchmark
-- [ ] "Since Linux x.x" documentation
+- [x] "Since Linux x.x" documentation — public Rust APIs link to Linux
+      references, with mainline introduction versions for interfaces and
+      fields added after the Linux 5.15 test baseline.

@@ -25,6 +25,8 @@ pub type BaseUnits = dyn uom::si::Units<
 /// CPU time accumulates across CPUs, so this is not a wall-clock uptime limit.
 /// Parsing microseconds checks for overflow; direct `uom` constructors and
 /// arithmetic remain subject to the storage type's range.
+///
+/// See [Linux cgroup units and formats](https://docs.kernel.org/admin-guide/cgroup-v2.html#conventions).
 pub type Time = uom::si::time::Time<BaseUnits, u64>;
 const _: () = {
   assert!(size_of::<Time>() == size_of::<u64>());
@@ -32,6 +34,8 @@ const _: () = {
 };
 
 /// An amount of memory or other information stored as `u64` bytes.
+///
+/// See [Linux cgroup units and formats](https://docs.kernel.org/admin-guide/cgroup-v2.html#conventions).
 pub type Bytes = uom::si::information::Information<BaseUnits, u64>;
 const _: () = {
   assert!(size_of::<Bytes>() == size_of::<u64>());
@@ -42,12 +46,16 @@ const _: () = {
 ///
 /// Unlike [`Time`], the base time unit is a second so small bandwidth limits
 /// retain their precision. Construct with `uom::si::information_rate::byte_per_second`.
+///
+/// See [Linux cgroup units and formats](https://docs.kernel.org/admin-guide/cgroup-v2.html#conventions).
 pub type BytesPerSecond = uom::si::u64::InformationRate;
 
 /// An integer operation rate stored in operations per second.
 ///
 /// Uses second-based units to preserve small IOPS limits. Construct with
 /// `uom::si::frequency::hertz`; one hertz represents one operation per second.
+///
+/// See [Linux cgroup units and formats](https://docs.kernel.org/admin-guide/cgroup-v2.html#conventions).
 pub type OperationsPerSecond = uom::si::u64::Frequency;
 
 /// Separates event counts from other dimensionless quantities.
@@ -69,6 +77,8 @@ type Dimensionless<Kind> = uom::si::ISQ<
 /// Construct with `Count { value: 42, ..Default::default() }`.
 /// `Count / Time` yields [`EventRate`]. Integer arithmetic truncates: convert
 /// operands to fractional storage before computing sub-unit rates.
+///
+/// See [Linux cgroup units and formats](https://docs.kernel.org/admin-guide/cgroup-v2.html#conventions).
 pub type Count = uom::si::Quantity<Dimensionless<dyn CountKind>, BaseUnits, u64>;
 const _: () = {
   assert!(size_of::<Count>() == size_of::<u64>());
@@ -81,6 +91,8 @@ pub trait PageKind: uom::Kind {}
 /// A number of memory pages, independent of the system's page size.
 ///
 /// Construct with `Pages { value: 42, ..Default::default() }`.
+///
+/// To convert to bytes, obtain the system page size; see [sysconf(3)](https://man7.org/linux/man-pages/man3/sysconf.3.html).
 pub type Pages = uom::si::Quantity<Dimensionless<dyn PageKind>, BaseUnits, u64>;
 const _: () = {
   assert!(size_of::<Pages>() == size_of::<u64>());
@@ -88,6 +100,8 @@ const _: () = {
 };
 
 /// An integer event rate stored in events per nanosecond.
+///
+/// See [Linux cgroup units and formats](https://docs.kernel.org/admin-guide/cgroup-v2.html#conventions).
 pub type EventRate = uom::si::frequency::Frequency<BaseUnits, u64>;
 const _: () = {
   assert!(size_of::<EventRate>() == size_of::<u64>());
@@ -95,6 +109,11 @@ const _: () = {
 };
 
 /// A nonzero [`Time`].
+///
+/// Use `try_new` to reject a zero duration and `into_inner` to recover the quantity.
+/// For example, [`crate::v2::cpu::CpuMax`] requires a nonzero quota and period.
+///
+/// See [Linux CPU bandwidth units](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
 #[nutype(
   validate(predicate = |time| time.get::<nanosecond>() != 0),
   derive(Debug, Clone, Copy, PartialEq, Eq, Hash, AsRef, Deref),
@@ -107,6 +126,8 @@ const _: () = {
 
 /// A dimensionless ratio stored as an `f64` to preserve fractional values.
 /// Standard SI integer ratios normalize to whole units and truncate percents.
+///
+/// See [Linux cgroup units and formats](https://docs.kernel.org/admin-guide/cgroup-v2.html#conventions).
 pub type Ratio = uom::si::f64::Ratio;
 
 #[cfg(test)]
