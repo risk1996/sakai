@@ -29,6 +29,8 @@ mod weight;
 /// Every method opens a fresh read-only descriptor. Missing interfaces,
 /// including disabled controllers, kernel configuration omissions, and root
 /// exemptions, return [`crate::Error::FileMissing`].
+///
+/// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
 #[cfg(target_os = "linux")]
 #[derive(Debug, Clone, Copy)]
 pub struct Io<'a> {
@@ -38,22 +40,65 @@ pub struct Io<'a> {
 #[cfg(target_os = "linux")]
 impl Io<'_> {
   /// Hierarchical byte and operation counters for each reported block device.
+  ///
+  /// Reads a fresh [`IoStat`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
+  ///
+  /// # Errors
+  ///
+  /// Returns [`crate::Error::FileMissing`] if the interface is absent,
+  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
+  /// if the read fails for another reason.
   pub fn stat(&self) -> Result<IoStat, Error> { self.cgroup.parse(IoStat::FILE_NAME) }
 
   /// I/O PSI rolling averages and cumulative stall time; never writes a trigger.
+  ///
+  /// Reads a fresh [`Pressure`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
+  ///
+  /// # Errors
+  ///
+  /// Returns [`crate::Error::FileMissing`] if the interface is absent,
+  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
+  /// if the read fails for another reason.
   pub fn pressure(&self) -> Result<Pressure, Error> { self.cgroup.parse(Pressure::IO_FILE_NAME) }
 
   /// Default scheduling weight and explicit per-device overrides.
+  ///
+  /// Reads a fresh [`IoWeight`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
+  ///
+  /// # Errors
+  ///
+  /// Returns [`crate::Error::FileMissing`] if the interface is absent,
+  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
+  /// if the read fails for another reason.
   pub fn weight(&self) -> Result<IoWeight, Error> { self.cgroup.parse(IoWeight::FILE_NAME) }
 
   /// Per-device byte-per-second and operation-per-second limits.
+  ///
+  /// Reads a fresh [`IoMax`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
+  ///
+  /// # Errors
+  ///
+  /// Returns [`crate::Error::FileMissing`] if the interface is absent,
+  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
+  /// if the read fails for another reason.
   pub fn max(&self) -> Result<IoMax, Error> { self.cgroup.parse(IoMax::FILE_NAME) }
 
   /// Per-device latency protection targets, where the kernel supports them.
+  ///
+  /// Reads a fresh [`IoLatency`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
+  ///
+  /// # Errors
+  ///
+  /// Returns [`crate::Error::FileMissing`] if the interface is absent,
+  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
+  /// if the read fails for another reason.
   pub fn latency(&self) -> Result<IoLatency, Error> { self.cgroup.parse(IoLatency::FILE_NAME) }
 }
 
 /// A block-device identifier keyed by the kernel's decimal `major:minor` pair.
+///
+/// Device numbers identify a block device, not a mount or a filename.
+/// See [makedev(3)](https://man7.org/linux/man-pages/man3/makedev.3.html).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Device {
   major: u32,
@@ -62,14 +107,20 @@ pub struct Device {
 
 impl Device {
   /// Constructs a device key without resolving it to a currently present device.
+  ///
+  /// See [`Device`] and [makedev(3)](https://man7.org/linux/man-pages/man3/makedev.3.html).
   #[must_use]
   pub const fn new(major: u32, minor: u32) -> Self { Self { major, minor } }
 
   /// Returns the major device number.
+  ///
+  /// See [`Device`] and [makedev(3)](https://man7.org/linux/man-pages/man3/makedev.3.html).
   #[must_use]
   pub const fn major(self) -> u32 { self.major }
 
   /// Returns the minor device number.
+  ///
+  /// See [`Device`] and [makedev(3)](https://man7.org/linux/man-pages/man3/makedev.3.html).
   #[must_use]
   pub const fn minor(self) -> u32 { self.minor }
 

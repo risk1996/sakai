@@ -16,6 +16,8 @@ use crate::{
 /// Inner keys are NUMA node IDs. Kernel versions and configurations may omit
 /// fields, and unknown future keys are ignored because their units are not
 /// defined by this type. The file can be absent without NUMA support.
+///
+/// See [Linux `memory.numa_stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct MemoryNumaStat {
   bytes: BTreeMap<MemoryStatByteField, BTreeMap<u32, Bytes>>,
@@ -25,17 +27,25 @@ pub struct MemoryNumaStat {
 
 impl MemoryNumaStat {
   /// The cgroup v2 `memory.numa_stat` interface filename.
+  ///
+  /// See [Linux `memory.numa_stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   pub const FILE_NAME: &'static str = "memory.numa_stat";
 
   /// Returns byte amounts by memory field and NUMA node ID.
+  ///
+  /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   #[must_use]
   pub const fn bytes(&self) -> &BTreeMap<MemoryStatByteField, BTreeMap<u32, Bytes>> { &self.bytes }
 
   /// Returns page quantities by memory field and NUMA node ID.
+  ///
+  /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   #[must_use]
   pub const fn pages(&self) -> &BTreeMap<MemoryStatPageField, BTreeMap<u32, Pages>> { &self.pages }
 
   /// Returns event counts by memory field and NUMA node ID.
+  ///
+  /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   #[must_use]
   pub const fn counts(&self) -> &BTreeMap<MemoryStatCountField, BTreeMap<u32, Count>> { &self.counts }
 

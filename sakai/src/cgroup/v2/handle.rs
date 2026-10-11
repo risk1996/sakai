@@ -31,6 +31,10 @@ const CGROUP2_SUPER_MAGIC: fs::FsWord = 0x6367_7270;
 ///
 /// Each read opens a fresh, read-only interface descriptor. Reads across files
 /// are separate snapshots, not a transaction. No controller is enabled or changed.
+///
+/// See [cgroups(7)](https://man7.org/linux/man-pages/man7/cgroups.7.html),
+/// [proc_pid_cgroup(5)](https://man7.org/linux/man-pages/man5/proc_pid_cgroup.5.html), and
+/// [proc_pid_mountinfo(5)](https://man7.org/linux/man-pages/man5/proc_pid_mountinfo.5.html).
 #[derive(Debug)]
 pub struct Cgroup {
   directory: OwnedFd,
@@ -39,9 +43,33 @@ pub struct Cgroup {
 
 impl Cgroup {
   /// Discovers this process's cgroup through its visible cgroup2 mounts.
+  ///
+  /// See [cgroups(7)](https://man7.org/linux/man-pages/man7/cgroups.7.html),
+  /// [proc_pid_cgroup(5)](https://man7.org/linux/man-pages/man5/proc_pid_cgroup.5.html), and
+  /// [proc_pid_mountinfo(5)](https://man7.org/linux/man-pages/man5/proc_pid_mountinfo.5.html).
+  ///
+  /// # Errors
+  ///
+  /// Returns the same discovery and open errors as [`Self::from_pid`].
   pub fn from_current_process() -> Result<Self, Error> { Self::from_pid(std::process::id()) }
 
   /// Resolves a process's membership using the caller's mount namespace.
+  ///
+  /// See [cgroups(7)](https://man7.org/linux/man-pages/man7/cgroups.7.html),
+  /// [proc_pid_cgroup(5)](https://man7.org/linux/man-pages/man5/proc_pid_cgroup.5.html), and
+  /// [proc_pid_mountinfo(5)](https://man7.org/linux/man-pages/man5/proc_pid_mountinfo.5.html).
+  ///
+  /// The target's membership is resolved against mounts visible to the caller.
+  /// A process can move cgroups or exit during discovery; this handle keeps the
+  /// directory it opened and does not follow later migrations.
+  ///
+  /// # Errors
+  ///
+  /// A zero PID or a PID larger than `i32::MAX` produces [`Error::Io`] with
+  /// [`io::ErrorKind::InvalidInput`]. Missing unified membership or a visible
+  /// mount produces [`Error::NotCgroupV2`]. Deleted membership produces
+  /// [`Error::DeletedCgroup`]. Procfs and directory-open failures retain their
+  /// causes in [`Error::Io`].
   pub fn from_pid(pid: u32) -> Result<Self, Error> {
     let pid = i32::try_from(pid)
       .ok()
@@ -73,6 +101,16 @@ impl Cgroup {
 
   /// Opens a directory and verifies cgroup2 filesystem magic.
   /// Symlinks and parent traversal are rejected, including on old kernels.
+  ///
+  /// See [openat2(2)](https://man7.org/linux/man-pages/man2/openat2.2.html) for path-resolution flags
+  /// and [statfs(2)](https://man7.org/linux/man-pages/man2/statfs.2.html) for filesystem identification.
+  ///
+  /// # Errors
+  ///
+  /// Invalid names or parent traversal produce [`crate::Error::Io`] with
+  /// [`std::io::ErrorKind::InvalidInput`]. A directory on another filesystem
+  /// produces [`crate::Error::NotCgroupV2`]; permission and open failures retain
+  /// the operating-system error.
   pub fn from_path(path: &Path) -> Result<Self, Error> {
     let (base, relative) = match path.is_absolute() {
       | true => (Path::new("/"), path.strip_prefix("/").map_err(io::Error::other)?),
@@ -119,6 +157,16 @@ impl Cgroup {
   }
 
   /// Opens one child by name; names containing slashes or traversal are invalid.
+  ///
+  /// See [openat2(2)](https://man7.org/linux/man-pages/man2/openat2.2.html) for path-resolution flags
+  /// and [statfs(2)](https://man7.org/linux/man-pages/man2/statfs.2.html) for filesystem identification.
+  ///
+  /// # Errors
+  ///
+  /// Invalid names or parent traversal produce [`crate::Error::Io`] with
+  /// [`std::io::ErrorKind::InvalidInput`]. A directory on another filesystem
+  /// produces [`crate::Error::NotCgroupV2`]; permission and open failures retain
+  /// the operating-system error.
   pub fn child(&self, name: &OsStr) -> Result<Self, Error> {
     if name.as_bytes().contains(&b'/') || !matches!(Path::new(name).components().next(), Some(Component::Normal(_))) {
       return Err(io::Error::new(io::ErrorKind::InvalidInput, "child must be a single name").into());
@@ -128,6 +176,9 @@ impl Cgroup {
 
   /// Lists directories, including child names that resemble interface files.
   /// A child removed during enumeration is omitted.
+  ///
+  /// Enumeration is a separate observation for each child, not an atomic tree
+  /// snapshot. See [getdents(2)](https://man7.org/linux/man-pages/man2/getdents.2.html).
   pub fn children(&self) -> Result<Vec<Self>, Error> {
     Dir::read_from(&self.directory)
       .map_err(io::Error::from)?
@@ -147,21 +198,34 @@ impl Cgroup {
   }
 
   /// The path used to open the handle; it is diagnostic and may become stale.
+  ///
+  /// Renaming or deleting the cgroup can make this path stale. Interface reads
+  /// continue to use the open directory descriptor; see [openat(2)](https://man7.org/linux/man-pages/man2/openat.2.html).
   pub fn path(&self) -> &Path { &self.path }
 
   /// Borrows this handle to read CPU controller interfaces.
+  ///
+  /// See [`crate::v2::cpu`] for the supported readers and See [Linux cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html#controllers).
   pub fn cpu(&self) -> Cpu<'_> { Cpu { cgroup: self } }
 
   /// Borrows this handle to read memory controller interfaces.
+  ///
+  /// See [`crate::v2::memory`] for the supported readers and See [Linux cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html#controllers).
   pub fn memory(&self) -> Memory<'_> { Memory { cgroup: self } }
 
   /// Borrows this handle to read I/O controller interfaces.
+  ///
+  /// See [`crate::v2::io`] for the supported readers and See [Linux cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html#controllers).
   pub fn io(&self) -> Io<'_> { Io { cgroup: self } }
 
   /// Borrows this handle to read process-number controller interfaces.
+  ///
+  /// See [`crate::v2::pids`] for the supported readers and See [Linux cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html#controllers).
   pub fn pids(&self) -> Pids<'_> { Pids { cgroup: self } }
 
   /// Borrows this handle to read core cgroup interfaces.
+  ///
+  /// See [`crate::v2::core`] for the supported readers and See [Linux cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html#controllers).
   pub fn core(&self) -> Core<'_> { Core { cgroup: self } }
 
   pub(crate) fn read(&self, file: &'static str) -> Result<String, Error> {

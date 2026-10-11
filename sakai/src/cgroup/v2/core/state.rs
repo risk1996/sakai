@@ -12,6 +12,8 @@ use crate::{
 /// Boolean states are encoded as zero or one. They may change immediately
 /// after a read. Older kernels omit `frozen`; absence does not imply false.
 /// Unknown future keys are ignored. The hierarchy root lacks this file.
+///
+/// See [Linux `cgroup.events` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CgroupEvents {
   populated: bool,
@@ -20,9 +22,13 @@ pub struct CgroupEvents {
 
 impl CgroupEvents {
   /// The cgroup v2 `cgroup.events` interface filename.
+  ///
+  /// See [Linux `cgroup.events` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
   pub const FILE_NAME: &'static str = "cgroup.events";
 
   /// Whether this cgroup or any descendant contains live processes.
+  ///
+  /// See [Linux core cgroup interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
   #[must_use]
   pub const fn populated(self) -> bool { self.populated }
 
@@ -30,6 +36,8 @@ impl CgroupEvents {
   ///
   /// Includes freezing imposed by ancestors; this is the observed state,
   /// which may lag a request written to `cgroup.freeze`.
+  ///
+  /// See [Linux `cgroup.freeze` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
   #[must_use]
   pub const fn frozen(self) -> Option<bool> { self.frozen }
 }
@@ -54,6 +62,8 @@ impl FromStr for CgroupEvents {
 /// Older kernels omit subsystem counters; absent entries do not imply zero.
 /// Unknown keys are ignored, while subsystem names are retained even for
 /// controllers not yet known to this library.
+///
+/// See [Linux `cgroup.stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CgroupStat {
   descendants: Count,
@@ -64,21 +74,37 @@ pub struct CgroupStat {
 
 impl CgroupStat {
   /// The cgroup v2 `cgroup.stat` interface filename.
+  ///
+  /// See [Linux `cgroup.stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
   pub const FILE_NAME: &'static str = "cgroup.stat";
 
   /// Visible descendant cgroups, excluding this cgroup.
+  ///
+  /// See [Linux core cgroup interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
   #[must_use]
   pub const fn descendants(&self) -> Count { self.descendants }
 
   /// Deleted descendant cgroups that have not yet been destroyed.
+  ///
+  /// See [Linux core cgroup interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
   #[must_use]
   pub const fn dying_descendants(&self) -> Count { self.dying_descendants }
 
   /// Live subsystem states at and beneath this cgroup, keyed by controller.
+  ///
+  /// See [Linux core cgroup interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
+  ///
+  /// Since Linux 6.12; see the [upstream Linux 6.12 source](https://github.com/torvalds/linux/blob/v6.12/kernel/cgroup/cgroup.c).
+  /// An absent map entry means the kernel did not report that controller.
   #[must_use]
   pub const fn subsystems(&self) -> &HashMap<CgroupController, Count> { &self.subsystems }
 
   /// Dying subsystem states at and beneath this cgroup, keyed by controller.
+  ///
+  /// See [Linux core cgroup interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
+  ///
+  /// Since Linux 6.12; see the [upstream Linux 6.12 source](https://github.com/torvalds/linux/blob/v6.12/kernel/cgroup/cgroup.c).
+  /// An absent map entry means the kernel did not report that controller.
   #[must_use]
   pub const fn dying_subsystems(&self) -> &HashMap<CgroupController, Count> { &self.dying_subsystems }
 

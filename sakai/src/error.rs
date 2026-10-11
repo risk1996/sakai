@@ -16,12 +16,17 @@ use std::{
 ///     | Error::DeletedCgroup { .. } | Error::Parse { .. } | Error::Io(_) => (),
 /// }
 /// ```
+///
+/// See [Linux cgroup file formats and availability](https://docs.kernel.org/admin-guide/cgroup-v2.html#interface-files).
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error {
   /// An interface is unavailable (controller disabled, root, or older kernel).
   #[error("cgroup interface is missing: {path}")]
-  FileMissing { path: PathBuf },
+  FileMissing {
+    /// Diagnostic path of the missing cgroup interface file.
+    path: PathBuf,
+  },
   /// The kernel does not support this operation for the cgroup.
   #[error("operation is not supported for this cgroup")]
   NotSupported,
@@ -30,7 +35,10 @@ pub enum Error {
   NotCgroupV2,
   /// Procfs reports a cgroup that has already been removed.
   #[error("cgroup has been deleted: {path}")]
-  DeletedCgroup { path: PathBuf },
+  DeletedCgroup {
+    /// Cgroup membership path reported as deleted by procfs.
+    path: PathBuf,
+  },
   /// Malformed interface contents at the given interface path.
   #[error("failed to parse {}: {source}", path.display())]
   Parse {
@@ -57,6 +65,8 @@ impl Error {
 }
 
 /// An error parsing a cgroup interface file.
+///
+/// See [Linux cgroup file formats and availability](https://docs.kernel.org/admin-guide/cgroup-v2.html#interface-files).
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum ParseError<E> {
@@ -107,6 +117,8 @@ impl<E> ParseError<E> {
 }
 
 /// A numeric field is malformed or outside the target type's supported range.
+///
+/// See [Linux cgroup file formats and availability](https://docs.kernel.org/admin-guide/cgroup-v2.html#interface-files).
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum ParseValueError {
@@ -122,6 +134,8 @@ pub enum ParseValueError {
 }
 
 /// Whether a cgroup interface file has too few or too many fields.
+///
+/// See [Linux cgroup file formats and availability](https://docs.kernel.org/admin-guide/cgroup-v2.html#interface-files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::Display)]
 #[strum(serialize_all = "lowercase")]
 pub enum FieldKind {

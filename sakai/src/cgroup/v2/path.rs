@@ -3,6 +3,11 @@ use std::path::{Path, PathBuf};
 use procfs::process::Process;
 
 /// The directory containing a process's cgroup v2 interface files.
+///
+/// Uses [proc_pid_cgroup(5)](https://man7.org/linux/man-pages/man5/proc_pid_cgroup.5.html) and
+/// [proc_pid_mountinfo(5)](https://man7.org/linux/man-pages/man5/proc_pid_mountinfo.5.html).
+/// Discovery observes the caller's namespaces; the process or mount can change
+/// after the read. This resolves a path without opening or verifying the directory.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CgroupPath {
   path: PathBuf,
@@ -12,6 +17,18 @@ pub struct CgroupPath {
 
 impl CgroupPath {
   /// Discovers the current process's cgroup v2 directory from procfs.
+  ///
+  /// Uses [proc_pid_cgroup(5)](https://man7.org/linux/man-pages/man5/proc_pid_cgroup.5.html) and
+  /// [proc_pid_mountinfo(5)](https://man7.org/linux/man-pages/man5/proc_pid_mountinfo.5.html).
+  /// Discovery observes the caller's namespaces; the process or mount can change
+  /// after the read. This resolves a path without opening or verifying the directory.
+  ///
+  /// # Errors
+  ///
+  /// Returns [`CgroupPathError::Procfs`] for procfs read or parse failures,
+  /// [`CgroupPathError::UnifiedHierarchyNotFound`] for missing v2 membership,
+  /// [`CgroupPathError::UnifiedMountNotFound`] when no visible mount exposes
+  /// that membership, or [`CgroupPathError::DeletedCgroup`] for deleted membership.
   pub fn current() -> Result<Self, CgroupPathError> { Self::of_process(&Process::myself()?) }
 
   fn of_process(process: &Process) -> Result<Self, CgroupPathError> {
@@ -55,9 +72,13 @@ impl CgroupPath {
   }
 
   /// Returns the cgroup2 mount point that exposes this cgroup.
+  ///
+  /// See [proc_pid_mountinfo(5)](https://man7.org/linux/man-pages/man5/proc_pid_mountinfo.5.html).
   pub fn mount_point(&self) -> &Path { &self.mount_point }
 
   /// Returns whether the process sees the cgroup2 mount as read-only.
+  ///
+  /// See [proc_pid_mountinfo(5)](https://man7.org/linux/man-pages/man5/proc_pid_mountinfo.5.html).
   pub const fn is_read_only(&self) -> bool { self.read_only }
 }
 
@@ -80,7 +101,10 @@ pub enum CgroupPathError {
   UnifiedMountNotFound,
   /// Procfs reports a cgroup that has already been removed.
   #[error("cgroup has been deleted: {path}")]
-  DeletedCgroup { path: PathBuf },
+  DeletedCgroup {
+    /// Cgroup membership path reported as deleted by procfs.
+    path: PathBuf,
+  },
 }
 
 #[cfg(test)]

@@ -30,6 +30,10 @@ impl<T: Copy, I: Interface> Scalar<T, I> {
   pub const FILE_NAME: &'static str = I::FILE_NAME;
 
   /// Returns the snapshot in its declared units.
+  ///
+  /// This inspects stored data; it does not read the kernel.
+  ///
+  /// See [Linux cgroup file formats](https://docs.kernel.org/admin-guide/cgroup-v2.html#format).
   #[must_use]
   pub const fn value(self) -> T { self.value }
 

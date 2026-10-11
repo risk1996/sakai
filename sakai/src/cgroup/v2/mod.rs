@@ -1,3 +1,9 @@
+//! Typed snapshots and read-only handles for the unified cgroup v2 hierarchy.
+//!
+//! Snapshots implement string parsing on any OS. Handles and borrowed
+//! controller readers are available on Linux. See the
+//! [Linux cgroup v2 guide](https://docs.kernel.org/admin-guide/cgroup-v2.html).
+
 #[cfg(target_os = "linux")]
 pub use handle::Cgroup;
 #[cfg(target_os = "linux")]
