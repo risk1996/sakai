@@ -100,7 +100,8 @@ class ContractTest(unittest.TestCase):
     for declaration in classes:
       with self.subTest(class_name=declaration.name):
         cls = getattr(sakai, declaration.name)
-        self.assertTrue(inspect.getdoc(cls))
+        # getdoc can inherit object/Exception docs when a class has no own docs.
+        self.assertTrue((cls.__doc__ or "").strip())
         for member in declaration.body:
           if isinstance(member, ast.FunctionDef):
             with self.subTest(member_name=member.name):
