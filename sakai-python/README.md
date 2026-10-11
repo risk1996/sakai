@@ -140,7 +140,7 @@ counts. Hierarchical events aggregate limit-hit locations in the subtree; local
 events count failures at this cgroup's own limit, including descendant requests.
 A request rejected at an ancestor's limit is counted there. Capacity is root-only;
 max and events are non-root. Events require Linux 5.16, root current requires
-Linux 6.8, and peak and local events require Linux 6.11. Empty files are valid;
+Linux 6.5, and peak and local events require Linux 6.11. Empty files are valid;
 omitted resource names remain absent, distinct from a measured zero.
 See [Linux misc interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#misc).
 

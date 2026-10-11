@@ -34,7 +34,7 @@ impl MiscReader {
     PythonError::read(py, &self.owner, |owner| owner.misc().capacity()).map(Into::into)
   }
 
-  /// Read hierarchical resource usage counts; root support starts with Linux 6.8.
+  /// Read hierarchical resource usage counts; root support starts with Linux 6.5.
   ///
   /// Performs fresh read-only I/O with the exception policy documented on MiscReader.
   fn current(&self, py: Python<'_>) -> PyResult<MiscCurrent> {

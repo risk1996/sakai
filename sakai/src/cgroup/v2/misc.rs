@@ -126,8 +126,8 @@ impl FromStr for MiscCapacity {
 /// Values count resource units keyed by kernel resource names. This stored
 /// snapshot can change on the next read; getters perform no I/O. Empty maps
 /// are valid; hardware-dependent and future resource names are preserved.
-/// The root file is available since Linux 6.8; earlier kernels omit it. See
-/// [Linux 6.8 source](https://github.com/torvalds/linux/blob/v6.8/kernel/cgroup/misc.c).
+/// Since Linux 6.5, this file also exists at the root; earlier kernels omit it. See
+/// [Linux 6.5 source](https://github.com/torvalds/linux/blob/v6.5/kernel/cgroup/misc.c).
 /// See [Linux misc interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#misc).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MiscCurrent {
