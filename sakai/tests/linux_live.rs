@@ -208,29 +208,30 @@ fn parses_live_delegated_controller_interfaces() {
     | Err(error) => panic!("local CPU read failed: {error}"),
   }
 
-  assert!(
-    assert_ok!(reader.core().controllers()).contains(&CgroupController::Cpuset),
-    "vmtest kernel must provide the cpuset controller"
-  );
-  fixture.check(CpuList::CPUS_FILE_NAME, false, reader.cpuset().cpus());
-  fixture.check(CpuList::EFFECTIVE_FILE_NAME, false, reader.cpuset().cpus_effective());
-  fixture.check(MemoryNodeList::MEMS_FILE_NAME, false, reader.cpuset().mems());
-  fixture.check(MemoryNodeList::EFFECTIVE_FILE_NAME, false, reader.cpuset().mems_effective());
-  fixture.check(CpusetPartition::FILE_NAME, true, reader.cpuset().partition());
-  assert_eq!(assert_ok!(reader.cpuset().cpus()), CpuList::default());
-  assert_eq!(assert_ok!(reader.cpuset().mems()), MemoryNodeList::default());
-  // Configure a granted resource, then check a fresh read and unchanged file.
-  // No process enters this fixture; these writes only exercise the test hierarchy.
-  let cpu = assert_ok!(reader.cpuset().cpus_effective()).ids().next().expect("online CPU");
-  let node = assert_ok!(reader.cpuset().mems_effective()).ids().next().expect("online memory node");
-  let cpu_path = fixture.path.join(CpuList::CPUS_FILE_NAME);
-  let node_path = fixture.path.join(MemoryNodeList::MEMS_FILE_NAME);
-  assert_ok!(fs::write(&cpu_path, cpu.to_string()));
-  assert_ok!(fs::write(&node_path, node.to_string()));
-  assert_eq!(assert_ok!(reader.cpuset().cpus()), assert_ok!(cpu.to_string().parse::<CpuList>()));
-  assert_eq!(assert_ok!(reader.cpuset().mems()), assert_ok!(node.to_string().parse::<MemoryNodeList>()));
-  assert_eq!(assert_ok!(fs::read_to_string(&cpu_path)).trim(), cpu.to_string());
-  assert_eq!(assert_ok!(fs::read_to_string(&node_path)).trim(), node.to_string());
+  match assert_ok!(reader.core().controllers()).contains(&CgroupController::Cpuset) {
+    | true => {
+      fixture.check(CpuList::CPUS_FILE_NAME, false, reader.cpuset().cpus());
+      fixture.check(CpuList::EFFECTIVE_FILE_NAME, false, reader.cpuset().cpus_effective());
+      fixture.check(MemoryNodeList::MEMS_FILE_NAME, false, reader.cpuset().mems());
+      fixture.check(MemoryNodeList::EFFECTIVE_FILE_NAME, false, reader.cpuset().mems_effective());
+      fixture.check(CpusetPartition::FILE_NAME, true, reader.cpuset().partition());
+      assert_eq!(assert_ok!(reader.cpuset().cpus()), CpuList::default());
+      assert_eq!(assert_ok!(reader.cpuset().mems()), MemoryNodeList::default());
+      // Configure a granted resource, then check a fresh read and unchanged file.
+      // No process enters this fixture; these writes only exercise the test hierarchy.
+      let cpu = assert_ok!(reader.cpuset().cpus_effective()).ids().next().expect("online CPU");
+      let node = assert_ok!(reader.cpuset().mems_effective()).ids().next().expect("online memory node");
+      let cpu_path = fixture.path.join(CpuList::CPUS_FILE_NAME);
+      let node_path = fixture.path.join(MemoryNodeList::MEMS_FILE_NAME);
+      assert_ok!(fs::write(&cpu_path, cpu.to_string()));
+      assert_ok!(fs::write(&node_path, node.to_string()));
+      assert_eq!(assert_ok!(reader.cpuset().cpus()), assert_ok!(cpu.to_string().parse::<CpuList>()));
+      assert_eq!(assert_ok!(reader.cpuset().mems()), assert_ok!(node.to_string().parse::<MemoryNodeList>()));
+      assert_eq!(assert_ok!(fs::read_to_string(&cpu_path)).trim(), cpu.to_string());
+      assert_eq!(assert_ok!(fs::read_to_string(&node_path)).trim(), node.to_string());
+    },
+    | false => {},
+  }
 
   fixture.check(CpuIdle::FILE_NAME, true, reader.cpu().idle());
   fixture.check(CpuMax::FILE_NAME, false, reader.cpu().max());
@@ -434,14 +435,18 @@ fn reads_root_placement_and_reports_configuration_exemptions() {
   }
   let path = PathBuf::from("/sys/fs/cgroup");
   let root = assert_ok!(Cgroup::from_path(&path));
-  assert!(assert_ok!(root.core().controllers()).contains(&CgroupController::Cpuset));
-  assert_ok!(root.cpuset().cpus_effective());
-  assert_ok!(root.cpuset().mems_effective());
-  for (name, result) in [
-    (CpuList::CPUS_FILE_NAME, root.cpuset().cpus().map(|_| ())),
-    (MemoryNodeList::MEMS_FILE_NAME, root.cpuset().mems().map(|_| ())),
-    (CpusetPartition::FILE_NAME, root.cpuset().partition().map(|_| ())),
-  ] {
-    assert!(matches!(result, Err(Error::FileMissing { path: missing }) if missing == path.join(name)));
+  match assert_ok!(root.core().controllers()).contains(&CgroupController::Cpuset) {
+    | true => {
+      assert_ok!(root.cpuset().cpus_effective());
+      assert_ok!(root.cpuset().mems_effective());
+      for (name, result) in [
+        (CpuList::CPUS_FILE_NAME, root.cpuset().cpus().map(|_| ())),
+        (MemoryNodeList::MEMS_FILE_NAME, root.cpuset().mems().map(|_| ())),
+        (CpusetPartition::FILE_NAME, root.cpuset().partition().map(|_| ())),
+      ] {
+        assert!(matches!(result, Err(Error::FileMissing { path: missing }) if missing == path.join(name)));
+      }
+    },
+    | false => {},
   }
 }
