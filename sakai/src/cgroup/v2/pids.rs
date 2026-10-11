@@ -37,7 +37,7 @@ impl Pids<'_> {
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
   /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
+  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Operation`]
   /// for other operating-system failures.
   pub fn current(&self) -> Result<PidsCurrent, Error> { self.cgroup.parse(PidsCurrent::FILE_NAME) }
 
@@ -49,7 +49,7 @@ impl Pids<'_> {
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
   /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
+  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Operation`]
   /// for other operating-system failures.
   pub fn max(&self) -> Result<PidsMax, Error> { self.cgroup.parse(PidsMax::FILE_NAME) }
 
@@ -61,7 +61,7 @@ impl Pids<'_> {
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
   /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
+  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Operation`]
   /// for other operating-system failures.
   pub fn events(&self) -> Result<PidsEvents, Error> { self.cgroup.parse(PidsEvents::FILE_NAME) }
 }

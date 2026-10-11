@@ -149,7 +149,7 @@ impl Core<'_> {
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
   /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
+  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Operation`]
   /// for other operating-system failures.
   pub fn events(&self) -> Result<CgroupEvents, Error> { self.cgroup.parse(CgroupEvents::FILE_NAME) }
 
@@ -161,7 +161,7 @@ impl Core<'_> {
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
   /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
+  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Operation`]
   /// for other operating-system failures.
   pub fn stat(&self) -> Result<CgroupStat, Error> { self.cgroup.parse(CgroupStat::FILE_NAME) }
 
@@ -173,7 +173,7 @@ impl Core<'_> {
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
   /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
+  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Operation`]
   /// for other operating-system failures.
   pub fn kind(&self) -> Result<CgroupType, Error> {
     let contents = self.cgroup.read(CgroupType::FILE_NAME)?;

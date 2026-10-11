@@ -35,7 +35,7 @@ impl Zswap<'_> {
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
   /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
+  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Operation`]
   /// for other operating-system failures.
   pub fn current(&self) -> Result<ZswapCurrent, Error> { self.cgroup.parse(ZswapCurrent::FILE_NAME) }
 
@@ -50,7 +50,7 @@ impl Zswap<'_> {
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
   /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
+  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Operation`]
   /// for other operating-system failures.
   pub fn max(&self) -> Result<ZswapMax, Error> { self.cgroup.parse(ZswapMax::FILE_NAME) }
 
@@ -65,7 +65,7 @@ impl Zswap<'_> {
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
   /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
+  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Operation`]
   /// for other operating-system failures.
   pub fn writeback(&self) -> Result<ZswapWriteback, Error> { self.cgroup.parse(ZswapWriteback::FILE_NAME) }
 }

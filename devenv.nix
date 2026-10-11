@@ -64,7 +64,9 @@
     "check:clippy".exec = "cargo clippy --workspace --all-targets --all-features --locked -- -D warnings";
     "check:test".exec = "cargo nextest run --workspace --all-targets --all-features --locked";
     # nextest does not execute documentation tests.
-    "check:doc".exec = "cargo test --workspace --all-features --doc --locked";
+    "check:doc".after = [ "check:doctest" "check:rustdoc" ];
+    "check:doctest".exec = "cargo test --workspace --all-features --doc --locked";
+    "check:rustdoc".exec = "RUSTDOCFLAGS='-D warnings -D missing_docs -D rustdoc::broken_intra_doc_links' cargo doc --package sakai --all-features --no-deps --locked";
     # Explicit opt-in: security checks fetch current advisories and registry data.
     "check:security".after = [ "check:audit" "check:deny" ];
     "check:audit".exec = "cargo audit --file Cargo.lock";

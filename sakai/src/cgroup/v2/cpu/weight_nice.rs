@@ -19,7 +19,7 @@ use crate::{
 /// See [Linux `cpu.weight.nice` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
 #[nutype(
   validate(greater_or_equal = -20, less_or_equal = 19),
-  derive(Debug, Clone, Copy, PartialEq, Eq, Hash, AsRef, Deref)
+  derive(Debug, Clone, Copy, PartialEq, Eq, Hash, AsRef)
 )]
 pub struct Nice(i8);
 

@@ -59,7 +59,7 @@ impl Memory<'_> {
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
   /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
+  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Operation`]
   /// for other operating-system failures.
   pub fn current(&self) -> Result<MemoryCurrent, Error> { self.cgroup.parse(MemoryCurrent::FILE_NAME) }
 
@@ -74,7 +74,7 @@ impl Memory<'_> {
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
   /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
+  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Operation`]
   /// for other operating-system failures.
   pub fn peak(&self) -> Result<MemoryPeak, Error> { self.cgroup.parse(MemoryPeak::FILE_NAME) }
 
@@ -86,7 +86,7 @@ impl Memory<'_> {
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
   /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
+  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Operation`]
   /// for other operating-system failures.
   pub fn stat(&self) -> Result<MemoryStat, Error> { self.cgroup.parse(MemoryStat::FILE_NAME) }
 
@@ -98,7 +98,7 @@ impl Memory<'_> {
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
   /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
+  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Operation`]
   /// for other operating-system failures.
   pub fn events(&self) -> Result<MemoryEvents, Error> { self.cgroup.parse(MemoryEvents::FILE_NAME) }
 
@@ -110,7 +110,7 @@ impl Memory<'_> {
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
   /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
+  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Operation`]
   /// for other operating-system failures.
   pub fn events_local(&self) -> Result<MemoryEventsLocal, Error> { self.cgroup.parse(MemoryEventsLocal::FILE_NAME) }
 
@@ -122,7 +122,7 @@ impl Memory<'_> {
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
   /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
+  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Operation`]
   /// for other operating-system failures.
   pub fn numa_stat(&self) -> Result<MemoryNumaStat, Error> { self.cgroup.parse(MemoryNumaStat::FILE_NAME) }
 
@@ -134,7 +134,7 @@ impl Memory<'_> {
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
   /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
+  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Operation`]
   /// for other operating-system failures.
   pub fn pressure(&self) -> Result<Pressure, Error> { self.cgroup.parse(Pressure::MEMORY_FILE_NAME) }
 
@@ -146,7 +146,7 @@ impl Memory<'_> {
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
   /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
+  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Operation`]
   /// for other operating-system failures.
   pub fn max(&self) -> Result<MemoryMax, Error> { self.cgroup.parse(MemoryMax::FILE_NAME) }
 
@@ -158,7 +158,7 @@ impl Memory<'_> {
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
   /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
+  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Operation`]
   /// for other operating-system failures.
   pub fn high(&self) -> Result<MemoryHigh, Error> { self.cgroup.parse(MemoryHigh::FILE_NAME) }
 
@@ -170,7 +170,7 @@ impl Memory<'_> {
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
   /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
+  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Operation`]
   /// for other operating-system failures.
   pub fn low(&self) -> Result<MemoryLow, Error> { self.cgroup.parse(MemoryLow::FILE_NAME) }
 
@@ -182,7 +182,7 @@ impl Memory<'_> {
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
   /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
+  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Operation`]
   /// for other operating-system failures.
   pub fn min(&self) -> Result<MemoryMin, Error> { self.cgroup.parse(MemoryMin::FILE_NAME) }
 
@@ -194,7 +194,7 @@ impl Memory<'_> {
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
   /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
+  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Operation`]
   /// for other operating-system failures.
   pub fn oom_group(&self) -> Result<MemoryOomGroup, Error> { self.cgroup.parse(MemoryOomGroup::FILE_NAME) }
 }

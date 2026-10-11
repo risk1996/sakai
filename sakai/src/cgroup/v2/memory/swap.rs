@@ -36,7 +36,7 @@ impl Swap<'_> {
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
   /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
+  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Operation`]
   /// for other operating-system failures.
   pub fn current(&self) -> Result<SwapCurrent, Error> { self.cgroup.parse(SwapCurrent::FILE_NAME) }
 
@@ -51,7 +51,7 @@ impl Swap<'_> {
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
   /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
+  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Operation`]
   /// for other operating-system failures.
   pub fn peak(&self) -> Result<SwapPeak, Error> { self.cgroup.parse(SwapPeak::FILE_NAME) }
 
@@ -63,7 +63,7 @@ impl Swap<'_> {
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
   /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
+  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Operation`]
   /// for other operating-system failures.
   pub fn max(&self) -> Result<SwapMax, Error> { self.cgroup.parse(SwapMax::FILE_NAME) }
 
@@ -75,7 +75,7 @@ impl Swap<'_> {
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
   /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
+  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Operation`]
   /// for other operating-system failures.
   pub fn high(&self) -> Result<SwapHigh, Error> { self.cgroup.parse(SwapHigh::FILE_NAME) }
 
@@ -87,7 +87,7 @@ impl Swap<'_> {
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
   /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
+  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Operation`]
   /// for other operating-system failures.
   pub fn events(&self) -> Result<SwapEvents, Error> { self.cgroup.parse(SwapEvents::FILE_NAME) }
 }

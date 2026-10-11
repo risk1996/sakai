@@ -70,16 +70,20 @@ impl Cgroup {
   /// [`io::ErrorKind::InvalidInput`]. Missing unified membership or a visible
   /// mount produces [`Error::NotCgroupV2`]. Deleted membership produces
   /// [`Error::DeletedCgroup`]. Procfs and directory-open failures retain their
-  /// causes in [`Error::Io`].
+  /// causes in [`Error::Operation`] when a path is known, or [`Error::Io`]
+  /// otherwise. Native procfs errno is preserved where available; procfs's
+  /// normalized missing and permission categories use ENOENT and EACCES.
+  /// Discovery tries matching mounts from the most specific root first. If
+  /// every candidate fails, the first candidate's error is returned.
   pub fn from_pid(pid: u32) -> Result<Self, Error> {
     let pid = i32::try_from(pid)
       .ok()
       .filter(|pid| *pid > 0)
       .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "PID must be positive and fit i32"))?;
-    let process = Process::new(pid).map_err(io::Error::other)?;
-    let caller = Process::myself().map_err(io::Error::other)?;
+    let process = Process::new(pid).map_err(Error::procfs)?;
+    let caller = Process::myself().map_err(Error::procfs)?;
     let candidates = CgroupPath::candidates(&process, &caller).map_err(|error| match error {
-      | CgroupPathError::Procfs(source) => Error::Io(io::Error::other(source)),
+      | CgroupPathError::Procfs(source) => Error::procfs(source),
       | CgroupPathError::DeletedCgroup { path } => Error::DeletedCgroup { path },
       | CgroupPathError::UnifiedHierarchyNotFound | CgroupPathError::UnifiedMountNotFound => Error::NotCgroupV2,
     })?;
@@ -90,14 +94,16 @@ impl Cgroup {
     candidates: impl IntoIterator<Item = CgroupPath>,
     mut open: impl FnMut(&Path) -> Result<T, Error>,
   ) -> Result<T, Error> {
-    let mut last_error = Error::NotCgroupV2;
+    let mut first_error = None;
     for candidate in candidates {
       match open(candidate.as_ref()) {
         | Ok(value) => return Ok(value),
-        | Err(error) => last_error = error,
+        | Err(error) => {
+          first_error.get_or_insert(error);
+        },
       }
     }
-    Err(last_error)
+    Err(first_error.unwrap_or(Error::NotCgroupV2))
   }
 
   /// Opens a directory and verifies cgroup2 filesystem magic.
@@ -111,8 +117,17 @@ impl Cgroup {
   /// Invalid names or parent traversal produce [`crate::Error::Io`] with
   /// [`std::io::ErrorKind::InvalidInput`]. A directory on another filesystem
   /// produces [`crate::Error::NotCgroupV2`]; permission and open failures retain
-  /// the operating-system error.
+  /// their path and operating-system error in [`Error::Operation`].
   pub fn from_path(path: &Path) -> Result<Self, Error> {
+    Self::open_path(path).map_err(|error| match error {
+      | Error::Io(source) if source.kind() != io::ErrorKind::InvalidInput => {
+        Error::Operation { operation: "open cgroup", path: path.to_owned(), source }
+      },
+      | other => other,
+    })
+  }
+
+  fn open_path(path: &Path) -> Result<Self, Error> {
     let (base, relative) = match path.is_absolute() {
       | true => (Path::new("/"), path.strip_prefix("/").map_err(io::Error::other)?),
       | false => (Path::new("."), path),
@@ -167,12 +182,17 @@ impl Cgroup {
   /// Invalid names or parent traversal produce [`crate::Error::Io`] with
   /// [`std::io::ErrorKind::InvalidInput`]. A directory on another filesystem
   /// produces [`crate::Error::NotCgroupV2`]; permission and open failures retain
-  /// the operating-system error.
+  /// their path and operating-system error in [`Error::Operation`].
   pub fn child(&self, name: &OsStr) -> Result<Self, Error> {
     if name.as_bytes().contains(&b'/') || !matches!(Path::new(name).components().next(), Some(Component::Normal(_))) {
       return Err(io::Error::new(io::ErrorKind::InvalidInput, "child must be a single name").into());
     }
-    Self::verified(Self::open_directory(&self.directory, Path::new(name))?, self.path.join(name))
+    let path = self.path.join(name);
+    let directory = Self::open_directory(&self.directory, Path::new(name)).map_err(|error| match error {
+      | Error::Io(source) => Error::Operation { operation: "open child cgroup", path: path.clone(), source },
+      | other => other,
+    })?;
+    Self::verified(directory, path)
   }
 
   /// Lists directories, including child names that resemble interface files.
@@ -180,16 +200,29 @@ impl Cgroup {
   ///
   /// Enumeration is a separate observation for each child, not an atomic tree
   /// snapshot. See [getdents(2)](https://man7.org/linux/man-pages/man2/getdents.2.html).
+  ///
+  /// # Errors
+  ///
+  /// Returns [`Error::Operation`] with the directory path and source for
+  /// enumeration or child-open failures other than a removed child.
   pub fn children(&self) -> Result<Vec<Self>, Error> {
     Dir::read_from(&self.directory)
-      .map_err(io::Error::from)?
+      .map_err(|source| Error::Operation {
+        operation: "list child cgroups",
+        path: self.path.clone(),
+        source: source.into(),
+      })?
       .filter_map(|entry| match entry {
-        | Err(error) => Some(Err(Error::Io(error.into()))),
+        | Err(source) => Some(Err(Error::Operation {
+          operation: "list child cgroups",
+          path: self.path.clone(),
+          source: source.into(),
+        })),
         | Ok(entry)
           if entry.file_type() == FileType::Directory && !matches!(entry.file_name().to_bytes(), b"." | b"..") =>
         {
           match self.child(OsStr::from_bytes(entry.file_name().to_bytes())) {
-            | Err(Error::Io(error)) if error.kind() == io::ErrorKind::NotFound => None,
+            | Err(Error::Operation { source, .. }) if source.kind() == io::ErrorKind::NotFound => None,
             | result => Some(result),
           }
         },
@@ -463,5 +496,26 @@ mod tests {
       PathBuf::from("/run/delegated/process.scope"),
       PathBuf::from("/run/parent/pod-1/process.scope"),
     ]);
+  }
+
+  #[test]
+  fn reports_first_candidate_failure_when_all_mounts_fail() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/cgroup/v2/fixtures/multiple_mounts/1");
+    let process = assert_ok!(Process::new_with_root(root));
+    let candidates = assert_ok!(CgroupPath::candidates(&process, &process));
+    let mut attempted = Vec::new();
+    let error = assert_err!(Cgroup::open_candidates::<()>(candidates, |path| {
+      attempted.push(path.to_owned());
+      Err(Error::Operation {
+        operation: "open cgroup",
+        path: path.to_owned(),
+        source: rustix::io::Errno::ACCESS.into(),
+      })
+    }));
+    assert_eq!(attempted.len(), 3);
+    assert!(
+      matches!(error, Error::Operation { path, source, .. } if path == Path::new("/run/delegated/process.scope") && source.raw_os_error() == Some(rustix::io::Errno::ACCESS.raw_os_error()))
+    );
+    assert!(matches!(Cgroup::open_candidates::<()>([], |_| Ok(())), Err(Error::NotCgroupV2)));
   }
 }

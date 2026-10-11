@@ -36,7 +36,10 @@ class DeletedCgroupError(SakaiError):
 class CgroupParseError(SakaiError):
   path: Path
 
-class NotSupportedError(SakaiError): ...
+class NotSupportedError(SakaiError):
+  path: Path
+  filename: Path
+  errno: int | None
 
 class Cgroup:
   @staticmethod
@@ -114,7 +117,7 @@ class CpuWeight:
   @property
   def is_idle(self) -> bool: ...
   @property
-  def shares(self) -> int | None: ...
+  def weight(self) -> int | None: ...
 
 class Pressure:
   @property

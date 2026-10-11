@@ -15,7 +15,7 @@ use crate::{
 /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
 #[nutype(
   validate(greater_or_equal = 1, less_or_equal = 10_000),
-  derive(Debug, Clone, Copy, PartialEq, Eq, Hash, AsRef, Deref)
+  derive(Debug, Clone, Copy, PartialEq, Eq, Hash, AsRef)
 )]
 pub struct Weight(u16);
 

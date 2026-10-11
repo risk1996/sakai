@@ -57,8 +57,8 @@ impl CpuMax {
       | MaxOr::Max => MaxOr::Max,
       #[expect(clippy::cast_precision_loss, reason = "the public ratio uses f64; large quotas may lose precision")]
       | MaxOr::Value(quota) => {
-        let quota = quota.get::<microsecond>() as f64;
-        let period = self.period.get::<microsecond>() as f64;
+        let quota = quota.as_ref().get::<microsecond>() as f64;
+        let period = self.period.as_ref().get::<microsecond>() as f64;
 
         MaxOr::Value(Ratio::new::<ratio>(quota / period))
       },

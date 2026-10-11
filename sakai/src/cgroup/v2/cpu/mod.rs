@@ -44,7 +44,7 @@ impl Cpu<'_> {
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
   /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
+  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Operation`]
   /// for other operating-system failures.
   pub fn stat(&self) -> Result<CpuStat, Error> { self.cgroup.parse(CpuStat::FILE_NAME) }
 
@@ -59,7 +59,7 @@ impl Cpu<'_> {
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
   /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
+  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Operation`]
   /// for other operating-system failures.
   pub fn stat_local(&self) -> Result<CpuStatLocal, Error> { self.cgroup.parse(CpuStatLocal::FILE_NAME) }
 
@@ -71,7 +71,7 @@ impl Cpu<'_> {
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
   /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
+  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Operation`]
   /// for other operating-system failures.
   pub fn weight(&self) -> Result<CpuWeight, Error> { self.cgroup.parse(CpuWeight::FILE_NAME) }
 
@@ -83,7 +83,7 @@ impl Cpu<'_> {
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
   /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
+  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Operation`]
   /// for other operating-system failures.
   pub fn weight_nice(&self) -> Result<Nice, Error> { self.cgroup.parse(Nice::FILE_NAME) }
 
@@ -95,7 +95,7 @@ impl Cpu<'_> {
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
   /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
+  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Operation`]
   /// for other operating-system failures.
   pub fn max(&self) -> Result<CpuMax, Error> { self.cgroup.parse(CpuMax::FILE_NAME) }
 
@@ -110,7 +110,7 @@ impl Cpu<'_> {
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
   /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
+  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Operation`]
   /// for other operating-system failures.
   pub fn max_burst(&self) -> Result<CpuMaxBurst, Error> { self.cgroup.parse(CpuMaxBurst::FILE_NAME) }
 
@@ -122,7 +122,7 @@ impl Cpu<'_> {
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
   /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
+  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Operation`]
   /// for other operating-system failures.
   pub fn pressure(&self) -> Result<Pressure, Error> { self.cgroup.parse(Pressure::CPU_FILE_NAME) }
 
@@ -134,7 +134,7 @@ impl Cpu<'_> {
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
   /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
+  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Operation`]
   /// for other operating-system failures.
   pub fn uclamp_min(&self) -> Result<CpuUclampMin, Error> { self.cgroup.parse(CpuUclampMin::FILE_NAME) }
 
@@ -146,7 +146,7 @@ impl Cpu<'_> {
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
   /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
+  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Operation`]
   /// for other operating-system failures.
   pub fn uclamp_max(&self) -> Result<CpuUclampMax, Error> { self.cgroup.parse(CpuUclampMax::FILE_NAME) }
 
@@ -158,7 +158,7 @@ impl Cpu<'_> {
   ///
   /// Returns [`crate::Error::FileMissing`] if the interface is absent,
   /// [`crate::Error::NotSupported`] if the kernel reports an unsupported operation,
-  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Io`]
+  /// [`crate::Error::Parse`] if its contents are invalid, or [`crate::Error::Operation`]
   /// for other operating-system failures.
   pub fn idle(&self) -> Result<CpuIdle, Error> { self.cgroup.parse(CpuIdle::FILE_NAME) }
 }

@@ -13,6 +13,13 @@
 //! ancestor can still impose a limit. An optional counter of `None` means it
 //! was not reported, rather than a measured zero.
 //!
+//! The public quantities intentionally expose `uom` interoperability: construct
+//! and convert them with `uom`'s unit types. [`Count`] and [`unit::Pages`] use
+//! their public `value` field. Map accessors intentionally return borrowed
+//! `BTreeMap` values for deterministic iteration and typed lookup; absent keys
+//! mean unreported fields, not zero. These representations are public contracts.
+//! Use [`NonZeroTime::event_rate`] for fractional monitoring rates.
+//!
 //! # Linux availability
 //!
 //! Linux 5.15 is the oldest kernel in the project's test matrix. Interfaces
@@ -74,7 +81,9 @@ pub use cgroup::v2;
 pub use error::Error;
 pub use limit::MaxOr;
 pub use pressure::{Pressure, PressureLine};
-pub use unit::{Bytes, BytesPerSecond, Count, EventRate, NonZeroTime, OperationsPerSecond, Pages, Ratio, Time};
+pub use unit::{
+  Bytes, BytesPerSecond, Count, EventRate, FractionalEventRate, NonZeroTime, OperationsPerSecond, Pages, Ratio, Time,
+};
 #[cfg(target_os = "linux")]
 pub use v2::Cgroup;
 pub use v2::cpu::{CpuWeight, Nice, Weight};
