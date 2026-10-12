@@ -292,6 +292,20 @@ impl Cgroup {
   /// See [`crate::v2::core`] for the supported readers and [Linux cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html#controllers).
   pub fn core(&self) -> Core<'_> { Core { cgroup: self } }
 
+  /// Reads interrupt pressure, which has only a `full` stall line.
+  ///
+  /// Since Linux 6.1 with `CONFIG_PSI` and `CONFIG_IRQ_TIME_ACCOUNTING`; see the
+  /// [Linux PSI documentation](https://docs.kernel.org/accounting/psi.html) and
+  /// [Linux 6.1 implementation](https://github.com/torvalds/linux/blob/v6.1/kernel/cgroup/cgroup.c).
+  /// This performs fresh read-only I/O; separate pressure reads are not atomic.
+  ///
+  /// # Errors
+  ///
+  /// Returns [`Error::FileMissing`] when unavailable, [`Error::NotSupported`]
+  /// for an unsupported operation, [`Error::Parse`] for invalid contents, or
+  /// [`Error::Operation`] for other operating-system failures.
+  pub fn irq_pressure(&self) -> Result<crate::IrqPressure, Error> { self.parse(crate::IrqPressure::FILE_NAME) }
+
   /// Opens a read-only subscription to one evented cgroup interface.
   ///
   /// An initial read establishes the notification baseline. Later calls to

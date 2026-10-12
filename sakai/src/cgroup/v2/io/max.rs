@@ -108,7 +108,7 @@ impl FromStr for IoMax {
   }
 }
 
-struct ParseBandwidth;
+pub(super) struct ParseBandwidth;
 
 impl ParseCgroup<ParseBandwidth> for BytesPerSecond {
   type Error = ParseValueError;
@@ -116,7 +116,7 @@ impl ParseCgroup<ParseBandwidth> for BytesPerSecond {
   fn parse_cgroup(value: &str) -> Result<Self, Self::Error> { Ok(Self::new::<byte_per_second>(value.parse()?)) }
 }
 
-struct ParseIops;
+pub(super) struct ParseIops;
 
 impl ParseCgroup<ParseIops> for OperationsPerSecond {
   type Error = ParseValueError;

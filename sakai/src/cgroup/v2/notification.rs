@@ -132,11 +132,11 @@ pub enum ConfigurationInterface {
   /// See [`super::memory::MemoryHigh`] for hierarchy and availability.
   #[strum(serialize = "memory.high")]
   MemoryHigh,
-  /// Best-effort memory protection in bytes.
+  /// Best-effort memory protection in bytes, or `max`.
   /// See [`super::memory::MemoryLow`] for protection semantics and availability.
   #[strum(serialize = "memory.low")]
   MemoryLow,
-  /// Hard memory protection in bytes.
+  /// Hard memory protection in bytes, or `max`.
   /// See [`super::memory::MemoryMin`] for protection semantics and availability.
   #[strum(serialize = "memory.min")]
   MemoryMin,

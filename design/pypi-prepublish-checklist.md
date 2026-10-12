@@ -60,7 +60,10 @@ are not execution tests on glibc 2.17 itself.
   unit suffixes, `MaxOr.is_max` and its guarded `.value`, optional older-kernel
   fields, exception types, and the no-atomic-snapshot guarantee. Verify that
   the docs and `.pyi` describe what the installed extension actually exports.
-  The implemented P0–P3 readers remain exposed, including process/core and I/O.
+  The implemented P0–P6 readers and notifications are exposed, including
+  cpuset, HugeTLB, RDMA, device memory, and miscellaneous resources. The
+  recorded P0–P3 artifact checks below are historical and must be repeated
+  for the expanded release surface.
   The existing installed contract suite compares stub classes with `__all__`,
   checks each declared member exists and has native documentation, and exercises
   CPU, memory, swap/zswap, NUMA, process/core, and I/O readers. It now also

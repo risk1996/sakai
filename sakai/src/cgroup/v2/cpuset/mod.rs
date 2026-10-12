@@ -51,6 +51,46 @@ impl Cpuset<'_> {
   /// See the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn cpus_effective(&self) -> Result<CpuList, Error> { self.cgroup.parse(CpuList::EFFECTIVE_FILE_NAME) }
 
+  /// Reads the CPUs requested for exclusive partition allocation.
+  ///
+  /// An empty request falls back to `cpuset.cpus` when forming a partition;
+  /// it does not mean inheritance of the parent's exclusive request.
+  /// Since Linux 6.7; see the [Linux 6.7 source](https://github.com/torvalds/linux/blob/v6.7/kernel/cgroup/cpuset.c)
+  /// and [Linux cpuset interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpuset-interface-files).
+  ///
+  /// # Errors
+  ///
+  /// See the shared [interface-read errors](crate::v2#interface-read-errors);
+  /// the root and older kernels lack this interface.
+  pub fn cpus_exclusive(&self) -> Result<CpuList, Error> { self.cgroup.parse(CpuList::EXCLUSIVE_FILE_NAME) }
+
+  /// Reads CPUs actually available for exclusive partition allocation.
+  ///
+  /// This grant can differ from the request and is not the task placement mask
+  /// returned by [`Self::cpus_effective`]. Since Linux 6.7; see the
+  /// [Linux 6.7 source](https://github.com/torvalds/linux/blob/v6.7/kernel/cgroup/cpuset.c)
+  /// and [Linux cpuset interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpuset-interface-files).
+  ///
+  /// # Errors
+  ///
+  /// See the shared [interface-read errors](crate::v2#interface-read-errors);
+  /// the root and older kernels lack this interface.
+  pub fn cpus_exclusive_effective(&self) -> Result<CpuList, Error> {
+    self.cgroup.parse(CpuList::EXCLUSIVE_EFFECTIVE_FILE_NAME)
+  }
+
+  /// Reads CPUs belonging to isolated partitions across the hierarchy.
+  ///
+  /// Available only at the hierarchy root. Since Linux 6.8; see the
+  /// [Linux 6.8 source](https://github.com/torvalds/linux/blob/v6.8/kernel/cgroup/cpuset.c)
+  /// and [Linux cpuset interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpuset-interface-files).
+  ///
+  /// # Errors
+  ///
+  /// See the shared [interface-read errors](crate::v2#interface-read-errors);
+  /// non-root cgroups and older kernels lack this interface.
+  pub fn cpus_isolated(&self) -> Result<CpuList, Error> { self.cgroup.parse(CpuList::ISOLATED_FILE_NAME) }
+
   /// Reads requested NUMA memory-node IDs; an empty list means inheritance.
   ///
   /// The request stays unchanged by memory-node hotplug and can differ from the

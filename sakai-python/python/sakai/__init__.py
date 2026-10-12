@@ -5,6 +5,7 @@ from ._sakai import Cgroup as Cgroup
 from ._sakai import CgroupEvents as CgroupEvents
 from ._sakai import CgroupParseError as CgroupParseError
 from ._sakai import CgroupStat as CgroupStat
+from ._sakai import CgroupStatLocal as CgroupStatLocal
 from ._sakai import ChangeNotification as ChangeNotification
 from ._sakai import ConfigurationWatcher as ConfigurationWatcher
 from ._sakai import CoreReader as CoreReader
@@ -23,12 +24,17 @@ from ._sakai import DeletedCgroupError as DeletedCgroupError
 from ._sakai import DmemCapacity as DmemCapacity
 from ._sakai import DmemCurrent as DmemCurrent
 from ._sakai import DmemLimits as DmemLimits
+from ._sakai import DmemPeak as DmemPeak
 from ._sakai import DmemReader as DmemReader
 from ._sakai import EventPoller as EventPoller
 from ._sakai import HugetlbEvents as HugetlbEvents
 from ._sakai import HugetlbNumaStat as HugetlbNumaStat
 from ._sakai import HugetlbReader as HugetlbReader
 from ._sakai import InterfaceMissingError as InterfaceMissingError
+from ._sakai import IoCostModel as IoCostModel
+from ._sakai import IoCostQos as IoCostQos
+from ._sakai import IoDeviceCostModel as IoDeviceCostModel
+from ._sakai import IoDeviceCostQos as IoDeviceCostQos
 from ._sakai import IoDeviceMax as IoDeviceMax
 from ._sakai import IoDeviceStat as IoDeviceStat
 from ._sakai import IoLatency as IoLatency
@@ -36,6 +42,7 @@ from ._sakai import IoMax as IoMax
 from ._sakai import IoReader as IoReader
 from ._sakai import IoStat as IoStat
 from ._sakai import IoWeight as IoWeight
+from ._sakai import IrqPressure as IrqPressure
 from ._sakai import MaxOr as MaxOr
 from ._sakai import MemoryEventCounts as MemoryEventCounts
 from ._sakai import MemoryNodeList as MemoryNodeList

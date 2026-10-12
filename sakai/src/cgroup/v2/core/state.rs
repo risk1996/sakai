@@ -3,8 +3,8 @@ use std::{collections::HashMap, str::FromStr};
 use super::CgroupController;
 use crate::{
   error::{ParseError, ParseValueError},
-  parse::{KeyedFields, ParseBoolean, ParseCgroup, ParseCount},
-  unit::Count,
+  parse::{KeyedFields, ParseBoolean, ParseCgroup, ParseCount, ParseMicroseconds},
+  unit::{Count, Time},
 };
 
 /// A point-in-time snapshot of `cgroup.events` lifecycle state.
@@ -51,6 +51,42 @@ impl FromStr for CgroupEvents {
       populated: fields.required::<ParseBoolean, _>("populated")?,
       frozen: fields.optional::<ParseBoolean, _>("frozen")?,
     })
+  }
+}
+
+/// A stored snapshot of local freezer accounting from `cgroup.stat.local`.
+///
+/// Records cumulative time between effective freeze and thaw requests, including
+/// freezing imposed by ancestors. The active interval is included; time starts
+/// when freezing is requested, without waiting for the `frozen` state. It is
+/// neither process CPU time nor the sum of descendants' freezing durations.
+/// Unknown future keys are ignored. The hierarchy root lacks this file.
+///
+/// Since Linux 6.18; see [Linux 6.18 source](https://github.com/torvalds/linux/blob/v6.18/kernel/cgroup/cgroup.c)
+/// and [Linux `cgroup.stat.local`](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct CgroupStatLocal {
+  frozen_time: Time,
+}
+
+impl CgroupStatLocal {
+  /// The non-root local freezer statistics filename, since Linux 6.18.
+  pub const FILE_NAME: &'static str = "cgroup.stat.local";
+
+  /// Returns cumulative local freezing duration, parsed from microseconds.
+  ///
+  /// Inspects this stored snapshot without I/O; the next read may report a
+  /// longer duration even if the cgroup has not finished freezing.
+  #[must_use]
+  pub const fn frozen_time(&self) -> Time { self.frozen_time }
+}
+
+impl FromStr for CgroupStatLocal {
+  type Err = ParseError<ParseValueError>;
+
+  fn from_str(contents: &str) -> Result<Self, Self::Err> {
+    let fields = KeyedFields::parse(contents, |_| "value")?;
+    Ok(Self { frozen_time: fields.required::<ParseMicroseconds, _>("frozen_usec")? })
   }
 }
 
@@ -118,7 +154,9 @@ impl CgroupStat {
       .filter_map(|(key, value)| key.strip_prefix(prefix).map(|name| (name, value)))
       .map(|(name, value)| match name.is_empty() {
         | true => Err(ParseError::invalid(raw, "controller", name, ParseValueError::OutOfRange)),
-        | false => Ok((CgroupController::from(name), Count::parse_field(raw, prefix, value)?)),
+        | false => {
+          Ok((CgroupController::from(name), <Count as ParseCgroup<ParseCount>>::parse_field(raw, prefix, value)?))
+        },
       })
       .collect()
   }
@@ -141,12 +179,25 @@ impl FromStr for CgroupStat {
 #[cfg(test)]
 mod tests {
   use indoc::indoc;
+  use uom::si::time::nanosecond;
 
   use super::*;
   use crate::parse::tests::{
     Cases,
     Failure::{Excess, Invalid, Missing},
   };
+
+  #[test]
+  fn parses_local_freezing_duration_in_microseconds() {
+    Cases::<CgroupStatLocal>::check([
+      ("frozen_usec 123456\nfuture nope", Ok(CgroupStatLocal { frozen_time: Time::new::<nanosecond>(123_456_000) })),
+      ("frozen_usec 0", Ok(CgroupStatLocal { frozen_time: Time::default() })),
+      ("", Err(Missing("frozen_usec"))),
+      ("frozen_usec -1", Err(Invalid("frozen_usec", "-1"))),
+      ("frozen_usec nope", Err(Invalid("frozen_usec", "nope"))),
+      ("frozen_usec 1 extra", Err(Excess)),
+    ]);
+  }
 
   #[test]
   fn parses_lifecycle_states_and_older_kernel_absence() {

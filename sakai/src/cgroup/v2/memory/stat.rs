@@ -2,7 +2,7 @@ use std::{collections::BTreeMap, str::FromStr};
 
 use crate::{
   error::{ParseError, ParseValueError},
-  parse::{ParseCgroup, Parser},
+  parse::{ParseCgroup, ParseCount, Parser},
   unit::{Bytes, Count, Pages},
 };
 
@@ -10,8 +10,8 @@ use crate::{
 ///
 /// Memory amounts are bytes, page quantities are numbers of pages (not bytes),
 /// and event counts are dimensionless. Kernel versions and configurations can
-/// omit individual fields. Unknown keys are ignored because their units are
-/// not defined by this type.
+/// omit individual fields; absence differs from a reported zero. Unknown keys
+/// are ignored because their units are not defined by this type.
 ///
 /// See [Linux `memory.stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -51,7 +51,7 @@ impl MemoryStat {
     } else if let Ok(field) = MemoryStatPageField::from_str(key) {
       self.pages.insert(field, Pages::parse_field(raw, field.into(), value)?);
     } else if let Ok(field) = MemoryStatCountField::from_str(key) {
-      self.counts.insert(field, Count::parse_field(raw, field.into(), value)?);
+      self.counts.insert(field, <Count as ParseCgroup<ParseCount>>::parse_field(raw, field.into(), value)?);
     }
     Ok(())
   }
@@ -158,7 +158,7 @@ pub enum MemoryStatByteField {
   ///
   /// See [Linux memory.stat](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   FileWriteback,
-  /// Swap-backed memory also present in the swap cache in bytes (`swapcached`).
+  /// Memory occupied by the swap cache in bytes (`swapcached`); charged to both memory and swap usage.
   ///
   /// See [Linux memory.stat](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   Swapcached,
@@ -236,13 +236,13 @@ pub enum MemoryStatPageField {
   ///
   /// See [Linux memory.stat](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
-  /// Since Linux 6.15; see the [upstream Linux 6.15 source](https://github.com/torvalds/linux/blob/v6.15/Documentation/admin-guide/cgroup-v2.rst).
+  /// Since Linux 6.13; see the [upstream Linux 6.13 source](https://github.com/torvalds/linux/blob/v6.13/mm/memcontrol.c).
   Pswpin,
   /// Pages sent out to swap (`pswpout`).
   ///
   /// See [Linux memory.stat](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
-  /// Since Linux 6.15; see the [upstream Linux 6.15 source](https://github.com/torvalds/linux/blob/v6.15/Documentation/admin-guide/cgroup-v2.rst).
+  /// Since Linux 6.13; see the [upstream Linux 6.13 source](https://github.com/torvalds/linux/blob/v6.13/mm/memcontrol.c).
   Pswpout,
   /// Pages examined during memory reclaim (`pgscan`).
   ///
@@ -255,10 +255,14 @@ pub enum MemoryStatPageField {
   /// Pages examined during reclaim by the background reclaim daemon (`pgscan_kswapd`).
   ///
   /// See [Linux memory.stat](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
+  ///
+  /// Since Linux 6.0; see the [upstream Linux 6.0 source](https://github.com/torvalds/linux/blob/v6.0/mm/memcontrol.c).
   PgscanKswapd,
   /// Pages examined during reclaim by direct reclaim in the allocating task (`pgscan_direct`).
   ///
   /// See [Linux memory.stat](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
+  ///
+  /// Since Linux 6.0; see the [upstream Linux 6.0 source](https://github.com/torvalds/linux/blob/v6.0/mm/memcontrol.c).
   PgscanDirect,
   /// Pages examined during reclaim by the transparent hugepage collapse daemon (`pgscan_khugepaged`).
   ///
@@ -275,10 +279,14 @@ pub enum MemoryStatPageField {
   /// Pages successfully reclaimed by the background reclaim daemon (`pgsteal_kswapd`).
   ///
   /// See [Linux memory.stat](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
+  ///
+  /// Since Linux 6.0; see the [upstream Linux 6.0 source](https://github.com/torvalds/linux/blob/v6.0/mm/memcontrol.c).
   PgstealKswapd,
   /// Pages successfully reclaimed by direct reclaim in the allocating task (`pgsteal_direct`).
   ///
   /// See [Linux memory.stat](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
+  ///
+  /// Since Linux 6.0; see the [upstream Linux 6.0 source](https://github.com/torvalds/linux/blob/v6.0/mm/memcontrol.c).
   PgstealDirect,
   /// Pages successfully reclaimed by the transparent hugepage collapse daemon (`pgsteal_khugepaged`).
   ///
@@ -328,19 +336,19 @@ pub enum MemoryStatPageField {
   ///
   /// See [Linux memory.stat](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
-  /// Since Linux 6.10; see the [upstream Linux 6.10 source](https://github.com/torvalds/linux/blob/v6.10/Documentation/admin-guide/cgroup-v2.rst).
+  /// Since Linux 5.19; see the [upstream Linux 5.19 source](https://github.com/torvalds/linux/blob/v5.19/mm/memcontrol.c).
   Zswpin,
   /// Pages stored in zswap (`zswpout`).
   ///
   /// See [Linux memory.stat](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
-  /// Since Linux 6.10; see the [upstream Linux 6.10 source](https://github.com/torvalds/linux/blob/v6.10/Documentation/admin-guide/cgroup-v2.rst).
+  /// Since Linux 5.19; see the [upstream Linux 5.19 source](https://github.com/torvalds/linux/blob/v5.19/mm/memcontrol.c).
   Zswpout,
   /// Pages written from zswap to a backing swap device (`zswpwb`).
   ///
   /// See [Linux memory.stat](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
-  /// Since Linux 6.10; see the [upstream Linux 6.10 source](https://github.com/torvalds/linux/blob/v6.10/Documentation/admin-guide/cgroup-v2.rst).
+  /// Since Linux 6.8; see the [upstream Linux 6.8 source](https://github.com/torvalds/linux/blob/v6.8/mm/memcontrol.c).
   Zswpwb,
   /// Pages moved by automatic NUMA balancing (`numa_pages_migrated`).
   ///
@@ -378,6 +386,12 @@ pub enum MemoryStatPageField {
   ///
   /// Since Linux 6.15; see the [upstream Linux 6.15 source](https://github.com/torvalds/linux/blob/v6.15/Documentation/admin-guide/cgroup-v2.rst).
   PgdemoteProactive,
+  /// Pages promoted to a faster memory tier by automatic NUMA balancing (`pgpromote_success`).
+  ///
+  /// Requires `CONFIG_NUMA_BALANCING`. See [Linux memory.stat](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
+  ///
+  /// Since Linux 6.12; see the [upstream Linux 6.12 source](https://github.com/torvalds/linux/blob/v6.12/mm/memcontrol.c).
+  PgpromoteSuccess,
 }
 
 /// Keys in `memory.stat` whose values count events or hugepage objects.
@@ -434,10 +448,14 @@ pub enum MemoryStatCountField {
   /// Transparent hugepages swapped out without splitting (`thp_swpout`).
   ///
   /// See [Linux memory.stat](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
+  ///
+  /// Since Linux 6.7; see the [upstream Linux 6.7 source](https://github.com/torvalds/linux/blob/v6.7/mm/memcontrol.c).
   ThpSwpout,
   /// Transparent hugepages split into base pages before swapping out (`thp_swpout_fallback`).
   ///
   /// See [Linux memory.stat](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
+  ///
+  /// Since Linux 6.7; see the [upstream Linux 6.7 source](https://github.com/torvalds/linux/blob/v6.7/mm/memcontrol.c).
   ThpSwpoutFallback,
   /// NUMA hinting faults used to decide page placement (`numa_hint_faults`).
   ///
@@ -493,10 +511,11 @@ mod tests {
           zswap_incomp 4096
           pswpin 2
           thp_fault_alloc 1
+          pgpromote_success 11
         "},
         MemoryStat::expected(
           [(Anon, 8192), (File, 4096), (Kernel, 1024), (ZswapIncomp, 4096)],
-          [(PgscanDirect, 7), (Pswpin, 2)],
+          [(PgscanDirect, 7), (Pswpin, 2), (PgpromoteSuccess, 11)],
           [
             (WorkingsetRefaultFile, 5),
             (WorkingsetRefaultAnon, 6),

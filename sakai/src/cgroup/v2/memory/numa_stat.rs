@@ -10,12 +10,14 @@ use crate::{
   unit::{Bytes, Count, Pages},
 };
 
-/// A point-in-time, per-node breakdown from `memory.numa_stat`.
+/// A point-in-time, per-node breakdown for this cgroup and its descendants.
 ///
 /// The outer keys identify the same kinds of quantities as `memory.stat`.
 /// Inner keys are NUMA node IDs. Kernel versions and configurations may omit
 /// fields, and unknown future keys are ignored because their units are not
 /// defined by this type. The file can be absent without NUMA support.
+/// Only fields with per-node accounting are reported; missing fields and nodes
+/// are distinct from measured zero values.
 ///
 /// See [Linux `memory.numa_stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -112,7 +114,7 @@ mod tests {
   use super::{
     MemoryStatByteField::{Anon, File},
     MemoryStatCountField::WorkingsetRefaultFile,
-    MemoryStatPageField::PgdemoteDirect,
+    MemoryStatPageField::{PgdemoteDirect, PgpromoteSuccess},
     *,
   };
   use crate::parse::tests::{
@@ -130,19 +132,29 @@ mod tests {
           workingset_refault_file N2=3 N0=1
           anon N0=4096 N2=8192
           pgdemote_direct N2=5 N0=0
+          pgpromote_success N0=7 N2=11
         "},
         MemoryNumaStat {
           bytes: BTreeMap::from([
             (Anon, BTreeMap::from([(0, Bytes::new::<byte>(4096)), (2, Bytes::new::<byte>(8192))])),
             (File, BTreeMap::from([(0, Bytes::new::<byte>(1024)), (2, Bytes::new::<byte>(2048))])),
           ]),
-          pages: BTreeMap::from([(
-            PgdemoteDirect,
-            BTreeMap::from([
-              (0, Pages { value: 0, ..Default::default() }),
-              (2, Pages { value: 5, ..Default::default() }),
-            ]),
-          )]),
+          pages: BTreeMap::from([
+            (
+              PgdemoteDirect,
+              BTreeMap::from([
+                (0, Pages { value: 0, ..Default::default() }),
+                (2, Pages { value: 5, ..Default::default() }),
+              ]),
+            ),
+            (
+              PgpromoteSuccess,
+              BTreeMap::from([
+                (0, Pages { value: 7, ..Default::default() }),
+                (2, Pages { value: 11, ..Default::default() }),
+              ]),
+            ),
+          ]),
           counts: BTreeMap::from([(
             WorkingsetRefaultFile,
             BTreeMap::from([

@@ -1,7 +1,7 @@
 # Sakai
 
 A _read-only_ Rust cgroup v2 library. While kernel reads require Linux, the
-parsers are OS-independent. Python bindings are work in progress.
+parsers are OS-independent. Linux Python bindings expose the same readers.
 
 The `sakai` crate supports Rust 1.88 and newer. This is a fixed minimum,
 not a policy that tracks the latest stable release. Raising it requires an
@@ -33,7 +33,8 @@ return `NotCgroupV2`; hybrid hosts may expose a v2 hierarchy without CPU control
 Missing interfaces return `Error::FileMissing`, including root exemptions and
 files unavailable on older kernels. Other errors retain their cause.
 
-Every call reads fresh contents. Multiple reads are not an atomic snapshot.
+Every interface reader fetches fresh contents; snapshot getters inspect stored
+values. Multiple reads are not an atomic snapshot.
 `cpu.stat` usage includes descendants; its bandwidth counters describe its own
 limit. `cpu.stat.local` describes local runqueue throttling, including ancestor
 limits. Unknown CPU stat counters are ignored.
@@ -72,6 +73,15 @@ Configured lists and partition state are absent at the hierarchy root. Reads
 never change affinity or migrate memory. See the
 [kernel cpuset documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpuset-interface-files).
 
+Core readers also expose requested freeze state, subtree depth/descendant limits,
+process and thread membership, PSI accounting configuration, and local freeze
+time. `Cgroup::irq_pressure()` reads the separate full-only IRQ PSI format.
+Newer kernel counters and configuration remain optional.
+
+Memory protections (`memory.min`, `memory.low`) accept `max` as well as byte
+amounts, so their Rust snapshots use `MaxOr<Bytes>` and Python uses `MaxOr[int]`.
+This preserves valid kernel output instead of rejecting unlimited protection.
+
 The remaining cgroup v2 controllers are available through `Cgroup::hugetlb()`,
 `rdma()`, `dmem()`, and `misc()`, with equivalent Python readers. Huge-page
 filenames use validated `v2::hugetlb::PageSize` values; memory quantities stay
@@ -80,6 +90,10 @@ resource names remain map keys; RDMA maps use `v2::rdma::RdmaDevice` keys
 that preserve device names and optional indices. Optional newer-kernel files and root
 exemptions return `FileMissing`. See the [Python controller reference](sakai-python/README.md)
 and each Rust module for availability, snapshot semantics and units.
+
+The Linux audit and supported interface boundary are recorded in
+[the audit notes](design/cgroup-v2-linux-audit.md). BFQ-specific scheduler tuning
+and debug interfaces are outside the generic cgroup v2 reader surface.
 
 Linux notification handles observe changes independently of snapshot readers:
 

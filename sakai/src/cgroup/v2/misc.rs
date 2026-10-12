@@ -67,7 +67,7 @@ impl Misc<'_> {
   /// See the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn max(&self) -> Result<MiscMax, Error> { self.cgroup.parse(MiscMax::FILE_NAME) }
 
-  /// Hierarchical resource limit failures; absent at the hierarchy root.
+  /// Hierarchical resource limit or capacity failures; absent at the root.
   ///
   /// Reads a fresh [`MiscEvents`] snapshot. See [Linux misc interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#misc).
   ///
@@ -76,7 +76,7 @@ impl Misc<'_> {
   /// See the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn events(&self) -> Result<MiscEvents, Error> { self.cgroup.parse(MiscEvents::FILE_NAME) }
 
-  /// Failures at this cgroup’s own limit; since Linux 6.11, absent at the root.
+  /// Failures at this cgroup's limit or platform capacity; since Linux 6.11.
   ///
   /// Reads a fresh [`MiscEvents`] snapshot. See [Linux misc interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#misc).
   ///
@@ -235,17 +235,20 @@ impl FromStr for MiscMax {
   }
 }
 
-/// Resource limit failures from `misc.events` or `misc.events.local`.
+/// Resource limit or platform-capacity failures from `misc.events` or `misc.events.local`.
 ///
 /// `misc.events` aggregates limit-hit locations in this subtree. Local events
-/// count failures at this cgroup’s own limit, including descendant allocations;
+/// count failures at this cgroup's own limit or the platform capacity checked
+/// at this cgroup, including descendant allocations;
 /// they exclude events propagated from descendant limits. A subtree allocation
-/// rejected at an ancestor’s limit is counted at that ancestor.
+/// rejected at an ancestor's limit or capacity check is counted at that ancestor.
 /// Counts are volatile, cumulative failure events, not resource usage. Only
 /// `<resource>.max` fields are interpreted; unknown future event kinds are ignored.
 /// Since Linux 5.16 for events, and Linux 6.11 for local events. See
 /// [Linux 5.16 source](https://github.com/torvalds/linux/blob/v5.16/kernel/cgroup/misc.c) and
 /// [Linux 6.11 source](https://github.com/torvalds/linux/blob/v6.11/kernel/cgroup/misc.c).
+/// The implementation checks capacity alongside each cgroup limit; see
+/// [Linux charging](https://github.com/torvalds/linux/blob/master/kernel/cgroup/misc.c).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MiscEvents {
   resources: BTreeMap<String, Count>,
@@ -257,7 +260,7 @@ impl MiscEvents {
   /// Local miscellaneous-resource event interface filename.
   pub const LOCAL_FILE_NAME: &'static str = "misc.events.local";
 
-  /// Stored resource names mapped to cumulative max-boundary failure counts.
+  /// Stored resource names mapped to cumulative limit or capacity failure counts.
   ///
   /// A missing resource is absent, not a measured zero. Performs no I/O.
   #[must_use]

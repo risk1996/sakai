@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use crate::{
   error::{ParseError, ParseValueError},
-  parse::{KeyedFields, ParseCount, ParseMicroseconds},
+  parse::{KeyedFields, ParseCgroup, ParseMicroseconds},
   unit::{Count, Time},
 };
 
@@ -81,6 +81,8 @@ pub struct CpuTimeStat {
   usage: Time,
   user: Time,
   system: Time,
+  nice: Option<Time>,
+  force_idle: Option<Time>,
 }
 
 impl CpuTimeStat {
@@ -102,19 +104,40 @@ impl CpuTimeStat {
   #[must_use]
   pub const fn system(&self) -> Time { self.system }
 
+  /// Returns user time of positively niced tasks, already included in [`Self::user`].
+  ///
+  /// Since Linux 6.13; see the [Linux 6.13 source](https://github.com/torvalds/linux/blob/v6.13/kernel/cgroup/rstat.c).
+  /// `None` means the counter was not reported, rather than measured zero.
+  #[must_use]
+  pub const fn nice(&self) -> Option<Time> { self.nice }
+
+  /// Returns sibling CPU time forced idle by core scheduling for this subtree.
+  ///
+  /// This is separate from CPU usage. Since Linux 6.0 and available with
+  /// `CONFIG_SCHED_CORE`; see the [Linux 6.0 source](https://github.com/torvalds/linux/blob/v6.0/kernel/cgroup/rstat.c).
+  /// `None` means the counter was not reported, rather than measured zero.
+  #[must_use]
+  pub const fn force_idle(&self) -> Option<Time> { self.force_idle }
+
   fn from_fields(fields: &KeyedFields<'_>) -> Result<Self, ParseError<ParseValueError>> {
     Ok(Self {
       usage: fields.required::<ParseMicroseconds, _>(CpuStatField::UsageUsec)?,
       user: fields.required::<ParseMicroseconds, _>(CpuStatField::UserUsec)?,
       system: fields.required::<ParseMicroseconds, _>(CpuStatField::SystemUsec)?,
+      nice: fields.optional::<ParseMicroseconds, _>(CpuStatField::NiceUsec)?,
+      force_idle: fields.optional::<ParseMicroseconds, _>(CpuStatField::ForceIdleUsec)?,
     })
   }
 }
 
 /// CPU bandwidth counters from a cgroup's `cpu.stat` file.
 /// These are non-hierarchical: ancestor-imposed throttling is excluded.
+/// The kernel's period, throttling, and burst event counters are 32-bit and
+/// wrap; signed decimal output after the sign bit is set is exposed as the
+/// corresponding unsigned count. Do not assume snapshots are monotonic forever.
 ///
-/// See [Linux `cpu.stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
+/// See [Linux `cpu.stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files)
+/// and the [counter implementation](https://github.com/torvalds/linux/blob/v6.13/kernel/sched/sched.h).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CpuBandwidthStat {
   nr_periods: Count,
@@ -159,8 +182,8 @@ impl CpuBandwidthStat {
     };
 
     Ok(Self {
-      nr_periods: fields.required::<ParseCount, _>(CpuStatField::NrPeriods)?,
-      nr_throttled: fields.required::<ParseCount, _>(CpuStatField::NrThrottled)?,
+      nr_periods: fields.required::<ParseBandwidthCount, _>(CpuStatField::NrPeriods)?,
+      nr_throttled: fields.required::<ParseBandwidthCount, _>(CpuStatField::NrThrottled)?,
       throttled: fields.required::<ParseMicroseconds, _>(CpuStatField::ThrottledUsec)?,
       burst,
     })
@@ -193,9 +216,24 @@ impl CpuBurstStat {
 
   fn from_fields(fields: &KeyedFields<'_>) -> Result<Self, ParseError<ParseValueError>> {
     Ok(Self {
-      nr_bursts: fields.required::<ParseCount, _>(CpuStatField::NrBursts)?,
+      nr_bursts: fields.required::<ParseBandwidthCount, _>(CpuStatField::NrBursts)?,
       burst: fields.required::<ParseMicroseconds, _>(CpuStatField::BurstUsec)?,
     })
+  }
+}
+
+struct ParseBandwidthCount;
+
+impl ParseCgroup<ParseBandwidthCount> for Count {
+  type Error = ParseValueError;
+
+  fn parse_cgroup(value: &str) -> Result<Self, Self::Error> {
+    let value = if value.starts_with('-') {
+      u64::from(u32::from_ne_bytes(value.parse::<i32>()?.to_ne_bytes()))
+    } else {
+      value.parse()?
+    };
+    Ok(Self { value, ..Default::default() })
   }
 }
 
@@ -242,6 +280,9 @@ enum CpuStatField {
   UsageUsec,
   UserUsec,
   SystemUsec,
+  NiceUsec,
+  #[strum(serialize = "core_sched.force_idle_usec")]
+  ForceIdleUsec,
   NrPeriods,
   NrThrottled,
   ThrottledUsec,
@@ -279,6 +320,8 @@ mod tests {
         usage: Time::new::<microsecond>(usage),
         user: Time::new::<microsecond>(user),
         system: Time::new::<microsecond>(system),
+        nice: None,
+        force_idle: None,
       }
     }
   }
@@ -382,7 +425,7 @@ mod tests {
           system_usec 3
           future_counter nope
           usage_usec 1
-          nice_usec 4
+          future_usec 4
           user_usec 2
         "},
         Ok(CpuStat { time: CpuTimeStat::expected([1, 2, 3]), bandwidth: None }),
@@ -447,5 +490,38 @@ mod tests {
     assert_eq!(assert_ok!(input.parse::<CpuTimeStat>()), time);
     assert_eq!(assert_ok!(input.parse::<CpuBandwidthStat>()), bandwidth);
     assert_eq!(assert_ok!(input.parse::<CpuBurstStat>()), burst);
+  }
+
+  #[test]
+  fn preserves_optional_nice_and_core_scheduling_times() {
+    Cases::<CpuTimeStat>::check([
+      (
+        "usage_usec 10\nuser_usec 7\nsystem_usec 3\nnice_usec 2\ncore_sched.force_idle_usec 0\n",
+        Ok(CpuTimeStat {
+          nice: Some(Time::new::<microsecond>(2)),
+          force_idle: Some(Time::new::<microsecond>(0)),
+          ..CpuTimeStat::expected([10, 7, 3])
+        }),
+      ),
+      ("usage_usec 10\nuser_usec 7\nsystem_usec 3\nnice_usec nope\n", Err(Invalid("nice_usec", "nope"))),
+      (
+        "usage_usec 10\nuser_usec 7\nsystem_usec 3\ncore_sched.force_idle_usec 18446744073709552\n",
+        Err(Invalid("core_sched.force_idle_usec", "18446744073709552")),
+      ),
+    ]);
+  }
+
+  #[test]
+  fn preserves_wrapped_signed_bandwidth_counter_output() {
+    Cases::<CpuBandwidthStat>::check([
+      (
+        "nr_periods -2147483648\nnr_throttled -1\nthrottled_usec 0\nnr_bursts -2147483647\nburst_usec 0\n",
+        Ok(CpuBandwidthStat::expected(
+          [2_147_483_648, 4_294_967_295, 0],
+          Some(CpuBurstStat::expected([2_147_483_649, 0])),
+        )),
+      ),
+      ("nr_periods -2147483649\nnr_throttled 0\nthrottled_usec 0", Err(Invalid("nr_periods", "-2147483649"))),
+    ]);
   }
 }

@@ -1,17 +1,17 @@
 # cgroup v2 metrics TODO
 
-Implement the read-only cgroup v2 surface in priority order. Finish all CPU
-items before starting memory. The implemented P0–P4 interfaces are in the
-initial release scope on both the Rust and Python sides. P5 adds read-only event
-delivery on both sides; P6 adds the remaining read-only controllers. P7 and later
-work is deferred.
+The implemented P0–P6 interfaces are in the initial release scope on both
+the Rust and Python sides. This inventory covers generic cgroup v2 interfaces
+and documented statistics, including optional newer-kernel files. Scheduler-
+specific BFQ tuning/debug interfaces and write-only actions are outside this
+read surface. P7 and later work is deferred.
 
 An interface item is complete when it has a typed public reader, key-based
 parsing where applicable, fixtures for supported and missing/older-kernel
 forms, documented volatility and units, and a Linux live test where the file
 is expected to exist. Missing optional files must return `FileMissing`.
 
-## P0 — CPU (complete first)
+## P0 — CPU
 
 - [x] `cpu.stat` — usage, user, system, and optional bandwidth counters; parse
       times as microseconds and tolerate bandwidth keys missing when the
@@ -29,8 +29,9 @@ is expected to exist. Missing optional files must return `FileMissing`.
 - [x] `cpu.max.burst` — burst duration in microseconds, not a frequency.
 - [x] `cpu.weight.nice` — validated nice value in `-20..=19`.
 - [x] `cpu.idle` — boolean idle scheduling state.
+- [x] Optional `cpu.stat` nice and forced-idle time counters.
 
-## P1 — Memory (start only after P0)
+## P1 — Memory
 
 - [x] `memory.current` — current hierarchical memory usage in bytes.
 - [x] `memory.max` — hard limit as `MaxOr<Bytes>`.
@@ -43,8 +44,8 @@ is expected to exist. Missing optional files must return `FileMissing`.
       time; never write to the file on the read path.
 - [x] `memory.peak` — peak usage in bytes; document that reset semantics are
       per file descriptor on kernels that support writes.
-- [x] `memory.low` — best-effort memory protection in bytes.
-- [x] `memory.min` — hard memory protection in bytes.
+- [x] `memory.low` — best-effort memory protection as `MaxOr<Bytes>`.
+- [x] `memory.min` — hard memory protection as `MaxOr<Bytes>`.
 - [x] `memory.oom.group` — boolean group OOM policy.
 - [x] `memory.events.local` — local, non-hierarchical memory event counters.
 - [x] `memory.swap.current` — current swap usage in bytes.
@@ -62,12 +63,22 @@ files. Treat that as `FileMissing`, not a parse failure or panic.
 
 ## P2 — Process and cgroup state
 
-- [x] `pids.current` — current process count; it may temporarily exceed the
+- [x] `pids.current` — hierarchical task count, including threads; it may exceed the
       configured maximum.
+- [x] `pids.peak` — peak hierarchical task count.
 - [x] `pids.max` — process limit as `MaxOr<Count>`.
 - [x] `pids.events` — hierarchical process-limit event counters.
+- [x] `pids.events.local` — local limit-event counters, accounting for mount options.
 - [x] `cgroup.events` — populated and frozen state for lifecycle monitoring.
 - [x] `cgroup.stat` — descendant and subsystem state counters.
+- [x] `cgroup.stat.local` — local requested-freeze time.
+- [x] `cgroup.type` — typed domain/threaded topology.
+- [x] `cgroup.procs`, `cgroup.threads` — observed process and thread IDs.
+- [x] `cgroup.controllers`, `cgroup.subtree_control` — controller availability and child enablement.
+- [x] `cgroup.max.depth`, `cgroup.max.descendants` — subtree limits.
+- [x] `cgroup.freeze` — requested freeze state.
+- [x] `cgroup.pressure` — configured PSI accounting enablement.
+- [x] `irq.pressure` — full-only IRQ pressure snapshot.
 
 ## P3 — I/O
 
@@ -76,6 +87,9 @@ files. Treat that as `FileMissing`, not a parse failure or panic.
 - [x] `io.weight` — default and per-device weights.
 - [x] `io.max` — per-device bandwidth and IOPS limits.
 - [x] `io.latency` — per-device latency targets where supported.
+- [x] `io.cost.qos`, `io.cost.model` — root-level I/O cost configuration.
+- [x] `io.prio.class` — I/O priority-class policy.
+- [x] Documented `io.stat` latency and cost fields.
 
 ## P4 — CPU and memory placement
 
@@ -84,6 +98,8 @@ files. Treat that as `FileMissing`, not a parse failure or panic.
 - [x] `cpuset.mems` — configured memory-node ID list.
 - [x] `cpuset.mems.effective` — effective memory-node ID list.
 - [x] `cpuset.cpus.partition` — partition state.
+- [x] `cpuset.cpus.exclusive`, `cpuset.cpus.exclusive.effective` — requested and granted exclusive CPUs.
+- [x] `cpuset.cpus.isolated` — root isolated CPUs.
 
 ## P5 — Event delivery
 
@@ -95,8 +111,8 @@ files. Treat that as `FileMissing`, not a parse failure or panic.
 
 - [x] `hugetlb.*` — typed per-page-size usage, limit, event, and reservation
       interfaces.
-- [x] `rdma.*` — typed per-device RDMA current and maximum resources.
-- [x] `dmem.*` — typed device-memory capacity and usage interfaces.
+- [x] `rdma.*` — typed per-device RDMA current, peak, maximum, and event resources.
+- [x] `dmem.*` — typed device-memory capacity, current, peak, protections, and limits.
 - [x] `misc.*` — typed miscellaneous-resource current, maximum, and event
       interfaces.
 

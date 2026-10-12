@@ -5,9 +5,11 @@
 
 use std::{collections::BTreeMap, str::FromStr};
 
+pub use cost::{IoCostControl, IoCostModel, IoCostModelName, IoCostQos, IoDeviceCostModel, IoDeviceCostQos};
 pub use latency::IoLatency;
 pub use max::{IoDeviceMax, IoMax};
-pub use stat::{IoDeviceStat, IoStat};
+pub use priority::IoPriorityClass;
+pub use stat::{DelayUsage, IoDeviceStat, IoStat};
 pub use weight::{IoWeight, Weight};
 
 #[cfg(target_os = "linux")]
@@ -19,8 +21,10 @@ use crate::{
   parse::KeyedFields,
 };
 
+mod cost;
 mod latency;
 mod max;
+mod priority;
 mod stat;
 mod weight;
 
@@ -83,6 +87,37 @@ impl Io<'_> {
   ///
   /// See the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn latency(&self) -> Result<IoLatency, Error> { self.cgroup.parse(IoLatency::FILE_NAME) }
+
+  /// Reads the device I/O cost controller's QoS configuration at the root.
+  ///
+  /// Requires `CONFIG_BLK_CGROUP_IOCOST`; automatic values can change between reads.
+  /// See [Linux I/O interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
+  ///
+  /// # Errors
+  ///
+  /// See the shared [interface-read errors](crate::v2#interface-read-errors);
+  /// non-root cgroups lack this interface.
+  pub fn cost_qos(&self) -> Result<IoCostQos, Error> { self.cgroup.parse(IoCostQos::FILE_NAME) }
+
+  /// Reads the device I/O cost models at the root.
+  ///
+  /// Requires `CONFIG_BLK_CGROUP_IOCOST`; model rates are inputs rather than measured usage.
+  /// See [Linux I/O interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
+  ///
+  /// # Errors
+  ///
+  /// See the shared [interface-read errors](crate::v2#interface-read-errors);
+  /// non-root cgroups lack this interface.
+  pub fn cost_model(&self) -> Result<IoCostModel, Error> { self.cgroup.parse(IoCostModel::FILE_NAME) }
+
+  /// Reads the I/O request-priority policy, including at the root.
+  ///
+  /// Requires `CONFIG_BLK_CGROUP_IOPRIO`; see [`IoPriorityClass`].
+  ///
+  /// # Errors
+  ///
+  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  pub fn priority_class(&self) -> Result<IoPriorityClass, Error> { self.cgroup.parse(IoPriorityClass::FILE_NAME) }
 }
 
 /// A block-device identifier keyed by the kernel's decimal `major:minor` pair.

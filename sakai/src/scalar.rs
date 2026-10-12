@@ -84,11 +84,51 @@ where
 pub mod interface {
   use super::Interface;
 
+  /// Marker for the cgroup's own freeze request.
+  #[derive(Clone, Copy, PartialEq, Eq, Hash)]
+  pub struct CgroupFreeze;
+  impl Interface for CgroupFreeze {
+    const FIELD: &'static str = "freeze";
+    const FILE_NAME: &'static str = "cgroup.freeze";
+  }
+
+  /// Marker for the configured descendant depth limit.
+  #[derive(Clone, Copy, PartialEq, Eq, Hash)]
+  pub struct CgroupMaxDepth;
+  impl Interface for CgroupMaxDepth {
+    const FIELD: &'static str = "depth";
+    const FILE_NAME: &'static str = "cgroup.max.depth";
+  }
+
+  /// Marker for the configured descendant cgroup count limit.
+  #[derive(Clone, Copy, PartialEq, Eq, Hash)]
+  pub struct CgroupMaxDescendants;
+  impl Interface for CgroupMaxDescendants {
+    const FIELD: &'static str = "descendants";
+    const FILE_NAME: &'static str = "cgroup.max.descendants";
+  }
+
+  /// Marker for the local pressure accounting enable flag.
+  #[derive(Clone, Copy, PartialEq, Eq, Hash)]
+  pub struct CgroupPressure;
+  impl Interface for CgroupPressure {
+    const FIELD: &'static str = "pressure";
+    const FILE_NAME: &'static str = "cgroup.pressure";
+  }
+
   #[derive(Clone, Copy, PartialEq, Eq, Hash)]
   pub struct PidsCurrent;
   impl Interface for PidsCurrent {
     const FIELD: &'static str = "current";
     const FILE_NAME: &'static str = "pids.current";
+  }
+
+  /// Marker for the historical task count peak.
+  #[derive(Clone, Copy, PartialEq, Eq, Hash)]
+  pub struct PidsPeak;
+  impl Interface for PidsPeak {
+    const FIELD: &'static str = "peak";
+    const FILE_NAME: &'static str = "pids.peak";
   }
 
   #[derive(Clone, Copy, PartialEq, Eq, Hash)]

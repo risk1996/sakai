@@ -62,7 +62,9 @@ class KubernetesResourceTest(unittest.TestCase):
   def test_memory_request_protection(self) -> None:
     request_bytes = int(os.environ["MEMORY_REQUEST_BYTES"])
     # Kubernetes v1.32 sets memory.min from requests.memory only with MemoryQoS.
-    self.assertEqual(self.group.memory().min(), request_bytes)
+    minimum = self.group.memory().min()
+    self.assertFalse(minimum.is_max)
+    self.assertEqual(minimum.value, request_bytes)
 
 
 if __name__ == "__main__":

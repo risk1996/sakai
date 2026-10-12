@@ -268,6 +268,12 @@ jobs:
           test -r /dev/kvm && test -w /dev/kvm || { echo 'KVM unavailable: runner must permit access to /dev/kvm' >&2; exit 1; }
           chmod +x tests/.cache/sakai-vmtest/bin/linux_live tests/.cache/sakai-vmtest/bin/xtask
 
+      - name: Cache the versioned kernel fixture
+        uses: actions/cache@v6
+        with:
+          path: tests/.cache/sakai-vmtest/kernels/bzImage-v${{ matrix.kernel }}-archlinux
+          key: vmtest-kernel-v1-x86_64-${{ matrix.kernel }}-${{ hashFiles('xtask/src/vmtest/kernel.rs') }}
+
       - name: Test cgroup v2 against Linux ${{ matrix.kernel }}
         shell: bash
         env:

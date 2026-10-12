@@ -6,9 +6,12 @@ use pyo3::{
   prelude::*,
   types::{IntoPyDict, PyMappingProxy},
 };
-use sakai::v2::core::{CgroupEvents as CoreCgroupEvents, CgroupStat as CoreCgroupStat};
+use sakai::v2::core::{
+  CgroupEvents as CoreCgroupEvents, CgroupStat as CoreCgroupStat, CgroupStatLocal as CoreCgroupStatLocal,
+};
+use uom::si::time::nanosecond;
 
-use super::PythonError;
+use super::{MaxOr, PythonError};
 
 /// Immutable lifecycle snapshot; states can change immediately after a read.
 #[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
@@ -28,6 +31,9 @@ impl From<CoreCgroupEvents> for CgroupEvents {
 ///
 /// Subsystem maps use controller names, including unknown names. Missing
 /// counters are absent from the maps, rather than zero. All mappings are read-only.
+/// Subsystem counts, available since Linux 6.12, include this cgroup and its
+/// descendants. Properties inspect stored snapshots without performing I/O.
+/// See https://github.com/torvalds/linux/blob/v6.12/kernel/cgroup/cgroup.c.
 #[pyclass(frozen, module = "sakai._sakai")]
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct CgroupStat {
@@ -75,7 +81,31 @@ impl CgroupStat {
   }
 }
 
-/// Fresh reads of cgroup topology, controller, and lifecycle files.
+/// Immutable local freezer accounting from cgroup.stat.local, since Linux 6.18.
+///
+/// Cumulative duration includes ancestor-imposed freezing and an active freeze
+/// interval. It starts when freezing is requested, without waiting for the
+/// frozen state; it is neither CPU time nor the sum of descendants' durations.
+/// Properties inspect stored snapshots without I/O.
+/// See https://github.com/torvalds/linux/blob/v6.18/kernel/cgroup/cgroup.c.
+#[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct CgroupStatLocal {
+  /// Stored cumulative local freezing duration in integer nanoseconds.
+  frozen_time_ns: u64,
+}
+
+impl From<CoreCgroupStatLocal> for CgroupStatLocal {
+  fn from(value: CoreCgroupStatLocal) -> Self { Self { frozen_time_ns: value.frozen_time().get::<nanosecond>() } }
+}
+
+/// Fresh reads of cgroup topology, membership, configuration, and lifecycle files.
+///
+/// Each call performs read-only I/O; separate calls are not atomic. Missing
+/// interfaces raise InterfaceMissingError, malformed contents raise
+/// CgroupParseError, unsupported reads raise NotSupportedError, and other
+/// operating-system failures raise OSError with their cause and interface path.
+/// See https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files.
 #[pyclass(frozen, module = "sakai._sakai")]
 pub(super) struct CoreReader {
   pub(super) owner: Arc<sakai::Cgroup>,
@@ -83,6 +113,29 @@ pub(super) struct CoreReader {
 
 #[pymethods]
 impl CoreReader {
+  /// Read process IDs in the reader's PID namespace, preserving order and duplicates.
+  ///
+  /// Excludes descendants and zombies. A threaded domain reports its entire
+  /// threaded subtree; reading from a threaded cgroup raises NotSupportedError.
+  /// IDs may be recycled during a read and do not pin processes. Zero entries
+  /// represent tasks invisible in the reader's PID namespace. See CoreReader
+  /// for other read errors and the Linux interface reference.
+  fn procs(&self, py: Python<'_>) -> PyResult<Vec<i32>> {
+    PythonError::read(py, &self.owner, |owner| owner.core().procs())
+      .map(|values| values.into_iter().map(|value| value.into_inner()).collect())
+  }
+
+  /// Read this cgroup's thread IDs in the reader's PID namespace.
+  ///
+  /// Excludes descendants, preserves order and possible duplicates, and accepts
+  /// empty membership. Zero entries represent namespace-invisible tasks.
+  /// IDs can be recycled while reading. See CoreReader for
+  /// read errors and the Linux interface reference.
+  fn threads(&self, py: Python<'_>) -> PyResult<Vec<i32>> {
+    PythonError::read(py, &self.owner, |owner| owner.core().threads())
+      .map(|values| values.into_iter().map(|value| value.into_inner()).collect())
+  }
+
   /// Read volatile populated and frozen state; root cgroups lack this interface.
   fn events(&self, py: Python<'_>) -> PyResult<CgroupEvents> {
     PythonError::read(py, &self.owner, |owner| owner.core().events()).map(Into::into)
@@ -91,6 +144,49 @@ impl CoreReader {
   /// Read volatile descendant and subsystem counts, including at the hierarchy root.
   fn stat(&self, py: Python<'_>) -> PyResult<CgroupStat> {
     PythonError::read(py, &self.owner, |owner| owner.core().stat()).map(Into::into)
+  }
+
+  /// Read cumulative local freezing time, including ancestor-imposed freezing.
+  ///
+  /// Since Linux 6.18; the root lacks this interface. See CgroupStatLocal for
+  /// timing semantics and CoreReader for read errors.
+  fn stat_local(&self, py: Python<'_>) -> PyResult<CgroupStatLocal> {
+    PythonError::read(py, &self.owner, |owner| owner.core().stat_local()).map(Into::into)
+  }
+
+  /// Read this cgroup's own freeze request as bool, excluding ancestor requests.
+  ///
+  /// This is configuration, not completed freezing; use events().frozen for
+  /// observed state. The root lacks this file. See CoreReader for read errors.
+  fn freeze(&self, py: Python<'_>) -> PyResult<bool> {
+    PythonError::read(py, &self.owner, |owner| owner.core().freeze()).map(|value| value.value())
+  }
+
+  /// Read the configured maximum descendant depth as MaxOr[int] cgroup levels.
+  ///
+  /// Zero prevents children; max removes this cgroup's restriction. Ancestor
+  /// restrictions still apply. Available at the root. See CoreReader for errors.
+  fn max_depth(&self, py: Python<'_>) -> PyResult<MaxOr> {
+    PythonError::read(py, &self.owner, |owner| owner.core().max_depth()).map(|value| MaxOr::from_count(value.value()))
+  }
+
+  /// Read the maximum descendant cgroup count, excluding this cgroup, as MaxOr[int].
+  ///
+  /// Zero prevents children; max removes this cgroup's restriction. Ancestors
+  /// still restrict creation, and existing descendants may exceed a lowered
+  /// limit. Available at the root. See CoreReader for read errors.
+  fn max_descendants(&self, py: Python<'_>) -> PyResult<MaxOr> {
+    PythonError::read(py, &self.owner, |owner| owner.core().max_descendants())
+      .map(|value| MaxOr::from_count(value.value()))
+  }
+
+  /// Read whether pressure stall accounting is enabled locally as bool.
+  ///
+  /// Since Linux 6.1; requires CONFIG_PSI and enabled kernel PSI support.
+  /// Disabling accounting here does not disable descendants. Available at the
+  /// root. See CoreReader for read errors and the Linux interface reference.
+  fn pressure_enabled(&self, py: Python<'_>) -> PyResult<bool> {
+    PythonError::read(py, &self.owner, |owner| owner.core().pressure_enabled()).map(|value| value.value())
   }
 
   /// Read the cgroup type: domain, domain threaded, domain invalid, or threaded.
@@ -129,6 +225,11 @@ mod tests {
   fn preserves_process_limits_states_and_immutable_subsystem_counts() {
     Python::initialize();
     Python::attach(|py| {
+      let local = CgroupStatLocal::from(assert_ok!("frozen_usec 123456".parse::<CoreCgroupStatLocal>()));
+      assert_eq!(local, CgroupStatLocal { frozen_time_ns: 123_456_000 });
+      let object = assert_ok!(Py::new(py, local));
+      assert_eq!(assert_ok!(assert_ok!(object.bind(py).getattr("frozen_time_ns")).extract::<u64>()), 123_456_000);
+      assert!(assert_err!(object.bind(py).setattr("frozen_time_ns", 0)).is_instance_of::<PyAttributeError>(py));
       for (input, expected) in [("0", Some(0)), ("18446744073709551615", Some(u64::MAX)), ("max", None)] {
         let limit = MaxOr::from_count(assert_ok!(input.parse::<sakai::v2::pids::PidsMax>()).value());
         assert_eq!(limit.is_max(), expected.is_none());

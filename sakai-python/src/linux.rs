@@ -3,23 +3,26 @@
 use pyo3::{prelude::*, types::PyModule};
 
 use self::{
-  core::{CgroupEvents, CgroupStat, CoreReader},
+  core::{CgroupEvents, CgroupStat, CgroupStatLocal, CoreReader},
   cpu::{CpuBandwidthStat, CpuBurstStat, CpuMax, CpuReader, CpuStat, CpuStatLocal, CpuTimeStat, CpuWeight},
   cpuset::{CpuList, CpusetPartition, CpusetReader, MemoryNodeList},
-  dmem::{DmemCapacity, DmemCurrent, DmemLimits, DmemReader},
+  dmem::{DmemCapacity, DmemCurrent, DmemLimits, DmemPeak, DmemReader},
   errors::{
     CgroupParseError, DeletedCgroupError, InterfaceMissingError, NotCgroupV2Error, NotSupportedError, PythonError,
     SakaiError,
   },
   handle::Cgroup,
   hugetlb::{HugetlbEvents, HugetlbNumaStat, HugetlbReader},
-  io::{IoDeviceMax, IoDeviceStat, IoLatency, IoMax, IoReader, IoStat, IoWeight},
+  io::{
+    IoCostModel, IoCostQos, IoDeviceCostModel, IoDeviceCostQos, IoDeviceMax, IoDeviceStat, IoLatency, IoMax, IoReader,
+    IoStat, IoWeight,
+  },
   limit::MaxOr,
   memory::{MemoryEventCounts, MemoryNumaStat, MemoryReader, MemoryStat, SwapEvents, SwapReader, ZswapReader},
   misc::{MiscCapacity, MiscCurrent, MiscEvents, MiscMax, MiscPeak, MiscReader},
   notification::{ChangeNotification, ConfigurationWatcher, EventPoller},
   pids::{PidsEvents, PidsReader},
-  pressure::{Pressure, PressureLine},
+  pressure::{IrqPressure, Pressure, PressureLine},
   rdma::{
     RdmaCurrent, RdmaDeviceCurrent, RdmaDeviceEvents, RdmaDeviceMax, RdmaEvents, RdmaMax, RdmaReader,
     RdmaResourceEvents,
@@ -69,6 +72,7 @@ fn _sakai(module: &Bound<'_, PyModule>) -> PyResult<()> {
   module.add_class::<DmemReader>()?;
   module.add_class::<DmemCapacity>()?;
   module.add_class::<DmemCurrent>()?;
+  module.add_class::<DmemPeak>()?;
   module.add_class::<DmemLimits>()?;
   module.add_class::<MiscReader>()?;
   module.add_class::<MiscCapacity>()?;
@@ -90,6 +94,10 @@ fn _sakai(module: &Bound<'_, PyModule>) -> PyResult<()> {
   module.add_class::<IoMax>()?;
   module.add_class::<IoDeviceMax>()?;
   module.add_class::<IoLatency>()?;
+  module.add_class::<IoCostQos>()?;
+  module.add_class::<IoDeviceCostQos>()?;
+  module.add_class::<IoCostModel>()?;
+  module.add_class::<IoDeviceCostModel>()?;
   module.add_class::<SwapReader>()?;
   module.add_class::<ZswapReader>()?;
   module.add_class::<CoreReader>()?;
@@ -97,6 +105,7 @@ fn _sakai(module: &Bound<'_, PyModule>) -> PyResult<()> {
   module.add_class::<PidsEvents>()?;
   module.add_class::<CgroupEvents>()?;
   module.add_class::<CgroupStat>()?;
+  module.add_class::<CgroupStatLocal>()?;
   module.add_class::<CpuStat>()?;
   module.add_class::<CpuStatLocal>()?;
   module.add_class::<CpuTimeStat>()?;
@@ -105,6 +114,7 @@ fn _sakai(module: &Bound<'_, PyModule>) -> PyResult<()> {
   module.add_class::<CpuMax>()?;
   module.add_class::<CpuWeight>()?;
   module.add_class::<Pressure>()?;
+  module.add_class::<IrqPressure>()?;
   module.add_class::<PressureLine>()?;
   module.add_class::<MemoryStat>()?;
   module.add_class::<MemoryEventCounts>()?;

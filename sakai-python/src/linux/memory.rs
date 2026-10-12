@@ -28,12 +28,13 @@ impl MemoryReader {
   /// Return a compressed swap reader that retains this pinned cgroup handle.
   fn zswap(&self) -> ZswapReader { ZswapReader { owner: Arc::clone(&self.owner) } }
 
-  /// Read current memory usage in bytes.
+  /// Read current memory usage of this cgroup and its descendants, in bytes.
   fn current(&self, py: Python<'_>) -> PyResult<u64> {
     PythonError::read(py, &self.owner, |owner| owner.memory().current()).map(|value| value.value().get::<byte>())
   }
 
-  /// Read peak memory usage in bytes.
+  /// Read peak hierarchical memory usage since cgroup creation, in bytes.
+  /// This fresh read-only descriptor never resets the peak.
   fn peak(&self, py: Python<'_>) -> PyResult<u64> {
     PythonError::read(py, &self.owner, |owner| owner.memory().peak()).map(|value| value.value().get::<byte>())
   }
@@ -48,14 +49,16 @@ impl MemoryReader {
     PythonError::read(py, &self.owner, |owner| owner.memory().high()).map(|value| MaxOr::from_bytes(value.value()))
   }
 
-  /// Read the best-effort memory protection boundary in bytes.
-  fn low(&self, py: Python<'_>) -> PyResult<u64> {
-    PythonError::read(py, &self.owner, |owner| owner.memory().low()).map(|value| value.value().get::<byte>())
+  /// Read best-effort memory protection as `max` or a concrete byte count.
+  /// Ancestor boundaries and sibling competition affect effective protection.
+  fn low(&self, py: Python<'_>) -> PyResult<MaxOr> {
+    PythonError::read(py, &self.owner, |owner| owner.memory().low()).map(|value| MaxOr::from_bytes(value.value()))
   }
 
-  /// Read the hard memory protection boundary in bytes.
-  fn min(&self, py: Python<'_>) -> PyResult<u64> {
-    PythonError::read(py, &self.owner, |owner| owner.memory().min()).map(|value| value.value().get::<byte>())
+  /// Read hard memory protection as `max` or a concrete byte count.
+  /// Ancestor boundaries and sibling competition affect effective protection.
+  fn min(&self, py: Python<'_>) -> PyResult<MaxOr> {
+    PythonError::read(py, &self.owner, |owner| owner.memory().min()).map(|value| MaxOr::from_bytes(value.value()))
   }
 
   /// Read whether the OOM killer treats this cgroup as one workload.
@@ -157,13 +160,19 @@ impl SwapReader {
       .map(|value| MaxOr::from_bytes(value.value()))
   }
 
-  /// Read swap threshold and allocation failure counters.
+  /// Read swap threshold and allocation failure counters for this cgroup and descendants.
+  ///
+  /// With the cgroup2 memory_localevents mount option, only this cgroup's events
+  /// are reported; parent counters exclude descendant failures.
   fn events(&self, py: Python<'_>) -> PyResult<SwapEvents> {
     PythonError::read(py, &self.owner, |owner| owner.memory().swap().events()).map(Into::into)
   }
 }
 
-/// Immutable swap threshold and allocation failure counters.
+/// Immutable swap threshold and allocation failure counters, including descendants.
+///
+/// With the cgroup2 memory_localevents mount option, events do not propagate to
+/// ancestors and these counters describe only the cgroup that was read.
 #[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct SwapEvents {
@@ -189,7 +198,7 @@ pub(super) struct ZswapReader {
 
 #[pymethods]
 impl ZswapReader {
-  /// Read memory consumed by the zswap compression backend in bytes.
+  /// Read zswap compression-backend memory for this cgroup and descendants, in bytes.
   fn current(&self, py: Python<'_>) -> PyResult<u64> {
     PythonError::read(py, &self.owner, |owner| owner.memory().zswap().current())
       .map(|value| value.value().get::<byte>())
@@ -201,7 +210,9 @@ impl ZswapReader {
       .map(|value| MaxOr::from_bytes(value.value()))
   }
 
-  /// Read the configured disk writeback policy; an ancestor can disable it.
+  /// Read this cgroup's configured disk writeback policy.
+  /// Since Linux 6.11, an ancestor can disable effective writeback. The policy
+  /// does not block disk swap when zswap is disabled globally.
   fn writeback(&self, py: Python<'_>) -> PyResult<bool> {
     PythonError::read(py, &self.owner, |owner| owner.memory().zswap().writeback()).map(|value| value.value())
   }
@@ -210,7 +221,7 @@ impl ZswapReader {
 /// Memory statistics grouped by their native units.
 ///
 /// Keys retain the kernel's snake_case names. Unknown kernel fields are
-/// ignored; each exposed mapping is read-only.
+/// ignored; each exposed mapping is read-only. Missing fields differ from zero.
 #[pyclass(frozen, module = "sakai._sakai")]
 pub(super) struct MemoryStat {
   bytes: BTreeMap<&'static str, u64>,
@@ -267,10 +278,11 @@ impl MemoryValues {
   }
 }
 
-/// Immutable per-NUMA-node memory statistics grouped by native units.
+/// Immutable per-NUMA-node memory statistics for this cgroup and descendants.
 ///
 /// Outer keys retain kernel field names; inner keys are integer NUMA node IDs.
 /// Both levels of every mapping are read-only. Unknown fields are ignored.
+/// Only fields with per-node accounting are reported; missing values differ from zero.
 #[pyclass(frozen, module = "sakai._sakai")]
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct MemoryNumaStat {

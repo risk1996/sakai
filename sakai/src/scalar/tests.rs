@@ -36,8 +36,8 @@ fn retains_each_interface_contract() {
   MemoryPeak::contract("memory.peak", "peak", "123", Bytes::new::<byte>(123));
   MemoryMax::contract("memory.max", "max", "123", MaxOr::Value(Bytes::new::<byte>(123)));
   MemoryHigh::contract("memory.high", "high", "123", MaxOr::Value(Bytes::new::<byte>(123)));
-  MemoryLow::contract("memory.low", "low", "123", Bytes::new::<byte>(123));
-  MemoryMin::contract("memory.min", "min", "123", Bytes::new::<byte>(123));
+  MemoryLow::contract("memory.low", "low", "123", MaxOr::Value(Bytes::new::<byte>(123)));
+  MemoryMin::contract("memory.min", "min", "123", MaxOr::Value(Bytes::new::<byte>(123)));
   SwapCurrent::contract("memory.swap.current", "current", "123", Bytes::new::<byte>(123));
   SwapPeak::contract("memory.swap.peak", "peak", "123", Bytes::new::<byte>(123));
   SwapMax::contract("memory.swap.max", "max", "123", MaxOr::Value(Bytes::new::<byte>(123)));
@@ -78,6 +78,8 @@ fn parses_scalar_encodings() {
   ]);
   Cases::<MemoryCurrent>::bytes("current", MemoryCurrent::new);
   Cases::<MemoryMax>::limit("max", MemoryMax::new);
+  Cases::<MemoryLow>::limit("low", MemoryLow::new);
+  Cases::<MemoryMin>::limit("min", MemoryMin::new);
   Cases::<CpuIdle>::boolean("idle", CpuIdle::new);
   Cases::<CpuMaxBurst>::check([
     ("0\n", Ok(CpuMaxBurst::new(Time::new::<microsecond>(0)))),

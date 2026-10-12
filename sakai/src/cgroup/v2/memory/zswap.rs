@@ -24,7 +24,7 @@ pub struct Zswap<'a> {
 
 #[cfg(target_os = "linux")]
 impl Zswap<'_> {
-  /// Memory consumed by this cgroup's zswap compression backend.
+  /// Memory consumed by the zswap compression backend for this cgroup and descendants.
   ///
   /// Reads a fresh [`ZswapCurrent`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
@@ -48,7 +48,7 @@ impl Zswap<'_> {
   /// See the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn max(&self) -> Result<ZswapMax, Error> { self.cgroup.parse(ZswapMax::FILE_NAME) }
 
-  /// Whether disk swap writeback is enabled for this cgroup.
+  /// This cgroup's configured disk swap writeback policy.
   ///
   /// Reads a fresh [`ZswapWriteback`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
@@ -61,7 +61,7 @@ impl Zswap<'_> {
   pub fn writeback(&self) -> Result<ZswapWriteback, Error> { self.cgroup.parse(ZswapWriteback::FILE_NAME) }
 }
 
-/// Memory consumed by the zswap compression backend in bytes.
+/// Memory consumed by the zswap compression backend for this cgroup and descendants, in bytes.
 ///
 /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
 ///
@@ -82,7 +82,9 @@ pub type ZswapMax = Scalar<MaxOr<Bytes>, interface::ZswapMax>;
 /// Disk swap writeback policy reported by `memory.zswap.writeback`.
 ///
 /// Disabling writeback also disables swapping to disk when a zswap store
-/// fails. An ancestor that disables writeback also disables it for children.
+/// fails, while zswap is enabled globally. This value is the local configured
+/// policy. Since Linux 6.11, an ancestor that disables writeback also disables
+/// it for children; see the [Linux 6.11 implementation](https://github.com/torvalds/linux/blob/v6.11/mm/memcontrol.c).
 ///
 /// See [Linux `memory.zswap.writeback` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
 ///

@@ -83,6 +83,8 @@ impl Memory<'_> {
 
   /// Live memory event counters for this cgroup and its descendants.
   ///
+  /// A cgroup2 mount with `memory_localevents` reports this cgroup only.
+  ///
   /// Reads a fresh [`MemoryEvents`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
   /// # Errors
@@ -110,6 +112,9 @@ impl Memory<'_> {
 
   /// Live PSI averages and totals. Never registers a pressure trigger.
   ///
+  /// This is a core PSI interface, so it does not require the memory controller.
+  /// PSI configuration and per-cgroup accounting settings affect availability.
+  ///
   /// Reads a fresh [`Pressure`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
   /// # Errors
@@ -135,7 +140,7 @@ impl Memory<'_> {
   /// See the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn high(&self) -> Result<MemoryHigh, Error> { self.cgroup.parse(MemoryHigh::FILE_NAME) }
 
-  /// Configuration snapshot of this cgroup's best-effort memory protection.
+  /// Configuration snapshot of this cgroup's best-effort memory protection, in bytes or `max`.
   ///
   /// Reads a fresh [`MemoryLow`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
@@ -144,7 +149,7 @@ impl Memory<'_> {
   /// See the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn low(&self) -> Result<MemoryLow, Error> { self.cgroup.parse(MemoryLow::FILE_NAME) }
 
-  /// Configuration snapshot of this cgroup's hard memory protection.
+  /// Configuration snapshot of this cgroup's hard memory protection, in bytes or `max`.
   ///
   /// Reads a fresh [`MemoryMin`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
@@ -257,15 +262,19 @@ pub type MemoryHigh = Scalar<MaxOr<Bytes>, interface::MemoryHigh>;
 ///
 /// Reclaim avoids memory below the effective low boundary while unprotected
 /// memory is available. Ancestor settings can reduce the effective protection.
+/// `max` requests protection for all memory charged to this cgroup; it does not
+/// bypass ancestor boundaries or protection shared with siblings.
 ///
 /// See [Linux `memory.low` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-pub type MemoryLow = Scalar<Bytes, interface::MemoryLow>;
+pub type MemoryLow = Scalar<MaxOr<Bytes>, interface::MemoryLow>;
 
 /// The hard memory protection configured by `memory.min`.
 ///
 /// Memory below the effective min boundary cannot be reclaimed. If no
 /// unprotected reclaimable memory remains, an OOM kill can follow. Ancestor
 /// settings can reduce the effective protection.
+/// `max` requests protection for all memory charged to this cgroup; it does not
+/// bypass ancestor boundaries or protection shared with siblings.
 ///
 /// See [Linux `memory.min` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-pub type MemoryMin = Scalar<Bytes, interface::MemoryMin>;
+pub type MemoryMin = Scalar<MaxOr<Bytes>, interface::MemoryMin>;

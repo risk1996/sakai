@@ -69,6 +69,9 @@ impl Swap<'_> {
 
   /// Swap high, max, and allocation failure counters.
   ///
+  /// Includes descendant events unless the cgroup2 mount uses `memory_localevents`.
+  /// With that option, only events originating in this cgroup are reported.
+  ///
   /// Reads a fresh [`SwapEvents`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
   /// # Errors
@@ -112,10 +115,15 @@ pub type SwapHigh = Scalar<MaxOr<Bytes>, interface::SwapHigh>;
 
 /// Swap event counters reported by `memory.swap.events`.
 ///
+/// Counters include events in this cgroup and its descendants unless the cgroup2
+/// mount uses `memory_localevents`. With that option, events do not propagate to
+/// ancestors, so parent counters exclude descendant failures.
 /// The `high` counter is absent on older kernels. Unknown future keys are
 /// ignored; known counters must contain valid unsigned event counts.
 ///
 /// See [Linux `memory.swap.events` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
+/// The [event propagation implementation](https://github.com/torvalds/linux/blob/v6.12/include/linux/memcontrol.h)
+/// applies the mount option to both memory and swap events.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SwapEvents {
   high: Option<Count>,

@@ -6,7 +6,10 @@ use pyo3::{
   prelude::*,
   types::{IntoPyDict, PyDict, PyMappingProxy},
 };
-use sakai::v2::dmem::{DmemCapacity as CoreDmemCapacity, DmemCurrent as CoreDmemCurrent, DmemLimits as CoreDmemLimits};
+use sakai::v2::dmem::{
+  DmemCapacity as CoreDmemCapacity, DmemCurrent as CoreDmemCurrent, DmemLimits as CoreDmemLimits,
+  DmemPeak as CoreDmemPeak,
+};
 use uom::si::information::byte;
 
 use super::{MaxOr, PythonError};
@@ -41,15 +44,31 @@ impl DmemReader {
     PythonError::read(py, &self.owner, |owner| owner.dmem().capacity()).map(Into::into)
   }
 
-  /// Read current hierarchical device-memory usage in bytes per region.
+  /// Read current hierarchical device-memory usage as MaxOr[int] bytes per region.
   ///
   /// Counts include this cgroup and its descendants and can change immediately
   /// after a read. Zero is measured zero; an absent key means the region was
   /// not reported. Kernel implementations also expose this file at the root,
   /// although the interface guide describes it as non-root. Since Linux 6.14;
   /// see DmemReader for read errors and the Linux interface reference.
+  ///
+  /// max preserves the kernel's PAGE_COUNTER_MAX sentinel; it is not an
+  /// unlimited configured limit. The sentinel depends on kernel architecture
+  /// and system page size. See https://github.com/torvalds/linux/blob/v6.14/kernel/cgroup/dmem.c.
   fn current(&self, py: Python<'_>) -> PyResult<DmemCurrent> {
     PythonError::read(py, &self.owner, |owner| owner.dmem().current()).map(Into::into)
+  }
+
+  /// Read historical hierarchical device-memory peaks as MaxOr[int] bytes.
+  ///
+  /// Since Linux 7.3 release candidates; non-root only. Each region records an
+  /// independent lifetime peak, including transient charges later canceled by
+  /// ancestor-limit failures. max preserves the PAGE_COUNTER_MAX sentinel;
+  /// reading never resets peaks. Region removal removes its history. See
+  /// https://github.com/torvalds/linux/blob/v7.3-rc1/kernel/cgroup/dmem.c and
+  /// DmemReader for read errors.
+  fn peak(&self, py: Python<'_>) -> PyResult<DmemPeak> {
+    PythonError::read(py, &self.owner, |owner| owner.dmem().peak()).map(Into::into)
   }
 
   /// Read configured hard eviction protections as MaxOr[int] byte amounts.
@@ -115,25 +134,50 @@ impl DmemCapacity {
 /// region; an empty map is valid. Usage and region membership may change between
 /// reads. Properties inspect stored values without I/O. Since Linux 6.14; see
 /// DmemReader for the Linux interface reference.
+/// max preserves the kernel's PAGE_COUNTER_MAX sentinel, not an unlimited
+/// configured limit; its numeric boundary depends on kernel architecture and
+/// system page size. Finite quantities are byte amounts wrapped in MaxOr[int].
 #[pyclass(frozen, module = "sakai._sakai")]
-#[derive(Debug, PartialEq, Eq)]
 pub(super) struct DmemCurrent {
-  regions: BTreeMap<String, u64>,
+  regions: BTreeMap<String, MaxOr>,
 }
 
 impl From<CoreDmemCurrent> for DmemCurrent {
   fn from(value: CoreDmemCurrent) -> Self {
-    Self { regions: value.regions().iter().map(|(name, value)| (name.clone(), value.get::<byte>())).collect() }
+    Self { regions: value.regions().iter().map(|(name, value)| (name.clone(), MaxOr::from_bytes(*value))).collect() }
   }
 }
 
 #[pymethods]
 impl DmemCurrent {
-  /// Read-only mapping from opaque region names to integer hierarchical bytes.
+  /// Read-only mapping from opaque region names to MaxOr[int] hierarchical bytes.
   #[getter]
-  fn regions(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
-    Ok(PyMappingProxy::new(py, (&self.regions).into_py_dict(py)?.as_mapping()).unbind())
+  fn regions(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> { region_values(py, &self.regions) }
+}
+
+/// Immutable hierarchical device-memory peak snapshot, since Linux 7.3 release candidates.
+///
+/// Each region maps to MaxOr[int] bytes. max preserves the kernel's
+/// PAGE_COUNTER_MAX sentinel, not an unlimited configured limit. Region peaks
+/// are independent and lifetime-scoped; device removal removes their history.
+/// Properties inspect stored snapshots without I/O; reads never reset peaks.
+/// See https://github.com/torvalds/linux/blob/v7.3-rc1/kernel/cgroup/dmem.c.
+#[pyclass(frozen, module = "sakai._sakai")]
+pub(super) struct DmemPeak {
+  regions: BTreeMap<String, MaxOr>,
+}
+
+impl From<CoreDmemPeak> for DmemPeak {
+  fn from(value: CoreDmemPeak) -> Self {
+    Self { regions: value.regions().iter().map(|(name, value)| (name.clone(), MaxOr::from_bytes(*value))).collect() }
   }
+}
+
+#[pymethods]
+impl DmemPeak {
+  /// Read-only mapping from opaque region names to MaxOr[int] historical byte peaks.
+  #[getter]
+  fn regions(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> { region_values(py, &self.regions) }
 }
 
 /// Immutable configuration from dmem.max, dmem.min, or dmem.low.
@@ -160,13 +204,15 @@ impl From<CoreDmemLimits> for DmemLimits {
 impl DmemLimits {
   /// Read-only mapping from opaque region names to immutable MaxOr[int] bytes.
   #[getter]
-  fn regions(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
-    let dict = PyDict::new(py);
-    for (name, value) in &self.regions {
-      dict.set_item(name, Py::new(py, *value)?)?;
-    }
-    Ok(PyMappingProxy::new(py, dict.as_mapping()).unbind())
+  fn regions(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> { region_values(py, &self.regions) }
+}
+
+fn region_values(py: Python<'_>, regions: &BTreeMap<String, MaxOr>) -> PyResult<Py<PyMappingProxy>> {
+  let dict = PyDict::new(py);
+  for (name, value) in regions {
+    dict.set_item(name, Py::new(py, *value)?)?;
   }
+  Ok(PyMappingProxy::new(py, dict.as_mapping()).unbind())
 }
 
 #[cfg(test)]
@@ -186,15 +232,12 @@ mod tests {
         ("drm/0000:03:00.0/stolen".to_owned(), 0),
         ("future/device".to_owned(), u64::MAX),
       ]);
-      let current = assert_ok!(Py::new(py, DmemCurrent::from(assert_ok!(input.parse::<CoreDmemCurrent>()))));
       let capacity = assert_ok!(Py::new(py, DmemCapacity::from(assert_ok!(input.parse::<CoreDmemCapacity>()))));
-      for object in [current.into_any(), capacity.into_any()] {
-        let mapping = assert_ok!(object.bind(py).getattr("regions"));
-        let copied = assert_ok!(py.get_type::<PyDict>().call1((&mapping,)));
-        assert_eq!(assert_ok!(copied.extract::<BTreeMap<String, u64>>()), expected);
-        assert!(assert_err!(mapping.set_item("future/device", 1)).is_instance_of::<PyTypeError>(py));
-        assert!(assert_err!(object.bind(py).setattr("regions", 1)).is_instance_of::<PyAttributeError>(py));
-      }
+      let mapping = assert_ok!(capacity.bind(py).getattr("regions"));
+      let copied = assert_ok!(py.get_type::<PyDict>().call1((&mapping,)));
+      assert_eq!(assert_ok!(copied.extract::<BTreeMap<String, u64>>()), expected);
+      assert!(assert_err!(mapping.set_item("future/device", 1)).is_instance_of::<PyTypeError>(py));
+      assert!(assert_err!(capacity.bind(py).setattr("regions", 1)).is_instance_of::<PyAttributeError>(py));
       assert!(DmemCurrent::from(assert_ok!("".parse::<CoreDmemCurrent>())).regions.is_empty());
       assert!(DmemCapacity::from(assert_ok!("".parse::<CoreDmemCapacity>())).regions.is_empty());
     });
@@ -205,24 +248,29 @@ mod tests {
     Python::initialize();
     Python::attach(|py| {
       for input in ["device 18446744073709551615\nother max\nzero 0", ""] {
-        let snapshot = DmemLimits::from(assert_ok!(input.parse::<CoreDmemLimits>()));
-        let object = assert_ok!(Py::new(py, snapshot));
-        let mapping = assert_ok!(object.bind(py).getattr("regions"));
-        if input.is_empty() {
-          assert_eq!(assert_ok!(mapping.len()), 0);
-        } else {
-          for (name, expected) in [("device", Some(u64::MAX)), ("other", None), ("zero", Some(0))] {
-            let limit = assert_ok!(mapping.get_item(name));
-            assert_eq!(assert_ok!(assert_ok!(limit.getattr("is_max")).extract::<bool>()), expected.is_none());
-            match expected {
-              | Some(expected) => assert_eq!(assert_ok!(assert_ok!(limit.getattr("value")).extract::<u64>()), expected),
-              | None => assert!(assert_err!(limit.getattr("value")).is_instance_of::<PyValueError>(py)),
+        let limits = assert_ok!(Py::new(py, DmemLimits::from(assert_ok!(input.parse::<CoreDmemLimits>()))));
+        let current = assert_ok!(Py::new(py, DmemCurrent::from(assert_ok!(input.parse::<CoreDmemCurrent>()))));
+        let peak = assert_ok!(Py::new(py, DmemPeak::from(assert_ok!(input.parse::<CoreDmemPeak>()))));
+        for object in [limits.into_any(), current.into_any(), peak.into_any()] {
+          let mapping = assert_ok!(object.bind(py).getattr("regions"));
+          if input.is_empty() {
+            assert_eq!(assert_ok!(mapping.len()), 0);
+          } else {
+            for (name, expected) in [("device", Some(u64::MAX)), ("other", None), ("zero", Some(0))] {
+              let limit = assert_ok!(mapping.get_item(name));
+              assert_eq!(assert_ok!(assert_ok!(limit.getattr("is_max")).extract::<bool>()), expected.is_none());
+              match expected {
+                | Some(expected) => {
+                  assert_eq!(assert_ok!(assert_ok!(limit.getattr("value")).extract::<u64>()), expected)
+                },
+                | None => assert!(assert_err!(limit.getattr("value")).is_instance_of::<PyValueError>(py)),
+              }
+              assert!(assert_err!(limit.setattr("value", 0)).is_instance_of::<PyAttributeError>(py));
             }
-            assert!(assert_err!(limit.setattr("value", 0)).is_instance_of::<PyAttributeError>(py));
           }
+          assert!(assert_err!(mapping.set_item("device", 1)).is_instance_of::<PyTypeError>(py));
+          assert!(assert_err!(object.bind(py).setattr("regions", 1)).is_instance_of::<PyAttributeError>(py));
         }
-        assert!(assert_err!(mapping.set_item("device", 1)).is_instance_of::<PyTypeError>(py));
-        assert!(assert_err!(object.bind(py).setattr("regions", 1)).is_instance_of::<PyAttributeError>(py));
       }
     });
   }

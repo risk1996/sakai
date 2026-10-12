@@ -8,7 +8,7 @@ matrix; newer interfaces depend on kernel version and configuration.
 
 ```toml
 [dependencies]
-sakai = "0.1"
+sakai = "0.1.0-alpha.1"
 ```
 
 ## Read a cgroup on Linux
@@ -27,13 +27,16 @@ fn main() -> Result<(), sakai::Error> {
 fn main() {}
 ```
 
-CPU, memory, process-count, core, I/O, and cpuset readers open fresh read-only
+CPU, memory, task-count, core, I/O, cpuset, HugeTLB, RDMA, device-memory, and
+miscellaneous-resource readers open fresh read-only
 kernel interfaces. Each result is an owned snapshot. Getters inspect the stored
 snapshot; reading separate files does not produce an atomic snapshot.
 
 Times use nanoseconds, memory uses bytes, and counts have a separate quantity
-type. `MaxOr::Max` means no limit at this cgroup, while ancestors may still impose
-limits. `CpuMax::cpu_count()` is the quota/period ratio; it does not resolve
+type. For limit interfaces, `MaxOr::Max` means no limit at this cgroup, while
+ancestors may still impose limits. Other interfaces define the token's meaning
+separately; device-memory usage preserves a kernel counter sentinel.
+`CpuMax::cpu_count()` is the quota/period ratio; it does not resolve
 affinity, cpuset placement, ancestor limits, or scheduling policy.
 
 Discovery uses procfs membership and the caller's mount namespace instead of
