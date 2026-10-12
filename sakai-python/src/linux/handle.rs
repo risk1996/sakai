@@ -6,7 +6,7 @@ use pyo3::{exceptions::PyValueError, prelude::*};
 
 use super::{
   ConfigurationWatcher, CoreReader, CpuReader, CpusetReader, EventPoller, IoReader, MemoryReader, PidsReader,
-  PythonError,
+  PythonError, dmem::DmemReader, hugetlb::HugetlbReader, misc::MiscReader, rdma::RdmaReader,
 };
 
 pub(super) struct PythonPath;
@@ -83,6 +83,18 @@ impl Cgroup {
 
   /// Return a reader for per-device I/O statistics, pressure, and configuration.
   fn io(&self) -> IoReader { IoReader { owner: Arc::clone(&self.owner) } }
+
+  /// Return a pinned read-only reader for the hugetlb controller.
+  fn hugetlb(&self) -> HugetlbReader { HugetlbReader { owner: Arc::clone(&self.owner) } }
+
+  /// Return a pinned read-only reader for the rdma controller.
+  fn rdma(&self) -> RdmaReader { RdmaReader { owner: Arc::clone(&self.owner) } }
+
+  /// Return a pinned read-only reader for the dmem controller.
+  fn dmem(&self) -> DmemReader { DmemReader { owner: Arc::clone(&self.owner) } }
+
+  /// Return a pinned read-only reader for the misc controller.
+  fn misc(&self) -> MiscReader { MiscReader { owner: Arc::clone(&self.owner) } }
 
   /// Return a process-number reader; kernel PID counts include threads.
   fn pids(&self) -> PidsReader { PidsReader { owner: Arc::clone(&self.owner) } }

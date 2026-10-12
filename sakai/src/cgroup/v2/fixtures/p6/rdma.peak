@@ -1,0 +1,2 @@
+mlx4_0 hca_handle=2 hca_object=2000
+ocrdma1 hca_handle=1 hca_object=23

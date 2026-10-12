@@ -109,6 +109,143 @@ class ContractTest(unittest.TestCase):
       if maximum is not None:
         self.assertLessEqual(limit.value, maximum)
 
+  def test_misc_and_device_memory(self) -> None:
+    def check_counts(snapshot: Any, attribute: str) -> None:  # noqa: ANN401
+      values = getattr(snapshot, attribute)
+      self.assertIsInstance(values, Mapping)
+      self.check_frozen(snapshot, attribute)
+      self.check_readonly(values, "unused")
+      for name, value in values.items():
+        self.assertIsInstance(name, str)
+        self.check_unsigned(value)
+
+    def check_limits(snapshot: Any, attribute: str) -> None:  # noqa: ANN401
+      values = getattr(snapshot, attribute)
+      self.check_frozen(snapshot, attribute)
+      self.check_readonly(values, "unused")
+      for name, limit in values.items():
+        self.assertIsInstance(name, str)
+        self.check_limit(limit)
+
+    misc = self.pinned_reader(Cgroup.misc)
+    self.assertIsInstance(misc, sakai.MiscReader)
+    for method, result_type in [
+      ("capacity", sakai.MiscCapacity),
+      ("current", sakai.MiscCurrent),
+      ("peak", sakai.MiscPeak),
+      ("events", sakai.MiscEvents),
+      ("events_local", sakai.MiscEvents),
+    ]:
+      self.check_optional(
+        "misc." + method.replace("_", "."),
+        getattr(misc, method),
+        lambda value: check_counts(value, "resources"),
+        result_type,
+      )
+    self.check_optional(
+      "misc.max",
+      misc.max,
+      lambda value: check_limits(value, "resources"),
+      sakai.MiscMax,
+    )
+    dmem = self.pinned_reader(Cgroup.dmem)
+    self.assertIsInstance(dmem, sakai.DmemReader)
+    for method, result_type in [
+      ("capacity", sakai.DmemCapacity),
+      ("current", sakai.DmemCurrent),
+    ]:
+      self.check_optional(
+        "dmem." + method,
+        getattr(dmem, method),
+        lambda value: check_counts(value, "regions"),
+        result_type,
+      )
+    for method in ["min", "low", "max"]:
+      self.check_optional(
+        "dmem." + method,
+        getattr(dmem, method),
+        lambda value: check_limits(value, "regions"),
+        sakai.DmemLimits,
+      )
+
+  def test_rdma(self) -> None:
+    rdma = self.pinned_reader(Cgroup.rdma)
+    self.assertIsInstance(rdma, sakai.RdmaReader)
+
+    def check_rdma(snapshot: Any, kind: str) -> None:  # noqa: ANN401
+      self.check_frozen(snapshot, "devices")
+      self.check_readonly(snapshot.devices, ("unused", None))
+      for key, device in snapshot.devices.items():
+        self.assertIsInstance(key, tuple)
+        self.assertEqual(len(key), 2)
+        name, index = key
+        self.assertIsInstance(name, str)
+        if index is not None:
+          self.check_unsigned(index)
+          self.assertLessEqual(index, 2**32 - 1)
+        self.check_frozen(device, "hca_handle", "hca_object")
+        for value in [device.hca_handle, device.hca_object]:
+          if kind == "max":
+            self.check_limit(value)
+          elif kind == "events":
+            self.check_frozen(value, "max", "alloc_fail")
+            self.check_unsigned(value.max)
+            self.check_unsigned(value.alloc_fail)
+          else:
+            self.check_unsigned(value)
+
+    for method, result_type, kind in [
+      ("current", sakai.RdmaCurrent, "current"),
+      ("peak", sakai.RdmaCurrent, "current"),
+      ("max", sakai.RdmaMax, "max"),
+      ("events", sakai.RdmaEvents, "events"),
+      ("events_local", sakai.RdmaEvents, "events"),
+    ]:
+      self.check_optional(
+        "rdma." + method.replace("_", "."),
+        getattr(rdma, method),
+        lambda value, kind=kind: check_rdma(value, kind),
+        result_type,
+      )
+
+  def test_hugetlb(self) -> None:
+    huge = self.pinned_reader(Cgroup.hugetlb)
+    self.assertIsInstance(huge, sakai.HugetlbReader)
+    for size in ["2MB", "1GB"]:
+      for suffix, read, check, result_type in [
+        ("current", huge.current, self.check_unsigned, int),
+        ("max", huge.max, self.check_limit, MaxOr),
+        ("rsvd.current", huge.reserved_current, self.check_unsigned, int),
+        ("rsvd.max", huge.reserved_max, self.check_limit, MaxOr),
+        (
+          "events",
+          huge.events,
+          lambda value: self.check_unsigned(value.max),
+          sakai.HugetlbEvents,
+        ),
+        (
+          "events.local",
+          huge.events_local,
+          lambda value: self.check_unsigned(value.max),
+          sakai.HugetlbEvents,
+        ),
+        (
+          "numa_stat",
+          huge.numa_stat,
+          lambda value: self.check_unsigned(value.total),
+          sakai.HugetlbNumaStat,
+        ),
+      ]:
+        self.check_optional(
+          f"hugetlb.{size}.{suffix}",
+          lambda read=read, size=size: read(size),
+          cast("Callable[[Any], None]", check),
+          result_type,
+        )
+    for size in ["../2MB", "2mb", "2048KB", "0KB", "3MB"]:
+      with self.subTest(page_size=size), self.assertRaises(ValueError):
+        huge.current(size)
+
   def test_native_documentation(self) -> None:
     self.assertTrue(inspect.getdoc(native))
     # Verify one complete Rust-to-Python docstring; other wording may change.

@@ -6,30 +6,41 @@ use self::{
   core::{CgroupEvents, CgroupStat, CoreReader},
   cpu::{CpuBandwidthStat, CpuBurstStat, CpuMax, CpuReader, CpuStat, CpuStatLocal, CpuTimeStat, CpuWeight},
   cpuset::{CpuList, CpusetPartition, CpusetReader, MemoryNodeList},
+  dmem::{DmemCapacity, DmemCurrent, DmemLimits, DmemReader},
   errors::{
     CgroupParseError, DeletedCgroupError, InterfaceMissingError, NotCgroupV2Error, NotSupportedError, PythonError,
     SakaiError,
   },
   handle::Cgroup,
+  hugetlb::{HugetlbEvents, HugetlbNumaStat, HugetlbReader},
   io::{IoDeviceMax, IoDeviceStat, IoLatency, IoMax, IoReader, IoStat, IoWeight},
   limit::MaxOr,
   memory::{MemoryEventCounts, MemoryNumaStat, MemoryReader, MemoryStat, SwapEvents, SwapReader, ZswapReader},
+  misc::{MiscCapacity, MiscCurrent, MiscEvents, MiscMax, MiscPeak, MiscReader},
   notification::{ChangeNotification, ConfigurationWatcher, EventPoller},
   pids::{PidsEvents, PidsReader},
   pressure::{Pressure, PressureLine},
+  rdma::{
+    RdmaCurrent, RdmaDeviceCurrent, RdmaDeviceEvents, RdmaDeviceMax, RdmaEvents, RdmaMax, RdmaReader,
+    RdmaResourceEvents,
+  },
 };
 
 mod core;
 mod cpu;
 mod cpuset;
+mod dmem;
 mod errors;
 mod handle;
+mod hugetlb;
 mod io;
 mod limit;
 mod memory;
+mod misc;
 mod notification;
 mod pids;
 mod pressure;
+mod rdma;
 
 /// Read-only Linux cgroup v2 bindings backed by sakai.
 #[pymodule(gil_used = true)]
@@ -44,6 +55,27 @@ fn _sakai(module: &Bound<'_, PyModule>) -> PyResult<()> {
   module.add_class::<EventPoller>()?;
   module.add_class::<ConfigurationWatcher>()?;
   module.add_class::<ChangeNotification>()?;
+  module.add_class::<HugetlbReader>()?;
+  module.add_class::<HugetlbEvents>()?;
+  module.add_class::<HugetlbNumaStat>()?;
+  module.add_class::<RdmaReader>()?;
+  module.add_class::<RdmaCurrent>()?;
+  module.add_class::<RdmaDeviceCurrent>()?;
+  module.add_class::<RdmaMax>()?;
+  module.add_class::<RdmaDeviceMax>()?;
+  module.add_class::<RdmaEvents>()?;
+  module.add_class::<RdmaDeviceEvents>()?;
+  module.add_class::<RdmaResourceEvents>()?;
+  module.add_class::<DmemReader>()?;
+  module.add_class::<DmemCapacity>()?;
+  module.add_class::<DmemCurrent>()?;
+  module.add_class::<DmemLimits>()?;
+  module.add_class::<MiscReader>()?;
+  module.add_class::<MiscCapacity>()?;
+  module.add_class::<MiscCurrent>()?;
+  module.add_class::<MiscPeak>()?;
+  module.add_class::<MiscMax>()?;
+  module.add_class::<MiscEvents>()?;
   module.add_class::<MaxOr>()?;
   module.add_class::<CpuReader>()?;
   module.add_class::<MemoryReader>()?;

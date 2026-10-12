@@ -1,6 +1,7 @@
 //! Read-only cgroup v2 interfaces. Parsers work on any OS; handles require Linux.
 //!
-//! `sakai` reads CPU, memory, task-count, I/O, and core cgroup state. Use
+//! `sakai` reads CPU, memory, placement, task counts, I/O, huge pages, RDMA,
+//! device memory, miscellaneous resources, and core cgroup state. Use
 //! `Cgroup` on Linux to discover a cgroup, then select a controller reader.
 //! Each read returns an owned snapshot: getters inspect that snapshot without
 //! doing more I/O. Reads of different files are not an atomic transaction.

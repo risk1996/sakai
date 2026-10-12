@@ -16,11 +16,15 @@ use super::{
   core::Core,
   cpu::Cpu,
   cpuset::Cpuset,
+  dmem::Dmem,
+  hugetlb::Hugetlb,
   io::Io,
   memory::Memory,
+  misc::Misc,
   notification::{ConfigurationInterface, ConfigurationWatcher, EventInterface, EventPoller},
   path::{CgroupPath, CgroupPathError},
   pids::Pids,
+  rdma::Rdma,
 };
 use crate::error::Error;
 
@@ -258,6 +262,26 @@ impl Cgroup {
   /// See [`crate::v2::io`] for the supported readers and [Linux cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html#controllers).
   pub fn io(&self) -> Io<'_> { Io { cgroup: self } }
 
+  /// Borrows this handle to read huge-page accounting and limits by page size.
+  ///
+  /// See [`crate::v2::hugetlb`] for units, availability and supported interfaces.
+  pub fn hugetlb(&self) -> Hugetlb<'_> { Hugetlb { cgroup: self } }
+
+  /// Borrows this handle to read per-device RDMA resources.
+  ///
+  /// See [`crate::v2::rdma`] for units, availability and supported interfaces.
+  pub fn rdma(&self) -> Rdma<'_> { Rdma { cgroup: self } }
+
+  /// Borrows this handle to read device-memory regions.
+  ///
+  /// See [`crate::v2::dmem`] for units, availability and supported interfaces.
+  pub fn dmem(&self) -> Dmem<'_> { Dmem { cgroup: self } }
+
+  /// Borrows this handle to read miscellaneous scalar resources.
+  ///
+  /// See [`crate::v2::misc`] for units, availability and supported interfaces.
+  pub fn misc(&self) -> Misc<'_> { Misc { cgroup: self } }
+
   /// Borrows this handle to read process-number controller interfaces.
   ///
   /// See [`crate::v2::pids`] for the supported readers and [Linux cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html#controllers).
@@ -305,11 +329,11 @@ impl Cgroup {
     ConfigurationWatcher::open(&self.directory, self.path.join(interface.filename()), interface)
   }
 
-  pub(crate) fn read(&self, file: &'static str) -> Result<String, Error> {
+  pub(crate) fn read(&self, file: &str) -> Result<String, Error> {
     super::file::read_file(&self.directory, file).map_err(|error| Error::read(self.path.join(file), error))
   }
 
-  pub(crate) fn parse<T: FromStr>(&self, file: &'static str) -> Result<T, Error>
+  pub(crate) fn parse<T: FromStr>(&self, file: &str) -> Result<T, Error>
   where
     T::Err: std::error::Error + Send + Sync + 'static, {
     self
@@ -341,7 +365,7 @@ mod tests {
 
   impl Cgroup {
     // Internal fixtures only: public constructors always verify filesystem magic.
-    fn fixture(relative: &str) -> Self {
+    pub(crate) fn fixture(relative: &str) -> Self {
       let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/cgroup/v2").join(relative);
       Self { directory: assert_ok!(fs::open(&path, DIRECTORY_FLAGS, Mode::empty())), path }
     }

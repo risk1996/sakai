@@ -2,7 +2,7 @@
 
 use std::{fmt::Debug, fs, io, path::PathBuf, process::Command, str::FromStr, time::Duration};
 
-use assertables::assert_ok;
+use assertables::{assert_ok, assert_some};
 use sakai::{
   Bytes, Cgroup, Error, MaxOr, Pressure,
   error::{ParseError, ParseValueError},
@@ -178,7 +178,7 @@ impl CgroupFixture {
     let controllers = fs::read_to_string(parent.join(CgroupController::CONTROLLERS_FILE_NAME))?;
     fs::write(parent.join(CgroupController::SUBTREE_CONTROL_FILE_NAME), "+cpu")?;
     fs::write(parent.join(CgroupController::SUBTREE_CONTROL_FILE_NAME), "+pids")?;
-    for controller in ["memory", "io", "cpuset"] {
+    for controller in ["memory", "io", "cpuset", "hugetlb", "rdma", "dmem", "misc"] {
       if controllers.split_ascii_whitespace().any(|available| available == controller) {
         fs::write(parent.join(CgroupController::SUBTREE_CONTROL_FILE_NAME), format!("+{controller}"))?;
       }
@@ -221,6 +221,32 @@ fn parses_live_delegated_controller_interfaces() {
 
   let fixture = assert_ok!(CgroupFixture::create());
   let reader = assert_ok!(Cgroup::from_path(&fixture.path));
+  assert_ok!(check_remaining_controllers(&reader));
+  let controllers = assert_ok!(reader.core().controllers());
+  if controllers.contains(&CgroupController::Rdma) {
+    assert_ok!(reader.rdma().current());
+    assert_ok!(reader.rdma().max());
+  }
+  if controllers.contains(&CgroupController::Dmem) {
+    assert_ok!(reader.dmem().current());
+    assert_ok!(reader.dmem().min());
+    assert_ok!(reader.dmem().low());
+    assert_ok!(reader.dmem().max());
+  }
+  if controllers.contains(&CgroupController::Misc) {
+    assert_ok!(reader.misc().current());
+    assert_ok!(reader.misc().max());
+  }
+  if controllers.contains(&CgroupController::Hugetlb) {
+    let size = assert_ok!("2MB".parse::<sakai::v2::hugetlb::PageSize>());
+    assert_ok!(reader.hugetlb().current(&size));
+    assert_ok!(reader.hugetlb().max(&size));
+    assert_ok!(reader.hugetlb().reserved_current(&size));
+    assert_ok!(reader.hugetlb().reserved_max(&size));
+    assert_ok!(reader.hugetlb().events(&size));
+    assert_ok!(reader.hugetlb().events_local(&size));
+  }
+
   let child_path = fixture.path.join("cpu.future");
   assert_ok!(fs::create_dir(&child_path));
   let child = assert_ok!(reader.child(std::ffi::OsStr::new("cpu.future")));
@@ -506,4 +532,82 @@ fn reads_root_placement_and_reports_configuration_exemptions() {
     },
     | false => {},
   }
+}
+
+#[test]
+fn reads_remaining_controllers_and_reports_unavailable_interfaces() {
+  let group = match Cgroup::from_current_process() {
+    | Ok(group) => group,
+    | Err(Error::NotCgroupV2) => return,
+    | Err(error) => panic!("cgroup discovery failed: {error}"),
+  };
+  assert_ok!(check_remaining_controllers(&group));
+  let membership = assert_ok!(CgroupPath::current());
+  let root = assert_ok!(Cgroup::from_path(membership.mount_point()));
+  assert_ok!(check_remaining_controllers(&root));
+}
+
+fn check_remaining_controllers(group: &Cgroup) -> io::Result<()> {
+  for (name, result) in [
+    ("misc.capacity", group.misc().capacity().map(|_| ())),
+    ("misc.current", group.misc().current().map(|_| ())),
+    ("misc.peak", group.misc().peak().map(|_| ())),
+    ("misc.max", group.misc().max().map(|_| ())),
+    ("misc.events", group.misc().events().map(|_| ())),
+    ("misc.events.local", group.misc().events_local().map(|_| ())),
+    ("dmem.capacity", group.dmem().capacity().map(|_| ())),
+    ("dmem.current", group.dmem().current().map(|_| ())),
+    ("dmem.min", group.dmem().min().map(|_| ())),
+    ("dmem.low", group.dmem().low().map(|_| ())),
+    ("dmem.max", group.dmem().max().map(|_| ())),
+    ("rdma.current", group.rdma().current().map(|_| ())),
+    ("rdma.peak", group.rdma().peak().map(|_| ())),
+    ("rdma.max", group.rdma().max().map(|_| ())),
+    ("rdma.events", group.rdma().events().map(|_| ())),
+    ("rdma.events.local", group.rdma().events_local().map(|_| ())),
+  ] {
+    check_present_or_missing(group, name, result)?;
+  }
+  // Discover available size labels from sysfs, independent of controller files.
+  // This checks missing controller/root files as well as supported interfaces.
+  let directory = match fs::read_dir("/sys/kernel/mm/hugepages") {
+    | Ok(directory) => directory,
+    | Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
+    | Err(error) => return Err(error),
+  };
+  for entry in directory {
+    let name = assert_ok!(entry).file_name();
+    let name = name.to_string_lossy();
+    let Some(kilobytes) = name.strip_prefix("hugepages-").and_then(|name| name.strip_suffix("kB")) else {
+      continue;
+    };
+    let bytes = assert_some!(assert_ok!(kilobytes.parse::<u64>()).checked_mul(1024));
+    let size = assert_ok!(sakai::v2::hugetlb::PageSize::try_new(Bytes::new::<byte>(bytes)));
+    let reader = group.hugetlb();
+    for (suffix, result) in [
+      ("current", reader.current(&size).map(|_| ())),
+      ("max", reader.max(&size).map(|_| ())),
+      ("rsvd.current", reader.reserved_current(&size).map(|_| ())),
+      ("rsvd.max", reader.reserved_max(&size).map(|_| ())),
+      ("events", reader.events(&size).map(|_| ())),
+      ("events.local", reader.events_local(&size).map(|_| ())),
+      ("numa_stat", reader.numa_stat(&size).map(|_| ())),
+    ] {
+      check_present_or_missing(group, &format!("hugetlb.{size}.{suffix}"), result)?;
+    }
+  }
+  Ok(())
+}
+
+fn check_present_or_missing(group: &Cgroup, name: &str, result: Result<(), Error>) -> io::Result<()> {
+  let path = group.path().join(name);
+  match fs::read_to_string(&path) {
+    | Ok(_) => result.map_err(io::Error::other)?,
+    | Err(error) if error.kind() == io::ErrorKind::NotFound => match result {
+      | Err(Error::FileMissing { path: missing }) if missing == path => {},
+      | unexpected => return Err(io::Error::other(format!("expected FileMissing at {path:?}, got {unexpected:?}"))),
+    },
+    | Err(error) => return Err(error),
+  }
+  Ok(())
 }
