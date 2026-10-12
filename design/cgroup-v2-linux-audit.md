@@ -53,6 +53,9 @@ reclaim and THP swap counters. Zswap writeback's ancestor policy applies since
 6.11; the configured local boolean alone does not describe effective policy.
 IRQ PSI exists since 6.1; runtime-disabled IRQ accounting reports an unsupported
 operation since 6.14. Root and hierarchy behavior are documented per interface.
+Swap events include descendants unless the cgroup2 mount uses `memory_localevents`,
+which stops propagation to ancestors for both memory and swap events; see the
+[event propagation implementation](https://github.com/torvalds/linux/blob/v6.12/include/linux/memcontrol.h).
 
 Reconciled the Rust/Python READMEs, stubs, TODO inventory, project direction,
 release checklists, and convenience-design reader inventory. Historical release

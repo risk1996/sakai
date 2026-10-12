@@ -212,10 +212,12 @@ Call the derived value `remaining_tasks`, not `remaining_processes` or
 
 ### Block I/O
 
-[`io/`](../sakai/src/cgroup/v2/io/) currently supplies `stat`, `pressure`,
-`weight`, `max`, and `latency`. In addition to new files, newer or optional
-fields in `io.stat` need a separate coverage check; the current stat snapshot
-exposes the six read/write/discard byte and operation counters.
+[`io/`](../sakai/src/cgroup/v2/io/) supplies `stat`, `pressure`, `weight`,
+`max`, `latency`, cost QoS/model, and priority-policy readers. The stat snapshot
+exposes the six read/write/discard byte and operation counters, plus optional
+queue depth, latency/window or missed/total observations, delay indicators and
+time, and cost accounting fields. Preserve each field's counter or gauge meaning
+when designing conveniences.
 
 | Interfaces or fields | Sakai coverage | Proposed convenience |
 | --- | --- | --- |
@@ -466,10 +468,10 @@ arbitrary universal “pressure is high” threshold. Extend the shared parser o
 when the resource's line shape is compatible; IRQ pressure requires its own
 documented shape.
 
-In the inspected upstream implementation, IRQ pressure reports only a `full`
-line. Sakai's current `Pressure` parser requires `some`, so reusing it unchanged
-would reject valid IRQ data. Verify the format and support conditions against
-the target release before adding the reader; see
+IRQ pressure reports only a `full` line. The existing `Cgroup::irq_pressure()`
+reader uses `IrqPressure` to preserve that shape; `Pressure` requires `some`
+and cannot parse IRQ output. Build IRQ conveniences from the full-only snapshot
+and retain its documented configuration and runtime support conditions; see
 [PSI output generation](https://github.com/torvalds/linux/blob/master/kernel/sched/psi.c).
 
 ### Map resolution and aggregation

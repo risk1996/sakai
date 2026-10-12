@@ -30,6 +30,9 @@ resolved in `devenv.lock`, on both platforms. QEMU comes from devenv on Linux
 and the container's Debian packages on macOS. Container images and kernel
 downloads have no manually maintained checksum pins. Kernel downloads use
 a file lock and atomic rename; remove a cached image to download it again.
+Transient network failures, HTTP 429, and server errors are retried up to three
+attempts, waiting 10 then 20 seconds between attempts. A valid HTTP 429
+`Retry-After` header overrides that backoff.
 Kernel images (including cache hits) and the container's vmtest executable
 are not independently checksum- or signature-verified. These paths trust
 upstream releases and local cache contents; locks and atomic rename do not
@@ -38,7 +41,9 @@ establish artifact authenticity.
 GitHub Actions builds the test executable and wrapper once, uploads them as a
 short-lived artifact, and runs a separate job for each kernel. The matrix comes
 from `cargo xtask kernel-matrix --profile smoke|full`, using the same Rust
-definitions as local runs. The manual
+definitions as local runs. Completed kernel images are cached separately per
+kernel and fixture definition, so subsequent jobs can avoid the upstream
+download. Partial downloads and test binaries are not part of that cache. The manual
 workflow has a `vmtest_debug` option to retain the full console on failure.
 See the [decision record](../../adr/e2e_live_linux_test.md) for the rationale.
 

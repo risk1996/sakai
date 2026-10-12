@@ -53,7 +53,7 @@ impl Kernel {
   const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
   const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(120);
   const MAX_DOWNLOAD_ATTEMPTS: u8 = 3;
-  const RETRY_DELAY: Duration = Duration::from_secs(2);
+  const RETRY_DELAY: Duration = Duration::from_secs(10);
 
   const fn new(name: &'static str, smoke: bool) -> Self { Self { name, smoke } }
 
@@ -87,8 +87,13 @@ impl Kernel {
       match Self::download_once(client, url, partial).await {
         | Ok(()) => return Ok(()),
         | Err(error) if attempt < Self::MAX_DOWNLOAD_ATTEMPTS && Self::retryable(&error) => {
-          eprintln!("kernel download attempt {attempt}/{} failed: {error:#}; retrying", Self::MAX_DOWNLOAD_ATTEMPTS);
-          tokio::time::sleep(RetryAfter::delay(&error, retry_delay)).await;
+          let backoff = retry_delay.checked_mul(u32::from(attempt)).context("kernel retry delay overflow")?;
+          let delay = RetryAfter::delay(&error, backoff);
+          eprintln!(
+            "kernel download attempt {attempt}/{} failed: {error:#}; retrying in {delay:?}",
+            Self::MAX_DOWNLOAD_ATTEMPTS
+          );
+          tokio::time::sleep(delay).await;
         },
         | Err(error) => {
           return Err(error).with_context(|| {
@@ -183,15 +188,24 @@ mod tests {
   async fn retries_transient_download_failures_with_a_fixed_budget() -> Result<()> {
     for (responses, expected_body, expected_requests) in [
       (vec![("503 Service Unavailable", "kernel"), ("200 OK", "kernel")], Some("kernel"), 2),
+      (
+        vec![("504 Gateway Timeout", "kernel"), ("504 Gateway Timeout", "kernel"), ("200 OK", "kernel")],
+        Some("kernel"),
+        3,
+      ),
       (vec![("429 Too Many Requests", "kernel"), ("200 OK", "kernel")], Some("kernel"), 2),
       (vec![("429 Too Many Requests\r\nRetry-After: 1", "kernel"), ("200 OK", "kernel")], Some("kernel"), 2),
       (vec![("200 OK", "par"), ("200 OK", "kernel")], Some("kernel"), 2),
       (vec![("503 Service Unavailable", "kernel"); 3], None, 3),
       (vec![("404 Not Found", "kernel")], None, 1),
     ] {
-      let server_delay = match responses.iter().any(|(status, _)| status.contains("Retry-After: 1")) {
-        | true => Duration::from_secs(1),
+      let retry_delay = match responses.iter().any(|(status, _)| status.starts_with("504")) {
+        | true => Duration::from_millis(10),
         | false => Duration::ZERO,
+      };
+      let minimum_delay = match responses.iter().any(|(status, _)| status.contains("Retry-After: 1")) {
+        | true => Duration::from_secs(1),
+        | false => retry_delay * 3,
       };
       let listener = TcpListener::bind("127.0.0.1:0")?;
       listener.set_nonblocking(true)?;
@@ -227,8 +241,8 @@ mod tests {
       fs::write(&partial, "stale incomplete response")?;
       let client = Client::builder().timeout(Duration::from_secs(5)).build()?;
       let started = Instant::now();
-      let result = Kernel::download(&client, &url, &partial, Duration::ZERO).await;
-      ensure!(started.elapsed() >= server_delay, "server's Retry-After interval was ignored");
+      let result = Kernel::download(&client, &url, &partial, retry_delay).await;
+      ensure!(started.elapsed() >= minimum_delay, "retry backoff or server's Retry-After interval was ignored");
       ensure!(result.is_ok() == expected_body.is_some(), "unexpected download result: {result:?}");
       if let Some(expected) = expected_body {
         ensure!(fs::read_to_string(&partial)? == expected, "retry did not replace partial download");

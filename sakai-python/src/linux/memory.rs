@@ -161,12 +161,18 @@ impl SwapReader {
   }
 
   /// Read swap threshold and allocation failure counters for this cgroup and descendants.
+  ///
+  /// With the cgroup2 memory_localevents mount option, only this cgroup's events
+  /// are reported; parent counters exclude descendant failures.
   fn events(&self, py: Python<'_>) -> PyResult<SwapEvents> {
     PythonError::read(py, &self.owner, |owner| owner.memory().swap().events()).map(Into::into)
   }
 }
 
 /// Immutable swap threshold and allocation failure counters, including descendants.
+///
+/// With the cgroup2 memory_localevents mount option, events do not propagate to
+/// ancestors and these counters describe only the cgroup that was read.
 #[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct SwapEvents {
