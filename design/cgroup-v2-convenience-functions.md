@@ -77,6 +77,8 @@ claims that the kernel provides an atomic resource-summary API.
 “Present” means Sakai has a typed read/parser surface in the inspected tree;
 it does not mean the proposed convenience exists. “Gap” means additional reader
 or parser work is needed. A field inside an existing file can still be a gap.
+The reader inventory was reconciled after the Linux implementation audit on
+2026-10-12; the convenience proposals remain design work.
 
 ### Core, lifecycle, and pressure
 
@@ -89,14 +91,14 @@ that every pressure file requires its corresponding resource controller.
 | --- | --- | --- |
 | `cgroup.events` | Present: populated and optional frozen | `is_empty()` as the inverse of populated; transitions between snapshots; explicit unknown frozen state |
 | `cgroup.stat` | Present: descendant and subsystem maps | Per-controller lookup; checked map comparisons; descendant-count changes without calling them creation rates |
-| `cgroup.type` | Used internally for handle validation; no public reader | Typed domain/threaded state and predicates that explain the valid scope of an operation |
-| `cgroup.procs`, `cgroup.threads` | Gap | Typed observed IDs, explicit deduplication, membership inspection; do not substitute their length for hierarchical task accounting |
-| `cgroup.controllers`, `cgroup.subtree_control` | Gap | Supported-controller sets, enabled-for-children sets, and set comparisons |
-| `cgroup.max.descendants`, `cgroup.max.depth` | Gap | Usage-versus-bound comparisons for subtree planning, with an explicit relative depth |
-| `cgroup.freeze`, `cgroup.stat.local` | Gap | Requested-versus-completed freeze summary; interval fraction from `frozen_usec` with its actual accounting meaning |
-| `cgroup.pressure` | Gap | Report PSI accounting configuration as part of pressure availability |
+| `cgroup.type` | Present: `Core::kind()` | Typed domain/threaded state and predicates that explain the valid scope of an operation |
+| `cgroup.procs`, `cgroup.threads` | Present | Typed observed IDs, explicit deduplication, membership inspection; do not substitute their length for hierarchical task accounting |
+| `cgroup.controllers`, `cgroup.subtree_control` | Present | Supported-controller sets, enabled-for-children sets, and set comparisons |
+| `cgroup.max.descendants`, `cgroup.max.depth` | Present | Usage-versus-bound comparisons for subtree planning, with an explicit relative depth |
+| `cgroup.freeze`, `cgroup.stat.local` | Present | Requested-versus-completed freeze summary; interval fraction from `frozen_usec` with its actual accounting meaning |
+| `cgroup.pressure` | Present: `Core::pressure_enabled()` | Report PSI accounting configuration as part of pressure availability |
 | `cpu.pressure`, `memory.pressure`, `io.pressure` | Present | Shared window selection and checked interval stall ratios |
-| `irq.pressure` | Gap | A resource-specific pressure parser and interval report; do not require the `some`/`full` shape of other PSI resources |
+| `irq.pressure` | Present: `Cgroup::irq_pressure()` | A resource-specific pressure parser and interval report; do not require the `some`/`full` shape of other PSI resources |
 | `cgroup.kill` | Write-only action | No metric getter; retain outside this read-only design |
 
 For core helpers, “empty” refers to observed population, not proof that the
@@ -193,9 +195,8 @@ historical maximum.
 
 ### Task count
 
-[`Pids`](../sakai/src/cgroup/v2/pids.rs) currently reads `current`, `max`, and
-`events`. The complete upstream file table also includes `pids.peak` and
-`pids.events.local`. Task accounting includes threads, and migration or lowering
+[`Pids`](../sakai/src/cgroup/v2/pids.rs) reads `current`, `max`, `peak`,
+`events`, and `events_local`. Task accounting includes threads, and migration or lowering
 a limit can leave usage above that limit. Local and hierarchical event
 interpretations also depend on the relevant mount behavior. See
 [the PID controller](https://github.com/torvalds/linux/blob/master/kernel/cgroup/pids.c).
@@ -204,7 +205,7 @@ interpretations also depend on the relevant mount behavior. See
 | --- | --- | --- |
 | `pids.current`, `pids.max` | Present | Remaining task slots, overage, usage ratio, and visible ancestor residual comparisons |
 | `pids.events` | Present | Checked limit-event differences and rates |
-| `pids.peak`, `pids.events.local` | Gap | Peak-to-limit comparison; local event differences |
+| `pids.peak`, `pids.events.local` | Present | Peak-to-limit comparison; local event differences |
 
 Call the derived value `remaining_tasks`, not `remaining_processes` or
 `can_fork`. Fork/clone can fail for reasons beyond cgroup PID limits.
@@ -222,9 +223,9 @@ exposes the six read/write/discard byte and operation counters.
 | `io.weight` | Present | `weight_for(device)` returns an override or the stored default |
 | `io.max` | Present | Local per-direction bandwidth/IOPS ratios using an interval rate; explicit absent-device fallback |
 | `io.latency` | Present | Per-device target lookup and observed-latency comparison when a compatible observation exists |
-| `io.stat` latency/debug/cost additions | Gap | Typed optional queue depth, latency/window or missed/total observations, delay and cost fields with their actual counter/gauge meanings |
-| `io.cost.qos`, `io.cost.model` | Gap | Root-level per-device configuration summaries and typed parameter lookup |
-| `io.prio.class` | Gap | Typed priority-policy summary |
+| `io.stat` documented latency/cost additions | Present | Typed optional queue depth, latency/window or missed/total observations, delay and cost fields with their actual counter/gauge meanings |
+| `io.cost.qos`, `io.cost.model` | Present | Root-level per-device configuration summaries and typed parameter lookup |
+| `io.prio.class` | Present | Typed priority-policy summary |
 | `io.pressure` | Present | Shared PSI conveniences |
 
 Use [`blk-iocost.c`](https://github.com/torvalds/linux/blob/master/block/blk-iocost.c)
@@ -264,8 +265,8 @@ store compact inclusive ranges and expose `ranges()`, lazy `ids()`, and
 | `cpuset.cpus`, `cpuset.cpus.effective` | Present | Range-based cardinality, emptiness, intersection, difference, subset testing |
 | `cpuset.mems`, `cpuset.mems.effective` | Present | The same operations on a distinct node-list type |
 | `cpuset.cpus.partition` | Present | Named state predicates retaining invalid reasons |
-| `cpuset.cpus.exclusive`, `cpuset.cpus.exclusive.effective` | Gap | Requested-versus-granted exclusive placement comparisons |
-| `cpuset.cpus.isolated` | Gap | Root-level isolated CPU inventory and explicit intersections |
+| `cpuset.cpus.exclusive`, `cpuset.cpus.exclusive.effective` | Present | Requested-versus-granted exclusive placement comparisons |
+| `cpuset.cpus.isolated` | Present | Root-level isolated CPU inventory and explicit intersections |
 
 The additional placement files and root flags are grounded in
 [the v2 cpuset file table](https://github.com/torvalds/linux/blob/master/kernel/cgroup/cpuset.c).
@@ -282,7 +283,7 @@ derived result without changing the parser's current contract.
 
 ### HugeTLB
 
-Sakai has no HugeTLB reader yet. Inspect the
+Sakai exposes typed HugeTLB readers. Inspect the
 [v2 HugeTLB source template](https://github.com/torvalds/linux/blob/master/mm/hugetlb_cgroup.c)
 for the complete per-page-size surface, including reservation interfaces not
 listed alongside the main usage files in the guide.
@@ -304,7 +305,7 @@ the v2 reader.
 
 ### RDMA
 
-Sakai has no RDMA reader yet. Current upstream exposes `rdma.current`,
+Sakai exposes the upstream RDMA interfaces: `rdma.current`,
 `rdma.max`, `rdma.peak`, `rdma.events`, and `rdma.events.local`, with handle
 and object resources. Newer output can disambiguate identical device names
 using an index. Keep device identity capable of representing that form and
@@ -320,7 +321,7 @@ identity can change across samples; detect that before deriving a rate.
 
 ### Device memory
 
-Sakai has no device-memory reader yet. Include `dmem.capacity`, `dmem.current`,
+Sakai exposes device-memory readers for `dmem.capacity`, `dmem.current`,
 `dmem.peak`, `dmem.max`, `dmem.min`, and `dmem.low`, keyed by region identity
 and measured in bytes. Capacity is a root-level interface. The source currently
 registers `current` without a non-root-only flag, despite the guide describing
@@ -338,7 +339,7 @@ without pretending to cover every driver's allocator or all physical VRAM.
 
 ### Miscellaneous resources
 
-Sakai has no misc reader yet. The relevant files are `misc.capacity`,
+Sakai exposes miscellaneous-resource readers for `misc.capacity`,
 `misc.current`, `misc.peak`, `misc.max`, `misc.events`, and
 `misc.events.local`. Capacity is root-only; current and peak can exist at root.
 Resource names are extensible, and charges remain with their owner until freed
@@ -617,14 +618,13 @@ The following phases are recommendations, not edits to the accepted
 | 2 | Checked CPU, event, I/O, and PSI differences plus fractional rates | Makes monitoring calculations reliable | Medium; rate units, optional-field outcomes, positive elapsed time |
 | 3 | Selected-interface collection and domain summaries | Combines useful reads with timing and partial-error reporting | Medium; session identity and selection design |
 | 4 | Bounded ancestor inspection with provenance; explicit CPU and shared-residual summaries | Explains visible constraints for budgeting | Larger; namespace boundaries, same-resource joins, partial results |
-| 5 | Missing standard readers: core metadata/state, PID peak/local events, exclusive/isolated cpusets, I/O cost/priority/debug fields, IRQ pressure | Completes common configuration and diagnostic questions | Medium; per-interface availability research and parser contracts |
-| 6 | HugeTLB, RDMA, DMEM, misc readers with comparisons and events | Brings specialist workloads the same conveniences | Larger; dynamic keys, controller-specific identity and fixtures |
-| 7 | Read-only notifications and explicit application-policy adapters | Reduces repeated sampling and supports caller-selected decisions | Larger; async/lifetime design; preserve read-only PSI scope |
+| 5 | Helpers over core metadata/state, PID peak/local events, exclusive/isolated cpusets, I/O cost/priority fields, and IRQ pressure | Completes common configuration and diagnostic questions | Medium; preserve the implemented reader contracts |
+| 6 | HugeTLB, RDMA, DMEM, misc comparisons and event differences | Brings specialist workloads the same conveniences | Larger; dynamic keys, controller-specific identity and fixtures |
+| 7 | Notification integration and explicit application-policy adapters | Reduces repeated sampling and supports caller-selected decisions | Larger; build on existing poll/inotify handles; preserve read-only PSI scope |
 
-Notification work can follow the existing P5 ordering if release priorities
-require it. Specialist controllers should reuse completed comparison/delta
-contracts when their readers land. Do not delay small pure helpers until the
-entire controller inventory is implemented.
+Notification integrations can build on the existing P5 handles. Specialist
+controller helpers should reuse completed comparison/delta contracts. Small
+pure helpers need not wait for application-policy integrations.
 
 Defer universal health scores, automatic parallelism changes, promised
 allocatable memory, guessed bandwidth from weights, whole-system resource

@@ -62,7 +62,7 @@ impl MiscReader {
     PythonError::read(py, &self.owner, |owner| owner.misc().events()).map(Into::into)
   }
 
-  /// Read failures at this cgroup’s own max boundary; since Linux 6.11.
+  /// Read failures at this cgroup's limit or platform capacity; since Linux 6.11.
   ///
   /// Performs fresh read-only I/O with the exception policy documented on MiscReader.
   fn events_local(&self, py: Python<'_>) -> PyResult<MiscEvents> {
@@ -148,8 +148,10 @@ impl MiscPeak {
 /// Cumulative resource max-boundary failures, with the scope of the selected file.
 ///
 /// Hierarchical events aggregate limit-hit locations in this subtree. Local
-/// events count hits at this cgroup’s own limit, including descendant requests;
-/// failures at an ancestor’s limit are counted at that ancestor.
+/// events count failures at this cgroup's own limit or its platform-capacity
+/// check, including descendant requests. Failures at an ancestor's limit or
+/// capacity check are counted at that ancestor.
+/// See https://github.com/torvalds/linux/blob/master/kernel/cgroup/misc.c.
 ///
 /// Immutable snapshot keyed by kernel resource names; values can change on the
 /// next read. Empty maps are valid. Omitted resources remain absent, distinct

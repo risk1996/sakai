@@ -110,8 +110,9 @@ pub type SwapMax = Scalar<MaxOr<Bytes>, interface::SwapMax>;
 /// See [Linux `memory.swap.high` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
 pub type SwapHigh = Scalar<MaxOr<Bytes>, interface::SwapHigh>;
 
-/// Swap event counters reported by `memory.swap.events`.
+/// Hierarchical swap event counters reported by `memory.swap.events`.
 ///
+/// Counters include events in this cgroup and its descendants.
 /// The `high` counter is absent on older kernels. Unknown future keys are
 /// ignored; known counters must contain valid unsigned event counts.
 ///

@@ -150,22 +150,20 @@ class ContractTest(unittest.TestCase):
     )
     dmem = self.pinned_reader(Cgroup.dmem)
     self.assertIsInstance(dmem, sakai.DmemReader)
-    for method, result_type in [
-      ("capacity", sakai.DmemCapacity),
-      ("current", sakai.DmemCurrent),
-    ]:
-      self.check_optional(
-        "dmem." + method,
-        getattr(dmem, method),
-        lambda value: check_counts(value, "regions"),
-        result_type,
-      )
-    for method in ["min", "low", "max"]:
+    self.check_optional(
+      "dmem.capacity",
+      dmem.capacity,
+      lambda value: check_counts(value, "regions"),
+      sakai.DmemCapacity,
+    )
+    for method in ["current", "peak", "min", "low", "max"]:
       self.check_optional(
         "dmem." + method,
         getattr(dmem, method),
         lambda value: check_limits(value, "regions"),
-        sakai.DmemLimits,
+        {"current": sakai.DmemCurrent, "peak": sakai.DmemPeak}.get(
+          method, sakai.DmemLimits
+        ),
       )
 
   def test_rdma(self) -> None:
@@ -530,9 +528,9 @@ class ContractTest(unittest.TestCase):
 
   def test_memory_contract(self) -> None:
     memory = self.group.memory()
-    for read in (memory.current, memory.peak, memory.low, memory.min):
+    for read in (memory.current, memory.peak):
       self.assertGreaterEqual(read(), 0)
-    for read in (memory.max, memory.high):
+    for read in (memory.max, memory.high, memory.low, memory.min):
       self.check_limit(read())
     stat = memory.stat()
     self.assertIsInstance(stat, MemoryStat)
@@ -618,6 +616,50 @@ class ContractTest(unittest.TestCase):
 
     self.check_optional("io.latency", self.group.io().latency, check_latency)
 
+  def test_io_cost_and_priority_contract(self) -> None:
+    def check_qos(value: sakai.IoCostQos) -> None:
+      self.check_readonly(value.devices, (8, 0))
+      for key, device in value.devices.items():
+        self.check_device_key(key)
+        self.assertIsInstance(device.enabled, bool)
+        self.assertIn(device.control, {"auto", "user"})
+        for percentile in (device.read_percentile, device.write_percentile):
+          self.assertTrue(0 <= percentile <= 1)
+        for scaling in (device.min_scaling, device.max_scaling):
+          self.check_unsigned(scaling, float)
+        for latency in (device.read_latency_ns, device.write_latency_ns):
+          self.check_unsigned(latency)
+          self.assertEqual(latency % 1000, 0)
+        self.check_frozen(device, "enabled", "control")
+
+    def check_model(value: sakai.IoCostModel) -> None:
+      self.check_readonly(value.devices, (8, 0))
+      for key, device in value.devices.items():
+        self.check_device_key(key)
+        self.assertIn(device.control, {"auto", "user"})
+        self.assertEqual(device.model, "linear")
+        for name in (
+          "read_bps",
+          "write_bps",
+          "read_sequential_iops",
+          "read_random_iops",
+          "write_sequential_iops",
+          "write_random_iops",
+        ):
+          self.check_unsigned(getattr(device, name))
+        self.check_frozen(device, "control", "read_bps")
+
+    reader = self.group.io()
+    self.check_optional("io.cost.qos", reader.cost_qos, check_qos)
+    self.check_optional("io.cost.model", reader.cost_model, check_model)
+    self.check_optional(
+      "io.prio.class",
+      reader.priority_class,
+      lambda value: self.assertIn(
+        value, {"no-change", "promote-to-rt", "none-to-rt", "restrict-to-be", "idle"}
+      ),
+    )
+
   def test_io_pressure_contract(self) -> None:
     def check_pressure(pressure: Pressure) -> None:
       self.assertIsInstance(pressure, Pressure)
@@ -670,6 +712,9 @@ class ContractTest(unittest.TestCase):
       ("cpuset.cpus.effective", reader.cpus_effective, CpuList),
       ("cpuset.mems", reader.mems, MemoryNodeList),
       ("cpuset.mems.effective", reader.mems_effective, MemoryNodeList),
+      ("cpuset.cpus.exclusive", reader.cpus_exclusive, CpuList),
+      ("cpuset.cpus.exclusive.effective", reader.cpus_exclusive_effective, CpuList),
+      ("cpuset.cpus.isolated", reader.cpus_isolated, CpuList),
     ):
       self.check_optional(name, read, check_list, value_type)
 
@@ -700,6 +745,31 @@ class ContractTest(unittest.TestCase):
       all(isinstance(v, str) for v in self.group.core().subtree_control())
     )
     self.assertEqual(Cgroup.from_pid(os.getpid()).path, self.group.path)
+    core = self.group.core()
+    for filename, read in (
+      ("cgroup.freeze", core.freeze),
+      ("cgroup.pressure", core.pressure_enabled),
+    ):
+      self.check_optional(
+        filename, read, lambda value: self.assertIsInstance(value, bool)
+      )
+    for filename, read in (
+      ("cgroup.max.depth", core.max_depth),
+      ("cgroup.max.descendants", core.max_descendants),
+    ):
+      self.check_optional(filename, read, self.check_limit)
+    self.check_optional(
+      "cgroup.stat.local",
+      core.stat_local,
+      lambda value: self.check_unsigned(value.frozen_time_ns),
+      sakai.CgroupStatLocal,
+    )
+    self.check_optional(
+      "irq.pressure",
+      self.group.irq_pressure,
+      lambda value: self.check_unsigned(value.full.total_ns),
+      sakai.IrqPressure,
+    )
 
   def test_memory_events_and_oom_policy(self) -> None:
     memory = self.group.memory()
@@ -757,6 +827,7 @@ class ContractTest(unittest.TestCase):
     pids = self.group.pids()
     self.assertIsInstance(pids, PidsReader)
     self.check_optional("pids.current", pids.current, self.check_unsigned)
+    self.check_optional("pids.peak", pids.peak, self.check_unsigned)
     self.check_optional("pids.max", pids.max, self.check_limit)
 
     def check_events(events: PidsEvents) -> None:
@@ -765,6 +836,7 @@ class ContractTest(unittest.TestCase):
       self.check_frozen(events, "max")
 
     self.check_optional("pids.events", pids.events, check_events)
+    self.check_optional("pids.events.local", pids.events_local, check_events)
 
   def test_cgroup_state_contract(self) -> None:
     def check_events(events: CgroupEvents) -> None:

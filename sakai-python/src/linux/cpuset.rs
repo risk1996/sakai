@@ -33,6 +33,24 @@ impl CpusetReader {
     PythonError::read(py, &self.owner, |owner| owner.cpuset().cpus_effective()).map(Into::into)
   }
 
+  /// Read the exclusive CPU request for partition allocation, since Linux 6.7.
+  /// An empty request falls back to cpuset.cpus when forming a partition.
+  /// The hierarchy root lacks this interface.
+  fn cpus_exclusive(&self, py: Python<'_>) -> PyResult<CpuList> {
+    PythonError::read(py, &self.owner, |owner| owner.cpuset().cpus_exclusive()).map(Into::into)
+  }
+
+  /// Read CPUs granted for exclusive partition allocation, since Linux 6.7.
+  /// This is distinct from task placement; the root lacks this interface.
+  fn cpus_exclusive_effective(&self, py: Python<'_>) -> PyResult<CpuList> {
+    PythonError::read(py, &self.owner, |owner| owner.cpuset().cpus_exclusive_effective()).map(Into::into)
+  }
+
+  /// Read CPUs in isolated partitions, since Linux 6.8; available only at root.
+  fn cpus_isolated(&self, py: Python<'_>) -> PyResult<CpuList> {
+    PythonError::read(py, &self.owner, |owner| owner.cpuset().cpus_isolated()).map(Into::into)
+  }
+
   /// Read requested NUMA memory-node IDs; an empty list means inheritance.
   /// Configuration is unchanged by hotplug; reading never migrates memory.
   fn mems(&self, py: Python<'_>) -> PyResult<MemoryNodeList> {
@@ -56,9 +74,11 @@ impl CpusetReader {
 /// Immutable CPU ID snapshot stored as compact inclusive ranges.
 ///
 /// IDs are unsigned 32-bit identifiers, not CPU counts or per-thread affinity.
-/// Configured emptiness means inheritance; effective emptiness means no grant.
+/// For cpus(), emptiness means inheritance; for cpus_effective(), no grant.
 /// Effective grants can differ from requests and change with hotplug. Snapshot
-/// access performs no kernel I/O. See https://docs.kernel.org/admin-guide/cgroup-v2.html#cpuset-interface-files.
+/// access performs no kernel I/O. Exclusive and isolated lists describe partition
+/// allocation; their empty-list semantics are documented on their readers.
+/// See https://docs.kernel.org/admin-guide/cgroup-v2.html#cpuset-interface-files.
 #[pyclass(frozen, module = "sakai._sakai")]
 pub(super) struct CpuList {
   inner: CoreCpuList,

@@ -108,18 +108,62 @@ impl FromStr for Pressure {
   type Err = ParseError<ParseValueError>;
 
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    let lines = contents
-      .lines()
-      .filter(|line| !line.trim().is_empty())
-      .filter_map(|line| PressureKind::parse(contents, line).transpose())
-      .map(|result| result.and_then(|(kind, fields)| Ok((kind, PressureLine::from_fields(&fields)?))))
-      .collect::<Result<BTreeMap<_, _>, _>>()?;
+    let lines = parse_lines(contents)?;
 
     Ok(Self {
       some: lines.get(&PressureKind::Some).copied().ok_or_else(|| ParseError::missing(contents, "some"))?,
       full: lines.get(&PressureKind::Full).copied(),
     })
   }
+}
+
+/// Interrupt pressure from the cgroup v2 `irq.pressure` interface.
+///
+/// Unlike CPU, memory, and I/O pressure, interrupt pressure reports only a
+/// `full` line: time during which interrupts prevented tasks from running.
+/// Averages are ratios and cumulative stall time is stored as [`Time`]. This
+/// snapshot does not register a pressure trigger; read again for fresh values.
+///
+/// Since Linux 6.1; availability requires PSI and `CONFIG_IRQ_TIME_ACCOUNTING`.
+/// See the [Linux 6.1 PSI implementation](https://github.com/torvalds/linux/blob/v6.1/kernel/sched/psi.c)
+/// and [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
+/// Since Linux 6.14, reading with IRQ time accounting disabled at runtime
+/// returns [`crate::Error::NotSupported`]; see the
+/// [Linux 6.14 implementation](https://github.com/torvalds/linux/blob/v6.14/kernel/sched/psi.c).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct IrqPressure {
+  full: PressureLine,
+}
+
+impl IrqPressure {
+  /// The cgroup v2 `irq.pressure` interface filename.
+  ///
+  /// Since Linux 6.1; see the [Linux 6.1 cgroup implementation](https://github.com/torvalds/linux/blob/v6.1/kernel/cgroup/cgroup.c).
+  pub const FILE_NAME: &'static str = "irq.pressure";
+
+  /// Returns interrupt pressure, the only line reported by this interface.
+  ///
+  /// See the [Linux interrupt PSI implementation](https://github.com/torvalds/linux/blob/v6.1/kernel/sched/psi.c).
+  #[must_use]
+  pub const fn full(&self) -> PressureLine { self.full }
+}
+
+impl FromStr for IrqPressure {
+  type Err = ParseError<ParseValueError>;
+
+  fn from_str(contents: &str) -> Result<Self, Self::Err> {
+    let lines = parse_lines(contents)?;
+    Ok(Self { full: lines.get(&PressureKind::Full).copied().ok_or_else(|| ParseError::missing(contents, "full"))? })
+  }
+}
+
+fn parse_lines(contents: &str) -> Result<BTreeMap<PressureKind, PressureLine>, ParseError<ParseValueError>> {
+  contents
+    .lines()
+    .filter(|line| !line.trim().is_empty())
+    .filter_map(|line| PressureKind::parse(contents, line).transpose())
+    .map(|result| result.and_then(|(kind, fields)| Ok((kind, PressureLine::from_fields(&fields)?))))
+    .collect()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, strum::EnumString)]
@@ -221,6 +265,25 @@ mod tests {
       ("some avg10=100.01 avg60=0.00 avg300=0.00 total=0\n", Err(Invalid("avg10", "100.01"))),
       ("some avg10=0.00 avg60=0.00 avg300=0.00 total=18446744073709552\n", Err(Invalid("total", "18446744073709552"))),
       ("some avg10=0.00 avg60=0.00 avg300=0.00 total=1 malformed\n", Err(Invalid("value", "malformed"))),
+    ]);
+  }
+
+  #[test]
+  fn parses_full_only_irq_pressure() {
+    Cases::<IrqPressure>::check([
+      (
+        "full avg10=12.50 avg60=1.00 avg300=0.00 total=42\n",
+        Ok(IrqPressure { full: PressureLine::expected([12.50, 1.00, 0.00], 42) }),
+      ),
+      (
+        "future avg10=nope\nfull total=0 avg300=0.00 avg60=0.00 avg10=0.00\n",
+        Ok(IrqPressure { full: PressureLine::expected([0.00, 0.00, 0.00], 0) }),
+      ),
+      ("", Err(Missing("full"))),
+      ("some avg10=0.00 avg60=0.00 avg300=0.00 total=0\n", Err(Missing("full"))),
+      ("full avg10=0.00 avg60=0.00 total=0\n", Err(Missing("avg300"))),
+      ("full avg10=nope avg60=0.00 avg300=0.00 total=0\n", Err(Invalid("avg10", "nope"))),
+      ("full avg10=0.00 avg60=0.00 avg300=0.00 total=-1\n", Err(Invalid("total", "-1"))),
     ]);
   }
 }

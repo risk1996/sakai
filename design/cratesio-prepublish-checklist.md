@@ -55,10 +55,10 @@ repeated for the changed source.
   [handle implementation](../sakai/src/cgroup/v2/handle.rs),
   [file reads](../sakai/src/cgroup/v2/file.rs).
 - [x] Settle which implemented interfaces belong in the first release.
-  The implemented P0–P3 interfaces, including process/core and I/O readers,
-  remain in the Rust and Python release surface. On 2026-10-11, the project
-  owner confirmed this scope and `TODO.md` was reconciled; P4 and later work
-  remains deferred.
+  The implemented P0–P6 interfaces, including cpuset, notifications, and the
+  remaining resource controllers, form the current Rust and Python release
+  surface described in `TODO.md`. The earlier P0–P3 artifact checks below are
+  historical; repeat release verification for the expanded surface.
 - [ ] Confirm that `sakai` is available on crates.io immediately before
   release and that the intended crates.io account controls the name. Crate
   names are allocated first come, first served.

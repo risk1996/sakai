@@ -1,17 +1,29 @@
 //! Pressure bindings and conversions.
 
 use pyo3::prelude::*;
-use sakai::{Pressure as CorePressure, PressureLine as CorePressureLine};
+use sakai::{IrqPressure as CoreIrqPressure, Pressure as CorePressure, PressureLine as CorePressureLine};
 use uom::si::{ratio::ratio, time::nanosecond};
 
 /// Pressure-stall information with some and optional full lines.
 #[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct Pressure {
-  /// Time during which some tasks were stalled.
+  /// Pressure during which at least one task was stalled.
   some: PressureLine,
-  /// Time during which all tasks were stalled, if reported.
+  /// Pressure during which all non-idle tasks were stalled, if reported.
   full: Option<PressureLine>,
+}
+
+/// Interrupt pressure with its single full line; requires Linux 6.1 and IRQ time accounting.
+#[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct IrqPressure {
+  /// Pressure while interrupts prevented tasks from running.
+  full: PressureLine,
+}
+
+impl From<CoreIrqPressure> for IrqPressure {
+  fn from(value: CoreIrqPressure) -> Self { Self { full: value.full().into() } }
 }
 
 impl From<CorePressure> for Pressure {
@@ -22,11 +34,11 @@ impl From<CorePressure> for Pressure {
 #[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct PressureLine {
-  /// Ten-second pressure average, from zero to one.
+  /// Exponentially weighted ten-second pressure average, from zero to one.
   avg10: f64,
-  /// Sixty-second pressure average, from zero to one.
+  /// Exponentially weighted sixty-second pressure average, from zero to one.
   avg60: f64,
-  /// Three-hundred-second pressure average, from zero to one.
+  /// Exponentially weighted three-hundred-second pressure average, from zero to one.
   avg300: f64,
   /// Cumulative stall time in nanoseconds.
   total_ns: u64,
@@ -56,5 +68,13 @@ mod tests {
     assert_in_delta!(pressure.some.avg10, 0.125, f64::EPSILON);
     assert_eq!(pressure.some.total_ns, 23_000);
     assert!(pressure.full.is_none());
+  }
+
+  #[test]
+  fn converts_full_only_irq_pressure() {
+    let pressure =
+      IrqPressure::from(assert_ok!("full avg10=12.50 avg60=0.00 avg300=100.00 total=23\n".parse::<CoreIrqPressure>()));
+    assert_in_delta!(pressure.full.avg10, 0.125, f64::EPSILON);
+    assert_eq!(pressure.full.total_ns, 23_000);
   }
 }

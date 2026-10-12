@@ -110,6 +110,12 @@ pub(super) struct CpuTimeStat {
   user_ns: u64,
   /// CPU usage in kernel mode, in nanoseconds.
   system_ns: u64,
+  /// User time of positively niced tasks, included in user_ns; since Linux 6.13.
+  /// None means the kernel omitted the counter.
+  nice_ns: Option<u64>,
+  /// Sibling time forced idle by core scheduling, separate from usage_ns.
+  /// Since Linux 6.0 with CONFIG_SCHED_CORE; None means omitted.
+  force_idle_ns: Option<u64>,
 }
 
 impl From<CoreCpuTimeStat> for CpuTimeStat {
@@ -118,11 +124,16 @@ impl From<CoreCpuTimeStat> for CpuTimeStat {
       usage_ns: value.usage().get::<nanosecond>(),
       user_ns: value.user().get::<nanosecond>(),
       system_ns: value.system().get::<nanosecond>(),
+      nice_ns: value.nice().map(|time| time.get::<nanosecond>()),
+      force_idle_ns: value.force_idle().map(|time| time.get::<nanosecond>()),
     }
   }
 }
 
 /// CPU bandwidth periods, throttling, and optional burst counters.
+///
+/// The kernel's signed 32-bit event counters are exposed as unsigned counts;
+/// they wrap after 2^32 events, so snapshots need not stay monotonic forever.
 #[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct CpuBandwidthStat {
@@ -215,7 +226,7 @@ mod tests {
 
   #[test]
   fn converts_cpu_stat_optional_fields_and_nanoseconds() {
-    let time = CpuTimeStat { usage_ns: 10_000, user_ns: 7_000, system_ns: 3_000 };
+    let time = CpuTimeStat { usage_ns: 10_000, user_ns: 7_000, system_ns: 3_000, nice_ns: None, force_idle_ns: None };
     for (input, bandwidth) in [
       ("usage_usec 10\nuser_usec 7\nsystem_usec 3\n", None),
       (
@@ -234,6 +245,12 @@ mod tests {
     for (input, throttled_ns) in [("", None), ("throttled_usec 0", Some(0))] {
       assert_eq!(CpuStatLocal::from(assert_ok!(input.parse::<CoreCpuStatLocal>())), CpuStatLocal { throttled_ns });
     }
+    let input = "usage_usec 10\nuser_usec 7\nsystem_usec 3\nnice_usec 2\ncore_sched.force_idle_usec 0";
+    assert_eq!(CpuTimeStat::from(assert_ok!(input.parse::<CoreCpuTimeStat>())), CpuTimeStat {
+      nice_ns: Some(2_000),
+      force_idle_ns: Some(0),
+      ..time
+    });
   }
 
   #[test]

@@ -54,6 +54,16 @@ impl Dmem<'_> {
   /// See the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn current(&self) -> Result<DmemCurrent, Error> { self.cgroup.parse(DmemCurrent::FILE_NAME) }
 
+  /// Reads historical hierarchical device-memory usage peaks per region.
+  ///
+  /// Since Linux 7.3 release candidates; non-root only. Each region has an
+  /// independent lifetime peak. Reading never resets peaks. See [`DmemPeak`].
+  ///
+  /// # Errors
+  ///
+  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  pub fn peak(&self) -> Result<DmemPeak, Error> { self.cgroup.parse(DmemPeak::FILE_NAME) }
+
   /// Reads configured hard eviction protections in bytes, or `max`.
   ///
   /// Effective protection depends on ancestors and sibling demand. Since Linux
@@ -118,6 +128,10 @@ impl FromStr for DmemCapacity {
 ///
 /// Amounts are bytes, not counts of device or system pages. Zero means a
 /// reported region has no usage; an absent region means it was not reported.
+/// The kernel emits `max` when usage reaches its `PAGE_COUNTER_MAX` sentinel;
+/// that token is retained as [`MaxOr::Max`], rather than interpreted as an
+/// unlimited configured limit. The sentinel depends on the kernel architecture
+/// and system page size. See [Linux output formatting](https://github.com/torvalds/linux/blob/v6.14/kernel/cgroup/dmem.c).
 /// An empty map is valid. Region names and usage can change between reads;
 /// getters inspect this stored snapshot without I/O. Separately read capacity
 /// and configuration values need not describe the same instant.
@@ -125,19 +139,50 @@ impl FromStr for DmemCapacity {
 /// Since Linux 6.14; see [Linux DMEM](https://www.kernel.org/doc/html/v6.14/admin-guide/cgroup-v2.html#dmem).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct DmemCurrent {
-  regions: BTreeMap<String, Bytes>,
+  regions: BTreeMap<String, MaxOr<Bytes>>,
 }
 
 impl DmemCurrent {
   /// The cgroup v2 current device-memory usage filename, since Linux 6.14.
   pub const FILE_NAME: &'static str = "dmem.current";
 
-  /// Returns hierarchical usage in bytes keyed by opaque region name.
+  /// Returns byte usage or the kernel's `max` sentinel by opaque region name.
   #[must_use]
-  pub const fn regions(&self) -> &BTreeMap<String, Bytes> { &self.regions }
+  pub const fn regions(&self) -> &BTreeMap<String, MaxOr<Bytes>> { &self.regions }
 }
 
 impl FromStr for DmemCurrent {
+  type Err = ParseError<ParseValueError>;
+
+  fn from_str(contents: &str) -> Result<Self, Self::Err> { Ok(Self { regions: parse_regions(contents)? }) }
+}
+
+/// Historical maximum device-memory usage by region for this cgroup and descendants.
+///
+/// Each finite value is bytes. `max` retains the kernel's architecture-dependent
+/// `PAGE_COUNTER_MAX` sentinel, as in [`DmemCurrent`]. Independent region peaks
+/// include transient charges later canceled by ancestor-limit failures. Region
+/// removal removes its history. Empty maps are valid; absent regions differ
+/// from measured zero. Getters inspect this stored snapshot without I/O.
+/// Reading never resets peaks; the hierarchy root lacks this interface.
+///
+/// Since Linux 7.3 release candidates; see [Linux 7.3-rc1 source](https://github.com/torvalds/linux/blob/v7.3-rc1/kernel/cgroup/dmem.c)
+/// and [Linux `dmem.peak`](https://docs.kernel.org/admin-guide/cgroup-v2.html#dmem).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct DmemPeak {
+  regions: BTreeMap<String, MaxOr<Bytes>>,
+}
+
+impl DmemPeak {
+  /// The non-root historical device-memory peak filename, since Linux 7.3 release candidates.
+  pub const FILE_NAME: &'static str = "dmem.peak";
+
+  /// Returns historical byte peaks or the kernel's `max` sentinel by region name.
+  #[must_use]
+  pub const fn regions(&self) -> &BTreeMap<String, MaxOr<Bytes>> { &self.regions }
+}
+
+impl FromStr for DmemPeak {
   type Err = ParseError<ParseValueError>;
 
   fn from_str(contents: &str) -> Result<Self, Self::Err> { Ok(Self { regions: parse_regions(contents)? }) }
@@ -233,6 +278,7 @@ mod tests {
       let reader = Dmem { cgroup: &cgroup };
       check_read(&cgroup, DmemCapacity::FILE_NAME, || reader.capacity());
       check_read(&cgroup, DmemCurrent::FILE_NAME, || reader.current());
+      check_read(&cgroup, DmemPeak::FILE_NAME, || reader.peak());
       check_read(&cgroup, DmemLimits::MIN_FILE_NAME, || reader.min());
       check_read(&cgroup, DmemLimits::LOW_FILE_NAME, || reader.low());
       check_read(&cgroup, DmemLimits::MAX_FILE_NAME, || reader.max());
@@ -253,12 +299,28 @@ mod tests {
       (" \n", BTreeMap::new()),
     ] {
       assert_eq!(assert_ok!(input.parse::<DmemCapacity>()), DmemCapacity { regions: expected.clone() });
+      let expected = expected.into_iter().map(|(name, value)| (name, MaxOr::Value(value))).collect();
       assert_eq!(assert_ok!(input.parse::<DmemCurrent>()), DmemCurrent { regions: expected });
     }
-    for input in ["device", "device max", "device -1", "device nope", "device 18446744073709551616", "device 1 extra"] {
+    assert_err!("device max".parse::<DmemCapacity>());
+    for input in ["device", "device -1", "device nope", "device 18446744073709551616", "device 1 extra"] {
       assert_err!(input.parse::<DmemCapacity>());
       assert_err!(input.parse::<DmemCurrent>());
+      assert_err!(input.parse::<DmemPeak>());
     }
+  }
+
+  #[test]
+  fn preserves_current_and_peak_kernel_sentinels() {
+    let expected = BTreeMap::from([
+      ("device".into(), MaxOr::Max),
+      ("zero".into(), MaxOr::Value(Bytes::new::<byte>(0))),
+      ("finite".into(), MaxOr::Value(Bytes::new::<byte>(123))),
+    ]);
+    let raw = "device max\nzero 0\nfinite 123";
+    assert_eq!(assert_ok!(raw.parse::<DmemCurrent>()), DmemCurrent { regions: expected.clone() });
+    assert_eq!(assert_ok!(raw.parse::<DmemPeak>()), DmemPeak { regions: expected });
+    assert_eq!(assert_ok!("".parse::<DmemPeak>()), DmemPeak::default());
   }
 
   #[test]

@@ -1,4 +1,9 @@
-/// A cgroup value that is either unlimited (`max`) or has a concrete value.
+/// A cgroup value that preserves the kernel's `max` token or a concrete value.
+///
+/// For limits, `max` means no local limit. Protections and accounting
+/// interfaces define its meaning separately; for example, device-memory
+/// usage uses `max` for a kernel page-counter sentinel. Consult the interface
+/// documentation before interpreting the token.
 ///
 /// See [Linux cgroup limits and the `max` token](https://docs.kernel.org/admin-guide/cgroup-v2.html#limits).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

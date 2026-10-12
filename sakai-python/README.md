@@ -26,6 +26,10 @@ These limits do not account for ancestor limits, affinity, or other policy. The 
 property is for display and may become stale; live reads continue through the
 original open directory handle.
 
+`memory.min()` and `memory.low()` also return `MaxOr[int]` protections: Linux
+accepts and prints `max` for these interfaces. Use `.value` only when `.is_max`
+is false.
+
 Compound readings are immutable native snapshot objects. Times are integer
 nanoseconds, memory amounts are integer bytes, page counts stay integers in
 pages, and event counts are integers. Pressure averages and utilization clamps
@@ -72,6 +76,16 @@ and `.dying_subsystems` mappings from controller names to integer object counts.
 Missing subsystem counters are absent from the maps. Every reading is volatile;
 missing files, including root exemptions, raise `InterfaceMissingError`.
 
+`group.pids().peak()` reads peak task usage, and `.events_local()` reads local
+limit events. `group.core()` also reads `.freeze()` (requested state),
+`.max_depth()` and `.max_descendants()` (`MaxOr[int]` subtree limits),
+`.pressure_enabled()` (configured PSI accounting), and `.stat_local()`
+(`.frozen_time_ns`, accounting requested freezing time). Requested freeze state
+and completed `.events().frozen` are separate observations.
+`group.irq_pressure()` returns an `IrqPressure` snapshot with only `.full`;
+it requires Linux 6.1, PSI, and IRQ time accounting. Disabled runtime accounting
+can raise `NotSupportedError` instead of producing a measured zero.
+
 `group.io()` exposes `.stat()`, `.pressure()`, `.weight()`, `.max()`, and
 `.latency()`. I/O snapshots use read-only device mappings keyed by `(major, minor)`
 integer tuples. `.stat().devices` contains immutable byte and operation counters;
@@ -83,6 +97,26 @@ nonzero nanosecond targets; disabled targets are omitted. Device maps can be
 empty, and every read is a separate snapshot. Optional files and root exemptions
 raise `InterfaceMissingError` with their interface path. Pressure uses the same
 `Pressure` snapshot as CPU and memory, and reading it never writes a PSI trigger.
+
+`.cost_qos()` and `.cost_model()` read root-only I/O cost configuration with
+read-only `.devices` mappings. QoS exposes enablement, `auto`/`user` control,
+read/write percentiles, latency targets in nanoseconds, and minimum/maximum
+scaling ratios. Scaling can exceed one (100%); it is not a bounded PSI average.
+Model parameters expose bytes per second and sequential/random 4 KiB IOPS.
+`.priority_class()` reads the kernel's I/O priority policy, including older
+`none-to-rt` output. Scheduler-specific BFQ tuning/debug files are outside this
+generic interface surface.
+
+I/O device statistics also preserve optional latency and cost fields: queue
+depth uses `MaxOr[int]`; latency windows and all time quantities use nanoseconds.
+`.use_delay` preserves the kernel's signed `-1` fixed-delay indicator.
+`.missed` and `.total` are window counters that can reset, while `.cost_usage_ns`,
+`.cost_wait_ns`, `.cost_indebt_ns`, and `.cost_indelay_ns` are cumulative modeled
+times. `.cost_vrate` is a scaling ratio that can exceed one.
+
+CPU time snapshots preserve optional `.nice_ns` and `.force_idle_ns`.
+Bandwidth event counts normalize the kernel's wrapped signed 32-bit output to
+unsigned values; they still wrap after 2^32 events and can decrease across reads.
 
 `group.cpuset()` provides `.cpus()`, `.cpus_effective()`, `.mems()`,
 `.mems_effective()`, and `.partition()`. CPU and memory-node snapshots use
@@ -96,6 +130,11 @@ older invalid states without reasons as `None`. Missing files, including root
 configuration exemptions, raise `InterfaceMissingError`. Every call reads fresh
 values through a retained pinned handle; reads never migrate memory or change
 placement. See the [kernel cpuset documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpuset-interface-files).
+
+`.cpus_exclusive()` and `.cpus_exclusive_effective()` read requested and
+granted exclusive CPU lists since Linux 6.7. `.cpus_isolated()` reads the
+root-only isolated CPU list since Linux 6.8. They return the same compact
+`CpuList` snapshots and preserve an empty list.
 
 `group.hugetlb()` reads huge-page interfaces for a canonical binary page-size
 label such as `"2MB"` or `"1GB"`. These are HugeTLB pages, separate from
@@ -129,8 +168,12 @@ These interfaces are absent at the root; missing files on older kernels raise
 `InterfaceMissingError`.
 See [Linux RDMA interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#rdma).
 
-`group.dmem()` provides `.capacity()` and `.current()` byte snapshots with
+`group.dmem()` provides `.capacity()`, `.current()`, and `.peak()` byte snapshots with
 read-only `.regions` mappings keyed by driver-defined device-memory region names.
+Capacity values are integers; current and peak values are `MaxOr[int]` because
+the kernel also prints `max` at its page-counter sentinel. For usage this token
+represents that sentinel, rather than an unlimited configured limit. Peak
+requires Linux 7.3 release candidates; current exists since Linux 6.14.
 `.min()`, `.low()`, and `.max()` return `DmemLimits`, whose `.regions` values are
 `MaxOr[int]` bytes. Min and low describe hard and best-effort protection; max is
 the hard allocation limit. This controller requires Linux 6.14, its kernel

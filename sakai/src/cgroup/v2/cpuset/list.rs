@@ -85,17 +85,19 @@ macro_rules! placement_list {
 }
 
 placement_list!(
-  /// A snapshot of configured or effective CPU IDs for tasks in one cgroup.
+  /// A snapshot of CPU IDs from a cgroup's placement or partition interfaces.
   ///
   /// IDs are dimensionless `u32` identifiers, not CPU counts. Parsing accepts
   /// comma-separated decimal IDs and inclusive ranges, in ascending order
-  /// without overlap; an empty file is valid. Configured emptiness means
+  /// without overlap; an empty file is valid. For `cpuset.cpus`, emptiness means
   /// inheritance from the nearest nonempty ancestor (or all available CPUs).
-  /// Effective emptiness means no grant. Effective CPUs can differ from the
+  /// For `cpuset.cpus.effective`, emptiness means no grant. Effective CPUs can differ from the
   /// request, including falling back to the parent's grant if none of the
   /// requested CPUs can be granted. Configuration changes affect either list;
   /// hotplug affects only the effective list. These values are not per-thread
-  /// affinity masks and do not resolve ancestor CPU bandwidth limits.
+  /// affinity masks and do not resolve ancestor CPU bandwidth limits. Exclusive
+  /// and isolated lists describe partition allocation instead of task placement;
+  /// their empty-list semantics are documented on the corresponding readers.
   /// See [Linux cpuset interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpuset-interface-files).
   ///
   /// ```
@@ -111,6 +113,21 @@ placement_list!(
   "cpuset.cpus",
   "cpuset.cpus.effective"
 );
+
+impl CpuList {
+  /// CPUs available for exclusive partition allocation, absent at the root.
+  ///
+  /// Since Linux 6.7; see the [Linux 6.7 source](https://github.com/torvalds/linux/blob/v6.7/kernel/cgroup/cpuset.c).
+  pub const EXCLUSIVE_EFFECTIVE_FILE_NAME: &'static str = "cpuset.cpus.exclusive.effective";
+  /// Exclusive CPU request for partition allocation, absent at the root.
+  ///
+  /// Since Linux 6.7; see the [Linux 6.7 source](https://github.com/torvalds/linux/blob/v6.7/kernel/cgroup/cpuset.c).
+  pub const EXCLUSIVE_FILE_NAME: &'static str = "cpuset.cpus.exclusive";
+  /// CPUs in isolated partitions, available only at the hierarchy root.
+  ///
+  /// Since Linux 6.8; see the [Linux 6.8 source](https://github.com/torvalds/linux/blob/v6.8/kernel/cgroup/cpuset.c).
+  pub const ISOLATED_FILE_NAME: &'static str = "cpuset.cpus.isolated";
+}
 
 placement_list!(
   /// A snapshot of configured or effective NUMA memory-node IDs for one cgroup.

@@ -10,8 +10,10 @@
 //!
 //! Durations use [`Time`] (stored in nanoseconds), memory amounts use [`Bytes`],
 //! and task or event totals use [`Count`]. Kernel percentages become [`Ratio`],
-//! where 1.0 means 100%. [`MaxOr::Max`] means no limit at this cgroup; an
-//! ancestor can still impose a limit. An optional counter of `None` means it
+//! where 1.0 means 100%. For limit interfaces, [`MaxOr::Max`] means no local
+//! limit; ancestors can still impose limits. Accounting interfaces can use
+//! the token for a kernel sentinel instead; see [`v2::dmem::DmemCurrent`].
+//! An optional counter of `None` means it
 //! was not reported, rather than a measured zero.
 //!
 //! The public quantities intentionally expose `uom` interoperability: construct
@@ -81,7 +83,7 @@
 pub use cgroup::v2;
 pub use error::Error;
 pub use limit::MaxOr;
-pub use pressure::{Pressure, PressureLine};
+pub use pressure::{IrqPressure, Pressure, PressureLine};
 pub use unit::{
   Bytes, BytesPerSecond, Count, EventRate, FractionalEventRate, NonZeroTime, OperationsPerSecond, Pages, Ratio, Time,
 };

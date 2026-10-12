@@ -41,11 +41,17 @@ fn reads_current_cgroup_without_privileges() {
     cgroup.cpuset().mems().map(|_| ()),
     cgroup.cpuset().mems_effective().map(|_| ()),
     cgroup.cpuset().partition().map(|_| ()),
+    cgroup.cpuset().cpus_exclusive().map(|_| ()),
+    cgroup.cpuset().cpus_exclusive_effective().map(|_| ()),
+    cgroup.cpuset().cpus_isolated().map(|_| ()),
     cgroup.io().stat().map(|_| ()),
     cgroup.io().pressure().map(|_| ()),
     cgroup.io().weight().map(|_| ()),
     cgroup.io().max().map(|_| ()),
     cgroup.io().latency().map(|_| ()),
+    cgroup.io().cost_qos().map(|_| ()),
+    cgroup.io().cost_model().map(|_| ()),
+    cgroup.io().priority_class().map(|_| ()),
     cgroup.cpu().stat_local().map(|_| ()),
     cgroup.cpu().weight().map(|_| ()),
     cgroup.cpu().weight_nice().map(|_| ()),
@@ -57,9 +63,20 @@ fn reads_current_cgroup_without_privileges() {
     cgroup.cpu().idle().map(|_| ()),
     cgroup.core().kind().map(|_| ()),
     cgroup.core().events().map(|_| ()),
+    cgroup.core().procs().map(|_| ()),
+    cgroup.core().threads().map(|_| ()),
+    cgroup.core().stat_local().map(|_| ()),
+    cgroup.core().freeze().map(|_| ()),
+    cgroup.core().max_depth().map(|_| ()),
+    cgroup.core().max_descendants().map(|_| ()),
+    cgroup.core().pressure_enabled().map(|_| ()),
+    cgroup.irq_pressure().map(|_| ()),
     cgroup.pids().current().map(|_| ()),
     cgroup.pids().max().map(|_| ()),
     cgroup.pids().events().map(|_| ()),
+    cgroup.pids().peak().map(|_| ()),
+    cgroup.pids().events_local().map(|_| ()),
+    cgroup.dmem().peak().map(|_| ()),
     cgroup.memory().current().map(|_| ()),
     cgroup.memory().max().map(|_| ()),
     cgroup.memory().high().map(|_| ()),
@@ -82,7 +99,7 @@ fn reads_current_cgroup_without_privileges() {
     cgroup.memory().zswap().writeback().map(|_| ()),
   ] {
     match result {
-      | Ok(()) | Err(Error::FileMissing { .. }) => {},
+      | Ok(()) | Err(Error::FileMissing { .. } | Error::NotSupported { .. }) => {},
       | Err(error) => panic!("cgroup read failed: {error}"),
     }
   }
@@ -365,8 +382,8 @@ fn parses_live_delegated_controller_interfaces() {
 
   assert_eq!(assert_ok!(reader.memory().max()).value(), MaxOr::Max);
   assert_eq!(assert_ok!(reader.memory().high()).value(), MaxOr::Max);
-  assert_eq!(assert_ok!(reader.memory().low()).value(), Bytes::new::<byte>(0));
-  assert_eq!(assert_ok!(reader.memory().min()).value(), Bytes::new::<byte>(0));
+  assert_eq!(assert_ok!(reader.memory().low()).value(), MaxOr::Value(Bytes::new::<byte>(0)));
+  assert_eq!(assert_ok!(reader.memory().min()).value(), MaxOr::Value(Bytes::new::<byte>(0)));
   assert!(!assert_ok!(reader.memory().oom_group()).value());
   for (input, expected) in [("1", true), ("0", false)] {
     fixture
@@ -378,12 +395,17 @@ fn parses_live_delegated_controller_interfaces() {
   fixture.configure(MemoryHigh::FILE_NAME, "33554432", MaxOr::Value(Bytes::new::<byte>(33_554_432)), || {
     reader.memory().high().map(|value| value.value())
   });
-  fixture.configure(MemoryLow::FILE_NAME, "16777216", Bytes::new::<byte>(16_777_216), || {
+  fixture.configure(MemoryLow::FILE_NAME, "16777216", MaxOr::Value(Bytes::new::<byte>(16_777_216)), || {
     reader.memory().low().map(|value| value.value())
   });
-  fixture.configure(MemoryMin::FILE_NAME, "8388608", Bytes::new::<byte>(8_388_608), || {
+  fixture.configure(MemoryMin::FILE_NAME, "8388608", MaxOr::Value(Bytes::new::<byte>(8_388_608)), || {
     reader.memory().min().map(|value| value.value())
   });
+  for file in [MemoryLow::FILE_NAME, MemoryMin::FILE_NAME] {
+    assert_ok!(fs::write(fixture.path.join(file), "max"));
+  }
+  assert_eq!(assert_ok!(reader.memory().low()).value(), MaxOr::Max);
+  assert_eq!(assert_ok!(reader.memory().min()).value(), MaxOr::Max);
   assert_eq!(assert_ok!(reader.core().kind()), CgroupType::Domain);
   assert_ok!(reader.core().controllers());
   assert_ok!(reader.core().subtree_control());

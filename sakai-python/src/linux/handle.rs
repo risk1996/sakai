@@ -102,6 +102,15 @@ impl Cgroup {
   /// Return a reader for core cgroup topology interfaces.
   fn core(&self) -> CoreReader { CoreReader { owner: Arc::clone(&self.owner) } }
 
+  /// Read interrupt pressure as a full-only PSI snapshot.
+  ///
+  /// Requires Linux 6.1, CONFIG_PSI, and CONFIG_IRQ_TIME_ACCOUNTING. Missing interfaces raise
+  /// InterfaceMissingError; other failures follow the reader exception policy.
+  /// See https://docs.kernel.org/accounting/psi.html.
+  fn irq_pressure(&self, py: Python<'_>) -> PyResult<super::pressure::IrqPressure> {
+    PythonError::read(py, &self.owner, sakai::Cgroup::irq_pressure).map(Into::into)
+  }
+
   /// Open a read-only poll monitor for a supported event interface.
   ///
   /// Accepts cgroup.events, memory.events, memory.events.local,
