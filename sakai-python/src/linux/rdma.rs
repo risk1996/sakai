@@ -14,12 +14,18 @@ use sakai::v2::rdma::{
 
 use super::{MaxOr, PythonError};
 
-/// Fresh read-only RDMA reads for one pinned cgroup, keyed by adapter name.
+type DeviceKey = (String, Option<u32>);
+
+/// Fresh read-only RDMA reads for one pinned cgroup, keyed by name and optional index.
 ///
 /// Every call opens a fresh interface descriptor; separate snapshots are not
 /// atomic together. Usage includes descendants and follows the cgroup that
 /// originally owned the resource, even after a task migrates. All resources
 /// are integer counts of HCA handles or objects, never byte amounts.
+/// Mapping keys are (name, index) tuples. None means the index was omitted,
+/// distinct from zero. Linux 7.3 release candidates add indices for duplicate
+/// names across network namespaces; older kernels and unique names omit them.
+/// See https://github.com/torvalds/linux/blob/v7.3-rc1/kernel/cgroup/rdma.c.
 ///
 /// Missing files, including root exemptions, disabled controllers, kernel
 /// configuration omissions, and older kernels, raise InterfaceMissingError.
@@ -92,28 +98,39 @@ impl RdmaReader {
 
 /// Immutable snapshot of hierarchical RDMA current or peak resource counts.
 ///
-/// Device names identify RDMA adapters. An empty devices map means no devices
-/// were reported. Current usage is volatile; peaks record independent high
+/// Keys are (name, index) tuples identifying RDMA adapters. None means the
+/// index was omitted, distinct from zero. Linux 7.3 release candidates emit an
+/// index for names shared across network namespaces; older kernels and unique
+/// names omit it. Name collisions, renames and index reuse can change keys
+/// between snapshots. See https://github.com/torvalds/linux/blob/v7.3-rc1/kernel/cgroup/rdma.c.
+/// An empty devices map means no devices were reported. Current usage is volatile; peaks record independent high
 /// water marks since cgroup creation, available since Linux 7.2. Device
 /// removal removes its history. Properties inspect this stored snapshot and
 /// perform no I/O. Unknown future resource keys are ignored.
 #[pyclass(frozen, module = "sakai._sakai")]
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct RdmaCurrent {
-  devices: BTreeMap<String, RdmaDeviceCurrent>,
+  devices: BTreeMap<DeviceKey, RdmaDeviceCurrent>,
 }
 
 impl From<CoreRdmaCurrent> for RdmaCurrent {
   fn from(value: CoreRdmaCurrent) -> Self {
-    Self { devices: value.devices().iter().map(|(device, value)| (device.clone(), (*value).into())).collect() }
+    Self {
+      devices: value
+        .devices()
+        .iter()
+        .map(|(device, value)| ((device.name().to_owned(), device.index()), (*value).into()))
+        .collect(),
+    }
   }
 }
 
 #[pymethods]
 impl RdmaCurrent {
-  /// Read-only mapping of adapter names to immutable resource counts.
+  /// Read-only mapping of (name, optional index) tuples to immutable resource counts.
   ///
-  /// This property returns stored data without opening an interface file.
+  /// None means the kernel omitted the index, not zero. This property
+  /// returns stored data without opening an interface file.
   #[getter]
   fn devices(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     mapping(py, &self.devices, |value| Py::new(py, value.clone()).map(Py::into_any))
@@ -149,18 +166,26 @@ impl From<CoreRdmaDeviceCurrent> for RdmaDeviceCurrent {
 /// no devices were reported. Properties return stored data without I/O.
 #[pyclass(frozen, module = "sakai._sakai")]
 pub(super) struct RdmaMax {
-  devices: BTreeMap<String, RdmaDeviceMax>,
+  devices: BTreeMap<DeviceKey, RdmaDeviceMax>,
 }
 
 impl From<CoreRdmaMax> for RdmaMax {
   fn from(value: CoreRdmaMax) -> Self {
-    Self { devices: value.devices().iter().map(|(device, value)| (device.clone(), (*value).into())).collect() }
+    Self {
+      devices: value
+        .devices()
+        .iter()
+        .map(|(device, value)| ((device.name().to_owned(), device.index()), (*value).into()))
+        .collect(),
+    }
   }
 }
 
 #[pymethods]
 impl RdmaMax {
-  /// Read-only mapping of adapter names to immutable resource limits.
+  /// Read-only mapping of (name, optional index) tuples to immutable resource limits.
+  ///
+  /// None means the kernel omitted the index, not zero. Performs no I/O.
   #[getter]
   fn devices(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     mapping(py, &self.devices, |value| Py::new(py, value.clone()).map(Py::into_any))
@@ -196,18 +221,26 @@ impl From<CoreRdmaDeviceMax> for RdmaDeviceMax {
 #[pyclass(frozen, module = "sakai._sakai")]
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct RdmaEvents {
-  devices: BTreeMap<String, RdmaDeviceEvents>,
+  devices: BTreeMap<DeviceKey, RdmaDeviceEvents>,
 }
 
 impl From<CoreRdmaEvents> for RdmaEvents {
   fn from(value: CoreRdmaEvents) -> Self {
-    Self { devices: value.devices().iter().map(|(device, value)| (device.clone(), (*value).into())).collect() }
+    Self {
+      devices: value
+        .devices()
+        .iter()
+        .map(|(device, value)| ((device.name().to_owned(), device.index()), (*value).into()))
+        .collect(),
+    }
   }
 }
 
 #[pymethods]
 impl RdmaEvents {
-  /// Read-only mapping of adapter names to immutable per-resource events.
+  /// Read-only mapping of (name, optional index) tuples to immutable per-resource events.
+  ///
+  /// None means the kernel omitted the index, not zero. Performs no I/O.
   #[getter]
   fn devices(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     mapping(py, &self.devices, |value| Py::new(py, value.clone()).map(Py::into_any))
@@ -259,7 +292,7 @@ impl From<CoreRdmaResourceEvents> for RdmaResourceEvents {
 
 fn mapping<T>(
   py: Python<'_>,
-  values: &BTreeMap<String, T>,
+  values: &BTreeMap<DeviceKey, T>,
   convert: impl Fn(&T) -> PyResult<Py<PyAny>>,
 ) -> PyResult<Py<PyMappingProxy>> {
   let dict = PyDict::new(py);
@@ -282,26 +315,29 @@ mod tests {
     Python::attach(|py| {
       let current = RdmaCurrent::from(assert_ok!("mlx4_0 hca_handle=1 hca_object=max".parse::<CoreRdmaCurrent>()));
       assert_eq!(current, RdmaCurrent {
-        devices: BTreeMap::from([("mlx4_0".into(), RdmaDeviceCurrent { hca_handle: 1, hca_object: i32::MAX as u64 }),])
+        devices: BTreeMap::from([(("mlx4_0".into(), None), RdmaDeviceCurrent {
+          hca_handle: 1,
+          hca_object: i32::MAX as u64
+        }),])
       });
       let current = assert_ok!(Py::new(py, current));
       let devices = assert_ok!(current.bind(py).getattr("devices"));
-      let device = assert_ok!(devices.get_item("mlx4_0"));
+      let device = assert_ok!(devices.get_item(("mlx4_0", None::<u32>)));
       assert_eq!(assert_ok!(assert_ok!(device.getattr("hca_handle")).extract::<u64>()), 1);
       assert_eq!(assert_ok!(assert_ok!(device.getattr("hca_object")).extract::<u64>()), i32::MAX as u64);
       assert!(assert_err!(device.setattr("hca_handle", 2)).is_instance_of::<PyAttributeError>(py));
-      assert!(assert_err!(devices.set_item("mlx4_0", 2)).is_instance_of::<PyTypeError>(py));
+      assert!(assert_err!(devices.set_item(("mlx4_0", None::<u32>), 2)).is_instance_of::<PyTypeError>(py));
 
       let limits = RdmaMax::from(assert_ok!("mlx4_0 hca_handle=0 hca_object=max".parse::<CoreRdmaMax>()));
       let limits = assert_ok!(Py::new(py, limits));
       let devices = assert_ok!(limits.bind(py).getattr("devices"));
-      let device = assert_ok!(devices.get_item("mlx4_0"));
+      let device = assert_ok!(devices.get_item(("mlx4_0", None::<u32>)));
       let handle = assert_ok!(device.getattr("hca_handle"));
       assert_eq!(assert_ok!(assert_ok!(handle.getattr("value")).extract::<u64>()), 0);
       let object = assert_ok!(device.getattr("hca_object"));
       assert!(assert_ok!(assert_ok!(object.getattr("is_max")).extract::<bool>()));
       assert!(assert_err!(object.getattr("value")).is_instance_of::<PyValueError>(py));
-      assert!(assert_err!(devices.set_item("mlx4_0", 2)).is_instance_of::<PyTypeError>(py));
+      assert!(assert_err!(devices.set_item(("mlx4_0", None::<u32>), 2)).is_instance_of::<PyTypeError>(py));
       assert!(assert_err!(device.setattr("hca_handle", 2)).is_instance_of::<PyAttributeError>(py));
     });
   }
@@ -315,19 +351,114 @@ mod tests {
           .parse::<CoreRdmaEvents>()
       ));
       assert_eq!(events, RdmaEvents {
-        devices: BTreeMap::from([("mlx4_0".into(), RdmaDeviceEvents {
+        devices: BTreeMap::from([(("mlx4_0".into(), None), RdmaDeviceEvents {
           hca_handle: RdmaResourceEvents { max: 5, alloc_fail: 7 },
           hca_object: RdmaResourceEvents { max: 0, alloc_fail: 1 },
         }),])
       });
       let events = assert_ok!(Py::new(py, events));
       let devices = assert_ok!(events.bind(py).getattr("devices"));
-      let device = assert_ok!(devices.get_item("mlx4_0"));
+      let device = assert_ok!(devices.get_item(("mlx4_0", None::<u32>)));
       let handles = assert_ok!(device.getattr("hca_handle"));
       assert_eq!(assert_ok!(assert_ok!(handles.getattr("alloc_fail")).extract::<u64>()), 7);
       assert!(assert_err!(handles.setattr("max", 0)).is_instance_of::<PyAttributeError>(py));
       assert!(assert_err!(device.setattr("hca_handle", 0)).is_instance_of::<PyAttributeError>(py));
-      assert!(assert_err!(devices.set_item("mlx4_0", 0)).is_instance_of::<PyTypeError>(py));
+      assert!(assert_err!(devices.set_item(("mlx4_0", None::<u32>), 0)).is_instance_of::<PyTypeError>(py));
+    });
+  }
+
+  #[test]
+  fn preserves_indexed_and_name_only_keys_in_all_python_snapshots() {
+    Python::initialize();
+    Python::attach(|py| {
+      let keys = [("rxe0".to_owned(), Some(0)), ("rxe0".to_owned(), Some(5)), ("mlx4_0".to_owned(), None)];
+      for (raw, expected) in [
+        (include_str!("../../../sakai/src/cgroup/v2/fixtures/p6_rdma_index/rdma.current"), [[1_u64, 20], [2, 30], [
+          3, 40,
+        ]]),
+        (include_str!("../../../sakai/src/cgroup/v2/fixtures/p6_rdma_index/rdma.peak"), [[10, 200], [20, 300], [
+          30, 400,
+        ]]),
+      ] {
+        let snapshot = RdmaCurrent::from(assert_ok!(raw.parse::<CoreRdmaCurrent>()));
+        assert_eq!(snapshot, RdmaCurrent {
+          devices: keys
+            .iter()
+            .cloned()
+            .zip(expected.map(|[hca_handle, hca_object]| RdmaDeviceCurrent { hca_handle, hca_object }))
+            .collect()
+        });
+        let object = assert_ok!(Py::new(py, snapshot));
+        let devices = assert_ok!(object.bind(py).getattr("devices"));
+        assert_eq!(assert_ok!(devices.len()), 3);
+        for (key, expected) in keys.iter().zip(expected) {
+          let device = assert_ok!(devices.get_item(key));
+          let actual =
+            ["hca_handle", "hca_object"].map(|field| assert_ok!(assert_ok!(device.getattr(field)).extract::<u64>()));
+          assert_eq!(actual, expected);
+        }
+        assert!(assert_err!(devices.set_item(("rxe0", Some(0)), 0)).is_instance_of::<PyTypeError>(py));
+        assert!(assert_err!(object.bind(py).setattr("devices", 0)).is_instance_of::<PyAttributeError>(py));
+      }
+      let limits = RdmaMax::from(assert_ok!(
+        include_str!("../../../sakai/src/cgroup/v2/fixtures/p6_rdma_index/rdma.max").parse::<CoreRdmaMax>()
+      ));
+      let object = assert_ok!(Py::new(py, limits));
+      let devices = assert_ok!(object.bind(py).getattr("devices"));
+      assert_eq!(assert_ok!(devices.len()), 3);
+      for (key, expected) in keys.iter().zip([[Some(0_u64), Some(20)], [Some(2), None], [None, Some(40)]]) {
+        let device = assert_ok!(devices.get_item(key));
+        for (field, expected) in ["hca_handle", "hca_object"].into_iter().zip(expected) {
+          let limit = assert_ok!(device.getattr(field));
+          assert_eq!(assert_ok!(assert_ok!(limit.getattr("is_max")).extract::<bool>()), expected.is_none());
+          match expected {
+            | Some(value) => assert_eq!(assert_ok!(assert_ok!(limit.getattr("value")).extract::<u64>()), value),
+            | None => assert!(assert_err!(limit.getattr("value")).is_instance_of::<PyValueError>(py)),
+          }
+        }
+      }
+      assert!(assert_err!(devices.set_item(("rxe0", Some(5)), 0)).is_instance_of::<PyTypeError>(py));
+      assert!(assert_err!(object.bind(py).setattr("devices", 0)).is_instance_of::<PyAttributeError>(py));
+      for (raw, expected) in [
+        (include_str!("../../../sakai/src/cgroup/v2/fixtures/p6_rdma_index/rdma.events"), [
+          [1_u64, 2, 3, 4],
+          [5, 6, 7, 8],
+          [9, 10, 11, 12],
+        ]),
+        (include_str!("../../../sakai/src/cgroup/v2/fixtures/p6_rdma_index/rdma.events.local"), [
+          [4, 5, 6, 7],
+          [0, 1, 2, 3],
+          [8, 9, 10, 11],
+        ]),
+      ] {
+        let snapshot = RdmaEvents::from(assert_ok!(raw.parse::<CoreRdmaEvents>()));
+        assert_eq!(snapshot, RdmaEvents {
+          devices: keys
+            .iter()
+            .cloned()
+            .zip(expected.map(|[handle_max, handle_fail, object_max, object_fail]| RdmaDeviceEvents {
+              hca_handle: RdmaResourceEvents { max: handle_max, alloc_fail: handle_fail },
+              hca_object: RdmaResourceEvents { max: object_max, alloc_fail: object_fail },
+            }))
+            .collect()
+        });
+        let object = assert_ok!(Py::new(py, snapshot));
+        let devices = assert_ok!(object.bind(py).getattr("devices"));
+        assert_eq!(assert_ok!(devices.len()), 3);
+        for (key, [handle_max, handle_fail, object_max, object_fail]) in keys.iter().zip(expected) {
+          let device = assert_ok!(devices.get_item(key));
+          for (resource, expected) in
+            [("hca_handle", [handle_max, handle_fail]), ("hca_object", [object_max, object_fail])]
+          {
+            let events = assert_ok!(device.getattr(resource));
+            let actual =
+              ["max", "alloc_fail"].map(|field| assert_ok!(assert_ok!(events.getattr(field)).extract::<u64>()));
+            assert_eq!(actual, expected);
+          }
+        }
+        assert!(assert_err!(devices.set_item(("rxe0", Some(0)), 0)).is_instance_of::<PyTypeError>(py));
+        assert!(assert_err!(object.bind(py).setattr("devices", 0)).is_instance_of::<PyAttributeError>(py));
+      }
     });
   }
 }

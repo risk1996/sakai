@@ -174,9 +174,15 @@ class ContractTest(unittest.TestCase):
 
     def check_rdma(snapshot: Any, kind: str) -> None:  # noqa: ANN401
       self.check_frozen(snapshot, "devices")
-      self.check_readonly(snapshot.devices, "unused")
-      for name, device in snapshot.devices.items():
+      self.check_readonly(snapshot.devices, ("unused", None))
+      for key, device in snapshot.devices.items():
+        self.assertIsInstance(key, tuple)
+        self.assertEqual(len(key), 2)
+        name, index = key
         self.assertIsInstance(name, str)
+        if index is not None:
+          self.check_unsigned(index)
+          self.assertLessEqual(index, 2**32 - 1)
         self.check_frozen(device, "hca_handle", "hca_object")
         for value in [device.hca_handle, device.hca_object]:
           if kind == "max":

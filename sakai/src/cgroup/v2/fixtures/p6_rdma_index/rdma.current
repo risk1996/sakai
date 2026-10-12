@@ -1,0 +1,3 @@
+rxe0 index=5 hca_handle=2 hca_object=30
+rxe0 index=0 hca_object=20 hca_handle=1
+mlx4_0 hca_handle=3 hca_object=40

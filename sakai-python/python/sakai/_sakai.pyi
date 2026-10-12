@@ -14,6 +14,7 @@ PathArg: TypeAlias = str | bytes | PathLike[str] | PathLike[bytes]
 CgroupKind: TypeAlias = Literal[
   "domain", "domain threaded", "domain invalid", "threaded"
 ]
+RdmaDeviceKey: TypeAlias = tuple[str, int | None]
 _ValueT = TypeVar("_ValueT", int, float)
 
 class MaxOr(Generic[_ValueT]):
@@ -359,7 +360,7 @@ class RdmaReader:
 
 class RdmaCurrent:
   @property
-  def devices(self) -> Mapping[str, RdmaDeviceCurrent]: ...
+  def devices(self) -> Mapping[RdmaDeviceKey, RdmaDeviceCurrent]: ...
 
 class RdmaDeviceCurrent:
   @property
@@ -369,7 +370,7 @@ class RdmaDeviceCurrent:
 
 class RdmaMax:
   @property
-  def devices(self) -> Mapping[str, RdmaDeviceMax]: ...
+  def devices(self) -> Mapping[RdmaDeviceKey, RdmaDeviceMax]: ...
 
 class RdmaDeviceMax:
   @property
@@ -379,7 +380,7 @@ class RdmaDeviceMax:
 
 class RdmaEvents:
   @property
-  def devices(self) -> Mapping[str, RdmaDeviceEvents]: ...
+  def devices(self) -> Mapping[RdmaDeviceKey, RdmaDeviceEvents]: ...
 
 class RdmaDeviceEvents:
   @property

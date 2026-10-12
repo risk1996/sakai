@@ -1,0 +1,3 @@
+rxe0 index=0 hca_handle.max=1 hca_handle.alloc_fail=2 hca_object.max=3 hca_object.alloc_fail=4
+rxe0 index=5 hca_object.alloc_fail=8 hca_object.max=7 hca_handle.alloc_fail=6 hca_handle.max=5
+mlx4_0 hca_handle.max=9 hca_handle.alloc_fail=10 hca_object.max=11 hca_object.alloc_fail=12

@@ -72,7 +72,8 @@ The remaining cgroup v2 controllers are available through `Cgroup::hugetlb()`,
 `rdma()`, `dmem()`, and `misc()`, with equivalent Python readers. Huge-page
 filenames use validated `v2::hugetlb::PageSize` values; memory quantities stay
 bytes, while RDMA and miscellaneous resources use typed counts. Hardware-defined
-resource/device names remain map keys. Optional newer-kernel files and root
+resource names remain map keys; RDMA maps use `v2::rdma::RdmaDevice` keys
+that preserve device names and optional indices. Optional newer-kernel files and root
 exemptions return `FileMissing`. See the [Python controller reference](sakai-python/README.md)
 and each Rust module for availability, snapshot semantics and units.
 

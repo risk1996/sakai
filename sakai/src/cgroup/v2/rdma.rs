@@ -16,6 +16,42 @@ use crate::{
   unit::Count,
 };
 
+/// An RDMA adapter name and its optional system-wide device index.
+///
+/// Names can be shared by adapters in different network namespaces. Since
+/// Linux 7.3 release candidates, the kernel adds `index=N` when a name is
+/// ambiguous; see the [Linux 7.3-rc1 implementation](https://github.com/torvalds/linux/blob/v7.3-rc1/kernel/cgroup/rdma.c).
+/// Older kernels and globally unique names omit the index. `None` means
+/// unreported, not index zero. Indices are unsigned identifiers, not counts.
+///
+/// This key describes one stored record, not a permanent device identity.
+/// Renames, registration changes, and index reuse can change identity between
+/// snapshots. An index can appear or disappear when another adapter shares
+/// the name. See [Linux RDMA interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#rdma-interface-files).
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct RdmaDevice {
+  name: String,
+  index: Option<u32>,
+}
+
+impl RdmaDevice {
+  /// Constructs a record key without resolving a currently registered adapter.
+  ///
+  /// Preserve `None` when the kernel omitted the index; it differs from zero.
+  #[must_use]
+  pub fn new(name: impl Into<String>, index: Option<u32>) -> Self { Self { name: name.into(), index } }
+
+  /// Returns the stored adapter name, which can be shared across namespaces.
+  #[must_use]
+  pub fn name(&self) -> &str { &self.name }
+
+  /// Returns the reported system-wide device index, or `None` when omitted.
+  ///
+  /// Inspects this record without performing I/O or resolving a device.
+  #[must_use]
+  pub const fn index(&self) -> Option<u32> { self.index }
+}
+
 /// A borrowed view of one cgroup's RDMA controller.
 ///
 /// Each call reads a fresh, read-only snapshot. Separate calls are not atomic
@@ -33,7 +69,7 @@ pub struct Rdma<'a> {
 impl Rdma<'_> {
   /// Reads hierarchical HCA handle and object usage, measured in counts.
   ///
-  /// Returns a fresh [`RdmaCurrent`] snapshot keyed by device name. See
+  /// Returns a fresh [`RdmaCurrent`] snapshot keyed by [`RdmaDevice`]. See
   /// [Linux RDMA interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#rdma-interface-files).
   ///
   /// # Errors
@@ -94,16 +130,18 @@ impl Rdma<'_> {
 
 /// A volatile snapshot of hierarchical RDMA resource usage or peak usage.
 ///
-/// Counts include this cgroup and its descendants, keyed by registered device
-/// name. An empty map means no devices were reported. Current usage can rise
+/// Counts include this cgroup and its descendants, keyed by [`RdmaDevice`]
+/// name/index pairs. An empty map means no devices were reported. Current usage
+/// can rise
 /// or fall between reads; peaks are independent historical high-water marks
 /// since cgroup creation. Device removal also removes its reported history.
+/// Optional device indices are preserved in the map keys.
 /// Unknown resource keys are ignored; the two baseline counters are required.
 ///
 /// See [Linux RDMA interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#rdma-interface-files).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct RdmaCurrent {
-  devices: BTreeMap<String, RdmaDeviceCurrent>,
+  devices: BTreeMap<RdmaDevice, RdmaDeviceCurrent>,
 }
 
 impl RdmaCurrent {
@@ -116,7 +154,7 @@ impl RdmaCurrent {
 
   /// Returns stored per-device HCA counts without performing I/O.
   #[must_use]
-  pub const fn devices(&self) -> &BTreeMap<String, RdmaDeviceCurrent> { &self.devices }
+  pub const fn devices(&self) -> &BTreeMap<RdmaDevice, RdmaDeviceCurrent> { &self.devices }
 }
 
 /// Hierarchical HCA handle and object counts for one RDMA device.
@@ -166,12 +204,13 @@ impl FromStr for RdmaCurrent {
 /// Zero is a valid limit. `max` means no configured limit at this cgroup;
 /// ancestor limits still apply. Configuration and registered devices can
 /// change between reads. An empty map means no devices were reported.
+/// Optional device indices are preserved in the map keys.
 /// Unknown resource keys are ignored; the two baseline limits are required.
 ///
 /// See [Linux RDMA interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#rdma-interface-files).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct RdmaMax {
-  devices: BTreeMap<String, RdmaDeviceMax>,
+  devices: BTreeMap<RdmaDevice, RdmaDeviceMax>,
 }
 
 impl RdmaMax {
@@ -180,7 +219,7 @@ impl RdmaMax {
 
   /// Returns stored per-device limits without performing I/O.
   #[must_use]
-  pub const fn devices(&self) -> &BTreeMap<String, RdmaDeviceMax> { &self.devices }
+  pub const fn devices(&self) -> &BTreeMap<RdmaDevice, RdmaDeviceMax> { &self.devices }
 }
 
 /// HCA handle and object limits for one RDMA device, measured in counts.
@@ -223,10 +262,11 @@ impl FromStr for RdmaMax {
 /// [release-tagged implementation](https://github.com/torvalds/linux/blob/v7.2/kernel/cgroup/rdma.c).
 /// Counts can increase between reads. An empty map means no devices were
 /// reported; device removal removes its counters. Unknown resource keys are
-/// ignored; all four baseline event counters are required for each device.
+/// ignored; optional device indices remain part of the map keys.
+/// All four baseline event counters are required for each device.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct RdmaEvents {
-  devices: BTreeMap<String, RdmaDeviceEvents>,
+  devices: BTreeMap<RdmaDevice, RdmaDeviceEvents>,
 }
 
 impl RdmaEvents {
@@ -237,7 +277,7 @@ impl RdmaEvents {
 
   /// Returns stored per-device event counters without performing I/O.
   #[must_use]
-  pub const fn devices(&self) -> &BTreeMap<String, RdmaDeviceEvents> { &self.devices }
+  pub const fn devices(&self) -> &BTreeMap<RdmaDevice, RdmaDeviceEvents> { &self.devices }
 }
 
 /// Allocation events for both resource types of one RDMA device.
@@ -310,7 +350,7 @@ impl FromStr for RdmaEvents {
 fn parse_devices<T>(
   raw: &str,
   parse: impl Fn(KeyedFields<'_>) -> Result<T, ParseError<ParseValueError>>,
-) -> Result<BTreeMap<String, T>, ParseError<ParseValueError>> {
+) -> Result<BTreeMap<RdmaDevice, T>, ParseError<ParseValueError>> {
   raw
     .lines()
     .filter(|line| !line.trim().is_empty())
@@ -323,7 +363,12 @@ fn parse_devices<T>(
           token.split_once('=').ok_or_else(|| ParseError::invalid(raw, "value", token, ParseValueError::OutOfRange))
         }),
       )?;
-      Ok((device.to_owned(), parse(fields)?))
+      let index = fields
+        .iter()
+        .find_map(|(key, value)| (key == "index").then_some(value))
+        .map(|value| value.parse::<u32>().map_err(|error| ParseError::invalid(raw, "index", value, error.into())))
+        .transpose()?;
+      Ok((RdmaDevice::new(device, index), parse(fields)?))
     })
     .collect()
 }
@@ -348,8 +393,8 @@ mod tests {
         include_str!("fixtures/p6/rdma.current"),
         Ok(RdmaCurrent {
           devices: BTreeMap::from([
-            ("mlx4_0".into(), RdmaDeviceCurrent { hca_handle: count(1), hca_object: count(20) }),
-            ("ocrdma1".into(), RdmaDeviceCurrent { hca_handle: count(0), hca_object: count(23) }),
+            (RdmaDevice::new("mlx4_0", None), RdmaDeviceCurrent { hca_handle: count(1), hca_object: count(20) }),
+            (RdmaDevice::new("ocrdma1", None), RdmaDeviceCurrent { hca_handle: count(0), hca_object: count(23) }),
           ]),
         }),
       ),
@@ -357,8 +402,8 @@ mod tests {
         include_str!("fixtures/p6/rdma.peak"),
         Ok(RdmaCurrent {
           devices: BTreeMap::from([
-            ("mlx4_0".into(), RdmaDeviceCurrent { hca_handle: count(2), hca_object: count(2000) }),
-            ("ocrdma1".into(), RdmaDeviceCurrent { hca_handle: count(1), hca_object: count(23) }),
+            (RdmaDevice::new("mlx4_0", None), RdmaDeviceCurrent { hca_handle: count(2), hca_object: count(2000) }),
+            (RdmaDevice::new("ocrdma1", None), RdmaDeviceCurrent { hca_handle: count(1), hca_object: count(23) }),
           ]),
         }),
       ),
@@ -367,7 +412,7 @@ mod tests {
       (
         "mlx4_0 hca_object=max future=nope hca_handle=max",
         Ok(RdmaCurrent {
-          devices: BTreeMap::from([("mlx4_0".into(), RdmaDeviceCurrent {
+          devices: BTreeMap::from([(RdmaDevice::new("mlx4_0", None), RdmaDeviceCurrent {
             hca_handle: count(i32::MAX as u64),
             hca_object: count(i32::MAX as u64),
           })]),
@@ -376,7 +421,7 @@ mod tests {
       (
         "mlx4_0 hca_handle=18446744073709551615 hca_object=0",
         Ok(RdmaCurrent {
-          devices: BTreeMap::from([("mlx4_0".into(), RdmaDeviceCurrent {
+          devices: BTreeMap::from([(RdmaDevice::new("mlx4_0", None), RdmaDeviceCurrent {
             hca_handle: count(u64::MAX),
             hca_object: count(0),
           })]),
@@ -398,11 +443,14 @@ mod tests {
         include_str!("fixtures/p6/rdma.max"),
         Ok(RdmaMax {
           devices: BTreeMap::from([
-            ("mlx4_0".into(), RdmaDeviceMax {
+            (RdmaDevice::new("mlx4_0", None), RdmaDeviceMax {
               hca_handle: MaxOr::Value(count(2)),
               hca_object: MaxOr::Value(count(2000)),
             }),
-            ("ocrdma1".into(), RdmaDeviceMax { hca_handle: MaxOr::Value(count(3)), hca_object: MaxOr::Max }),
+            (RdmaDevice::new("ocrdma1", None), RdmaDeviceMax {
+              hca_handle: MaxOr::Value(count(3)),
+              hca_object: MaxOr::Max,
+            }),
           ]),
         }),
       ),
@@ -410,7 +458,7 @@ mod tests {
       (
         "mlx4_0 future=nope hca_object=max hca_handle=0",
         Ok(RdmaMax {
-          devices: BTreeMap::from([("mlx4_0".into(), RdmaDeviceMax {
+          devices: BTreeMap::from([(RdmaDevice::new("mlx4_0", None), RdmaDeviceMax {
             hca_handle: MaxOr::Value(count(0)),
             hca_object: MaxOr::Max,
           })]),
@@ -419,7 +467,7 @@ mod tests {
       (
         "mlx4_0 hca_handle=max hca_object=max",
         Ok(RdmaMax {
-          devices: BTreeMap::from([("mlx4_0".into(), RdmaDeviceMax {
+          devices: BTreeMap::from([(RdmaDevice::new("mlx4_0", None), RdmaDeviceMax {
             hca_handle: MaxOr::Max,
             hca_object: MaxOr::Max,
           })]),
@@ -438,7 +486,7 @@ mod tests {
       (
         include_str!("fixtures/p6/rdma.events"),
         Ok(RdmaEvents {
-          devices: BTreeMap::from([("mlx4_0".into(), RdmaDeviceEvents {
+          devices: BTreeMap::from([(RdmaDevice::new("mlx4_0", None), RdmaDeviceEvents {
             hca_handle: RdmaResourceEvents { max: count(5), alloc_fail: count(7) },
             hca_object: RdmaResourceEvents { max: count(0), alloc_fail: count(1) },
           })]),
@@ -447,7 +495,7 @@ mod tests {
       (
         include_str!("fixtures/p6/rdma.events.local"),
         Ok(RdmaEvents {
-          devices: BTreeMap::from([("mlx4_0".into(), RdmaDeviceEvents {
+          devices: BTreeMap::from([(RdmaDevice::new("mlx4_0", None), RdmaDeviceEvents {
             hca_handle: RdmaResourceEvents { max: count(2), alloc_fail: count(3) },
             hca_object: RdmaResourceEvents { max: count(0), alloc_fail: count(0) },
           })]),
@@ -463,10 +511,92 @@ mod tests {
     ]);
   }
 
+  #[test]
+  fn preserves_same_named_devices_in_usage_limits_and_events() {
+    let keys = [RdmaDevice::new("rxe0", Some(0)), RdmaDevice::new("rxe0", Some(5)), RdmaDevice::new("mlx4_0", None)];
+    let usage = |values: [(u64, u64); 3]| RdmaCurrent {
+      devices: keys
+        .iter()
+        .cloned()
+        .zip(
+          values.map(|(handles, objects)| RdmaDeviceCurrent { hca_handle: count(handles), hca_object: count(objects) }),
+        )
+        .collect(),
+    };
+    Cases::<RdmaCurrent>::check([
+      (include_str!("fixtures/p6_rdma_index/rdma.current"), Ok(usage([(1, 20), (2, 30), (3, 40)]))),
+      (include_str!("fixtures/p6_rdma_index/rdma.peak"), Ok(usage([(10, 200), (20, 300), (30, 400)]))),
+    ]);
+    Cases::<RdmaMax>::check([(
+      include_str!("fixtures/p6_rdma_index/rdma.max"),
+      Ok(RdmaMax {
+        devices: BTreeMap::from([
+          (RdmaDevice::new("rxe0", Some(0)), RdmaDeviceMax {
+            hca_handle: MaxOr::Value(count(0)),
+            hca_object: MaxOr::Value(count(20)),
+          }),
+          (RdmaDevice::new("rxe0", Some(5)), RdmaDeviceMax {
+            hca_handle: MaxOr::Value(count(2)),
+            hca_object: MaxOr::Max,
+          }),
+          (RdmaDevice::new("mlx4_0", None), RdmaDeviceMax {
+            hca_handle: MaxOr::Max,
+            hca_object: MaxOr::Value(count(40)),
+          }),
+        ]),
+      }),
+    )]);
+    let events = |values: [[u64; 4]; 3]| RdmaEvents {
+      devices: keys
+        .iter()
+        .cloned()
+        .zip(values.map(|[handle_max, handle_fail, object_max, object_fail]| RdmaDeviceEvents {
+          hca_handle: RdmaResourceEvents { max: count(handle_max), alloc_fail: count(handle_fail) },
+          hca_object: RdmaResourceEvents { max: count(object_max), alloc_fail: count(object_fail) },
+        }))
+        .collect(),
+    };
+    Cases::<RdmaEvents>::check([
+      (include_str!("fixtures/p6_rdma_index/rdma.events"), Ok(events([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]]))),
+      (
+        include_str!("fixtures/p6_rdma_index/rdma.events.local"),
+        Ok(events([[4, 5, 6, 7], [0, 1, 2, 3], [8, 9, 10, 11]])),
+      ),
+    ]);
+  }
+
+  #[test]
+  fn validates_optional_device_indices_without_conflating_absence_with_zero() {
+    for (suffix, expected) in [("", None), ("index=0", Some(0)), ("index=4294967295", Some(u32::MAX))] {
+      let raw = format!("rxe0 {suffix} hca_handle=1 hca_object=2");
+      Cases::<RdmaCurrent>::check([(
+        raw.as_str(),
+        Ok(RdmaCurrent {
+          devices: BTreeMap::from([(RdmaDevice::new("rxe0", expected), RdmaDeviceCurrent {
+            hca_handle: count(1),
+            hca_object: count(2),
+          })]),
+        }),
+      )]);
+    }
+    for index in ["", "-1", "max", "nope", "4294967296"] {
+      let usage = format!("rxe0 index={index} hca_handle=1 hca_object=2");
+      Cases::<RdmaCurrent>::check([(usage.as_str(), Err(Invalid("index", index)))]);
+      Cases::<RdmaMax>::check([(usage.as_str(), Err(Invalid("index", index)))]);
+      let events =
+        format!("rxe0 index={index} hca_handle.max=0 hca_handle.alloc_fail=0 hca_object.max=0 hca_object.alloc_fail=0");
+      Cases::<RdmaEvents>::check([(events.as_str(), Err(Invalid("index", index)))]);
+    }
+    let key = RdmaDevice::new("rxe0", Some(0));
+    assert_eq!(key.name(), "rxe0");
+    assert_eq!(key.index(), Some(0));
+    assert_ne!(key, RdmaDevice::new("rxe0", None));
+  }
+
   #[cfg(target_os = "linux")]
   #[test]
   fn reads_rdma_fixtures_and_older_kernel_missing_files_without_writes() {
-    for fixture in ["p6", "p6_older"] {
+    for fixture in ["p6", "p6_rdma_index", "p6_older"] {
       let cgroup = Cgroup::fixture(&format!("fixtures/{fixture}"));
       let rdma = cgroup.rdma();
       let path = cgroup.path();
@@ -491,7 +621,7 @@ mod tests {
         (RdmaEvents::LOCAL_FILE_NAME, rdma.events_local().map(|_| ())),
       ] {
         match fixture {
-          | "p6" => {
+          | "p6" | "p6_rdma_index" => {
             assert_ok!(read);
           },
           | _ => assert!(matches!(read, Err(Error::FileMissing { path: missing }) if missing == path.join(name))),

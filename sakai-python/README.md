@@ -110,7 +110,14 @@ noncanonical labels raise `ValueError`; unavailable sizes and root interfaces
 raise `InterfaceMissingError`. See [Linux HugeTLB interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#hugetlb).
 
 `group.rdma()` reads `.current()` and `.peak()` as immutable `RdmaCurrent`
-snapshots with read-only `.devices` mappings keyed by kernel RDMA device names.
+snapshots with read-only `.devices` mappings keyed by `(name, index)` tuples.
+The index is an unsigned device identifier, or `None` when the kernel omits it;
+`None` differs from zero. Linux 7.3 release candidates add an index for names
+shared across network namespaces; older kernels and unique names omit it.
+For example, `snapshot.devices[("mlx4_0", None)]` accesses a name-only record,
+while `snapshot.devices[("rxe0", 5)]` selects an indexed record. Name collisions,
+renames and index reuse can change keys between snapshots. See the
+[Linux 7.3-rc1 implementation](https://github.com/torvalds/linux/blob/v7.3-rc1/kernel/cgroup/rdma.c).
 Each device exposes integer `.hca_handle` and `.hca_object` resource counts.
 `.max()` has the same device keys and `MaxOr[int]` resource limits. Device pools
 may disappear when resources are released; an empty map is valid. `.events()`
@@ -118,7 +125,8 @@ and `.events_local()` map devices to `.hca_handle` and `.hca_object` event objec
 each with integer `.max` and `.alloc_fail` counters. Peak and event interfaces
 require Linux 7.2; local max counts hits at this cgroup’s own limit, while local
 alloc_fail counts failed requests originating here, including ancestor limits.
-These interfaces are absent at the root; missing files on older kernels raise `InterfaceMissingError`.
+These interfaces are absent at the root; missing files on older kernels raise
+`InterfaceMissingError`.
 See [Linux RDMA interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#rdma).
 
 `group.dmem()` provides `.capacity()` and `.current()` byte snapshots with
