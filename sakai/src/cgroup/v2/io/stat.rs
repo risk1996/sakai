@@ -20,7 +20,6 @@ use crate::{
 /// this device group, rather than hierarchical cumulative usage. Unknown keys
 /// are ignored. Cost-controller counters use modeled I/O time and include
 /// descendants, rather than representing observed request completion latency.
-///
 /// See [Linux `io.stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct IoStat {
@@ -29,12 +28,10 @@ pub struct IoStat {
 
 impl IoStat {
   /// The cgroup v2 `io.stat` interface filename.
-  ///
   /// See [Linux `io.stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   pub const FILE_NAME: &'static str = "io.stat";
 
   /// Returns the byte and operation counters for each reported device.
-  ///
   /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   #[must_use]
   pub const fn devices(&self) -> &BTreeMap<Device, IoDeviceStat> { &self.devices }
@@ -43,7 +40,6 @@ impl IoStat {
 /// Cumulative byte and operation counters for one block device.
 ///
 /// Absent fields are not assumed to be zero.
-///
 /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct IoDeviceStat {
@@ -69,43 +65,36 @@ pub struct IoDeviceStat {
 
 impl IoDeviceStat {
   /// Cumulative bytes read (`rbytes`).
-  ///
   /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   #[must_use]
   pub const fn read_bytes(&self) -> Option<Bytes> { self.read_bytes }
 
   /// Cumulative bytes written (`wbytes`).
-  ///
   /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   #[must_use]
   pub const fn write_bytes(&self) -> Option<Bytes> { self.write_bytes }
 
   /// Cumulative bytes discarded (`dbytes`), when reported.
-  ///
   /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   #[must_use]
   pub const fn discard_bytes(&self) -> Option<Bytes> { self.discard_bytes }
 
   /// Cumulative read operations (`rios`).
-  ///
   /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   #[must_use]
   pub const fn read_operations(&self) -> Option<Count> { self.read_operations }
 
   /// Cumulative write operations (`wios`).
-  ///
   /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   #[must_use]
   pub const fn write_operations(&self) -> Option<Count> { self.write_operations }
 
   /// Cumulative discard operations (`dios`), when reported.
-  ///
   /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   #[must_use]
   pub const fn discard_operations(&self) -> Option<Count> { self.discard_operations }
 
   /// Delay-control indicator (`use_delay`), when kernel debug statistics are enabled.
-  ///
   /// See [`DelayUsage`] and [Linux I/O latency](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-latency).
   #[must_use]
   pub const fn delay_usage(&self) -> Option<DelayUsage> { self.delay_usage }

@@ -72,12 +72,10 @@ impl CgroupPath {
   }
 
   /// Returns the cgroup2 mount point that exposes this cgroup.
-  ///
   /// See [proc_pid_mountinfo(5)](https://man7.org/linux/man-pages/man5/proc_pid_mountinfo.5.html).
   pub fn mount_point(&self) -> &Path { &self.mount_point }
 
   /// Returns whether the process sees the cgroup2 mount as read-only.
-  ///
   /// See [proc_pid_mountinfo(5)](https://man7.org/linux/man-pages/man5/proc_pid_mountinfo.5.html).
   pub const fn is_read_only(&self) -> bool { self.read_only }
 }

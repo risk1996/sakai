@@ -31,7 +31,6 @@ mod zswap;
 /// hierarchy root and cgroups without the memory controller can lack these
 /// files; such reads return [`crate::Error::FileMissing`]. Separate reads are not
 /// atomic together.
-///
 /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
 #[cfg(target_os = "linux")]
 #[derive(Debug, Clone, Copy)]
@@ -42,12 +41,10 @@ pub struct Memory<'a> {
 #[cfg(target_os = "linux")]
 impl Memory<'_> {
   /// Borrows this cgroup's swap interfaces.
-  ///
   /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   pub const fn swap(&self) -> Swap<'_> { Swap { cgroup: self.cgroup } }
 
   /// Borrows this cgroup's compressed swap interfaces.
-  ///
   /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   pub const fn zswap(&self) -> Zswap<'_> { Zswap { cgroup: self.cgroup } }
 
@@ -55,9 +52,7 @@ impl Memory<'_> {
   ///
   /// Reads a fresh [`MemoryCurrent`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn current(&self) -> Result<MemoryCurrent, Error> { self.cgroup.parse(MemoryCurrent::FILE_NAME) }
 
   /// Live peak usage, in bytes, since cgroup creation for this fresh descriptor.
@@ -67,18 +62,14 @@ impl Memory<'_> {
   /// Since Linux 5.19; see the [upstream Linux 5.19 source](https://github.com/torvalds/linux/blob/v5.19/Documentation/admin-guide/cgroup-v2.rst).
   /// Older kernels return [`crate::Error::FileMissing`] when this interface is read.
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn peak(&self) -> Result<MemoryPeak, Error> { self.cgroup.parse(MemoryPeak::FILE_NAME) }
 
   /// Live breakdown of memory usage, page quantities, and event counts.
   ///
   /// Reads a fresh [`MemoryStat`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn stat(&self) -> Result<MemoryStat, Error> { self.cgroup.parse(MemoryStat::FILE_NAME) }
 
   /// Live memory event counters for this cgroup and its descendants.
@@ -87,27 +78,21 @@ impl Memory<'_> {
   ///
   /// Reads a fresh [`MemoryEvents`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn events(&self) -> Result<MemoryEvents, Error> { self.cgroup.parse(MemoryEvents::FILE_NAME) }
 
   /// Live memory event counters originating in this cgroup only.
   ///
   /// Reads a fresh [`MemoryEventsLocal`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn events_local(&self) -> Result<MemoryEventsLocal, Error> { self.cgroup.parse(MemoryEventsLocal::FILE_NAME) }
 
   /// Live per-NUMA-node memory amounts, page quantities, and event counts.
   ///
   /// Reads a fresh [`MemoryNumaStat`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn numa_stat(&self) -> Result<MemoryNumaStat, Error> { self.cgroup.parse(MemoryNumaStat::FILE_NAME) }
 
   /// Live PSI averages and totals. Never registers a pressure trigger.
@@ -117,54 +102,42 @@ impl Memory<'_> {
   ///
   /// Reads a fresh [`Pressure`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn pressure(&self) -> Result<Pressure, Error> { self.cgroup.parse(Pressure::MEMORY_FILE_NAME) }
 
   /// Configuration snapshot of this cgroup's hard memory limit in bytes.
   ///
   /// Reads a fresh [`MemoryMax`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn max(&self) -> Result<MemoryMax, Error> { self.cgroup.parse(MemoryMax::FILE_NAME) }
 
   /// Configuration snapshot of this cgroup's throttling limit in bytes.
   ///
   /// Reads a fresh [`MemoryHigh`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn high(&self) -> Result<MemoryHigh, Error> { self.cgroup.parse(MemoryHigh::FILE_NAME) }
 
   /// Configuration snapshot of this cgroup's best-effort memory protection, in bytes or `max`.
   ///
   /// Reads a fresh [`MemoryLow`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn low(&self) -> Result<MemoryLow, Error> { self.cgroup.parse(MemoryLow::FILE_NAME) }
 
   /// Configuration snapshot of this cgroup's hard memory protection, in bytes or `max`.
   ///
   /// Reads a fresh [`MemoryMin`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn min(&self) -> Result<MemoryMin, Error> { self.cgroup.parse(MemoryMin::FILE_NAME) }
 
   /// Configuration snapshot of group OOM kill behavior.
   ///
   /// Reads a fresh [`MemoryOomGroup`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn oom_group(&self) -> Result<MemoryOomGroup, Error> { self.cgroup.parse(MemoryOomGroup::FILE_NAME) }
 }
 
@@ -172,7 +145,6 @@ impl Memory<'_> {
 ///
 /// When enabled, a cgroup OOM kills its tasks and descendant tasks together,
 /// except OOM-protected tasks.
-///
 /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
 pub type MemoryOomGroup = Scalar<bool, interface::MemoryOomGroup>;
 
@@ -236,7 +208,6 @@ pub type MemoryCurrent = Scalar<Bytes, interface::MemoryCurrent>;
 /// lack this file; the reader then returns [`crate::Error::FileMissing`].
 /// Peak values are bytes. The reset behavior is documented in the
 /// [Linux 6.12 guide](https://github.com/torvalds/linux/blob/v6.12/Documentation/admin-guide/cgroup-v2.rst).
-///
 /// See [Linux `memory.peak` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
 ///
 /// Since Linux 5.19; see the [upstream Linux 5.19 source](https://github.com/torvalds/linux/blob/v5.19/Documentation/admin-guide/cgroup-v2.rst).
@@ -246,7 +217,6 @@ pub type MemoryPeak = Scalar<Bytes, interface::MemoryPeak>;
 /// The hard memory limit configured by `memory.max`.
 ///
 /// `max` means no limit is configured here; ancestor limits can still apply.
-///
 /// See [Linux `memory.max` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
 pub type MemoryMax = Scalar<MaxOr<Bytes>, interface::MemoryMax>;
 
@@ -254,7 +224,6 @@ pub type MemoryMax = Scalar<MaxOr<Bytes>, interface::MemoryMax>;
 ///
 /// Crossing this boundary triggers reclaim and throttling, not an OOM kill.
 /// `max` means no limit is configured here; ancestor limits can still apply.
-///
 /// See [Linux `memory.high` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
 pub type MemoryHigh = Scalar<MaxOr<Bytes>, interface::MemoryHigh>;
 
@@ -264,7 +233,6 @@ pub type MemoryHigh = Scalar<MaxOr<Bytes>, interface::MemoryHigh>;
 /// memory is available. Ancestor settings can reduce the effective protection.
 /// `max` requests protection for all memory charged to this cgroup; it does not
 /// bypass ancestor boundaries or protection shared with siblings.
-///
 /// See [Linux `memory.low` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
 pub type MemoryLow = Scalar<MaxOr<Bytes>, interface::MemoryLow>;
 
@@ -275,6 +243,5 @@ pub type MemoryLow = Scalar<MaxOr<Bytes>, interface::MemoryLow>;
 /// settings can reduce the effective protection.
 /// `max` requests protection for all memory charged to this cgroup; it does not
 /// bypass ancestor boundaries or protection shared with siblings.
-///
 /// See [Linux `memory.min` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
 pub type MemoryMin = Scalar<MaxOr<Bytes>, interface::MemoryMin>;

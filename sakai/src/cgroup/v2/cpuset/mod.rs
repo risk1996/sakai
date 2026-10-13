@@ -46,9 +46,7 @@ impl Cpuset<'_> {
   /// effective list means no CPUs are granted, not inheritance. The root also
   /// exposes this file. See [`CpuList`] and [Linux cpuset interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpuset-interface-files).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn cpus_effective(&self) -> Result<CpuList, Error> { self.cgroup.parse(CpuList::EFFECTIVE_FILE_NAME) }
 
   /// Reads the CPUs requested for exclusive partition allocation.
@@ -109,9 +107,7 @@ impl Cpuset<'_> {
   /// root also exposes this file. See [`MemoryNodeList`] and
   /// [Linux cpuset interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpuset-interface-files).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn mems_effective(&self) -> Result<MemoryNodeList, Error> {
     self.cgroup.parse(MemoryNodeList::EFFECTIVE_FILE_NAME)
   }

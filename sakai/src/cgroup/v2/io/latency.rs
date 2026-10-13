@@ -16,7 +16,6 @@ use crate::{
 /// or guarantees. Targets and device membership can change between reads.
 /// This optional interface requires kernel I/O latency controller support.
 /// Unknown nested keys are ignored.
-///
 /// See [Linux `io.latency` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct IoLatency {
@@ -25,12 +24,10 @@ pub struct IoLatency {
 
 impl IoLatency {
   /// The cgroup v2 `io.latency` interface filename.
-  ///
   /// See [Linux `io.latency` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   pub const FILE_NAME: &'static str = "io.latency";
 
   /// Returns configured latency targets keyed by block device.
-  ///
   /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   #[must_use]
   pub const fn devices(&self) -> &BTreeMap<Device, NonZeroTime> { &self.devices }

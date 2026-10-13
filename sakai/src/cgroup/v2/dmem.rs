@@ -25,7 +25,6 @@ use crate::{
 /// and root exemptions. Capacity is root-only; protection and limit files are
 /// non-root. The kernel also exposes current usage at the root, although the
 /// interface guide describes it as non-root.
-///
 /// See [Linux 6.14 DMEM source](https://github.com/torvalds/linux/blob/v6.14/kernel/cgroup/dmem.c).
 #[cfg(target_os = "linux")]
 #[derive(Debug, Clone, Copy)]
@@ -40,18 +39,14 @@ impl Dmem<'_> {
   /// Capacity includes device memory reserved for kernel use, so it is not
   /// necessarily available to cgroups. Since Linux 6.14; see [Linux DMEM](https://www.kernel.org/doc/html/v6.14/admin-guide/cgroup-v2.html#dmem).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn capacity(&self) -> Result<DmemCapacity, Error> { self.cgroup.parse(DmemCapacity::FILE_NAME) }
 
   /// Reads volatile hierarchical usage for each registered region in bytes.
   ///
   /// Since Linux 6.14; see [Linux DMEM](https://www.kernel.org/doc/html/v6.14/admin-guide/cgroup-v2.html#dmem).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn current(&self) -> Result<DmemCurrent, Error> { self.cgroup.parse(DmemCurrent::FILE_NAME) }
 
   /// Reads historical hierarchical device-memory usage peaks per region.
@@ -59,9 +54,7 @@ impl Dmem<'_> {
   /// Since Linux 7.3 release candidates; non-root only. Each region has an
   /// independent lifetime peak. Reading never resets peaks. See [`DmemPeak`].
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn peak(&self) -> Result<DmemPeak, Error> { self.cgroup.parse(DmemPeak::FILE_NAME) }
 
   /// Reads configured hard eviction protections in bytes, or `max`.
@@ -69,9 +62,7 @@ impl Dmem<'_> {
   /// Effective protection depends on ancestors and sibling demand. Since Linux
   /// 6.14; see [Linux DMEM](https://www.kernel.org/doc/html/v6.14/admin-guide/cgroup-v2.html#dmem).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn min(&self) -> Result<DmemLimits, Error> { self.cgroup.parse(DmemLimits::MIN_FILE_NAME) }
 
   /// Reads configured best-effort eviction protections in bytes, or `max`.
@@ -79,9 +70,7 @@ impl Dmem<'_> {
   /// Effective protection depends on ancestors and sibling demand. Since Linux
   /// 6.14; see [Linux DMEM](https://www.kernel.org/doc/html/v6.14/admin-guide/cgroup-v2.html#dmem).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn low(&self) -> Result<DmemLimits, Error> { self.cgroup.parse(DmemLimits::LOW_FILE_NAME) }
 
   /// Reads configured hierarchical usage limits in bytes, or `max`.
@@ -89,9 +78,7 @@ impl Dmem<'_> {
   /// `max` removes this cgroup's limit; ancestor limits still apply. Since Linux
   /// 6.14; see [Linux DMEM](https://www.kernel.org/doc/html/v6.14/admin-guide/cgroup-v2.html#dmem).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn max(&self) -> Result<DmemLimits, Error> { self.cgroup.parse(DmemLimits::MAX_FILE_NAME) }
 }
 
@@ -228,10 +215,7 @@ impl FromStr for DmemLimits {
 fn parse_regions<T>(contents: &str) -> Result<BTreeMap<String, T>, ParseError<ParseValueError>>
 where
   T: ParseCgroup<ParseBytes, Error = ParseValueError>, {
-  KeyedFields::parse(contents, |_| "bytes")?
-    .iter()
-    .map(|(region, value)| Ok((region.to_owned(), T::parse_field(contents, "bytes", value)?)))
-    .collect()
+  KeyedFields::parse(contents, |_| "bytes")?.parse_values::<ParseBytes, T>("bytes")
 }
 
 #[cfg(test)]

@@ -15,7 +15,6 @@ use crate::{
 /// weight.
 /// Use `try_new` to validate the range and `into_inner` to recover the integer.
 /// The nice scale is described in [sched(7)](https://man7.org/linux/man-pages/man7/sched.7.html).
-///
 /// See [Linux `cpu.weight.nice` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
 #[nutype(
   validate(greater_or_equal = -20, less_or_equal = 19),
@@ -25,7 +24,6 @@ pub struct Nice(i8);
 
 impl Nice {
   /// The cgroup v2 `cpu.weight.nice` interface filename.
-  ///
   /// See [Linux `cpu.weight.nice` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
   pub const FILE_NAME: &'static str = "cpu.weight.nice";
 }

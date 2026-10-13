@@ -15,7 +15,6 @@ use crate::{
 /// again to obtain a fresh value.
 /// The first token is the quota, or `max`, and the second is its period;
 /// both numeric tokens are microseconds. Only fair-class tasks are limited.
-///
 /// See [Linux `cpu.max` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CpuMax {
@@ -25,19 +24,16 @@ pub struct CpuMax {
 
 impl CpuMax {
   /// The cgroup v2 `cpu.max` interface filename.
-  ///
   /// See [Linux `cpu.max` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
   pub const FILE_NAME: &'static str = "cpu.max";
 
   /// Returns the CPU time allowed per enforcement period, converted from microseconds.
   /// [`MaxOr::Max`] means no quota at this cgroup; ancestor quotas can still apply.
-  ///
   /// See [Linux CPU interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
   #[must_use]
   pub const fn quota(&self) -> MaxOr<NonZeroTime> { self.quota }
 
   /// Returns the enforcement period, converted from kernel microseconds.
-  ///
   /// See [Linux CPU interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
   #[must_use]
   pub const fn period(&self) -> NonZeroTime { self.period }
@@ -49,7 +45,6 @@ impl CpuMax {
   /// Large quotas may lose precision when converted to a floating-point ratio.
   /// For example, a quota of 25,000 microseconds over a 100,000-microsecond
   /// period gives 0.25 CPUs, exposed as a dimensionless [`Ratio`].
-  ///
   /// See [Linux CPU interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
   #[must_use]
   pub fn cpu_count(&self) -> MaxOr<Ratio> {

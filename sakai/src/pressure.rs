@@ -15,9 +15,7 @@ use crate::{
 ///
 /// CPU pressure files before Linux 5.13 contain only the `some` line, so
 /// [`Self::full`] is optional. Reading pressure never requires writing a PSI
-/// trigger to the file.
-///
-/// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
+/// trigger to the file. See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Pressure {
   some: PressureLine,
@@ -26,20 +24,16 @@ pub struct Pressure {
 
 impl Pressure {
   /// The cgroup v2 `cpu.pressure` interface filename.
-  ///
   /// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
   pub const CPU_FILE_NAME: &'static str = "cpu.pressure";
   /// The cgroup v2 `io.pressure` interface filename.
-  ///
   /// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
   pub const IO_FILE_NAME: &'static str = "io.pressure";
   /// The cgroup v2 `memory.pressure` interface filename.
-  ///
   /// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
   pub const MEMORY_FILE_NAME: &'static str = "memory.pressure";
 
   /// Returns pressure during which at least one task was stalled.
-  ///
   /// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
   #[must_use]
   pub const fn some(&self) -> PressureLine { self.some }
@@ -48,7 +42,6 @@ impl Pressure {
   ///
   /// CPU PSI before Linux 5.13 does not report this line. `None` means the
   /// line was absent; it does not mean zero stall time.
-  ///
   /// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
   #[must_use]
   pub const fn full(&self) -> Option<PressureLine> { self.full }
@@ -59,7 +52,6 @@ impl Pressure {
 /// Averages are exponentially weighted percentages parsed as [`Ratio`]; a
 /// value of 0.25 represents 25% stalled time. Total time is accumulated since
 /// accounting began, converted from kernel microseconds to [`Time`].
-///
 /// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PressureLine {
@@ -71,25 +63,21 @@ pub struct PressureLine {
 
 impl PressureLine {
   /// Returns the exponentially weighted stalled-time ratio with a 10-second averaging period.
-  ///
   /// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
   #[must_use]
   pub const fn avg10(&self) -> Ratio { self.avg10 }
 
   /// Returns the exponentially weighted stalled-time ratio with a 60-second averaging period.
-  ///
   /// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
   #[must_use]
   pub const fn avg60(&self) -> Ratio { self.avg60 }
 
   /// Returns the exponentially weighted stalled-time ratio with a 300-second averaging period.
-  ///
   /// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
   #[must_use]
   pub const fn avg300(&self) -> Ratio { self.avg300 }
 
   /// Returns cumulative stall time, converted from kernel microseconds to [`Time`].
-  ///
   /// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
   #[must_use]
   pub const fn total(&self) -> Time { self.total }

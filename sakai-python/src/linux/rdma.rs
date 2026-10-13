@@ -2,17 +2,14 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use pyo3::{
-  prelude::*,
-  types::{PyAny, PyDict, PyMappingProxy},
-};
+use pyo3::{prelude::*, types::PyMappingProxy};
 use sakai::v2::rdma::{
-  RdmaCurrent as CoreRdmaCurrent, RdmaDeviceCurrent as CoreRdmaDeviceCurrent, RdmaDeviceEvents as CoreRdmaDeviceEvents,
-  RdmaDeviceMax as CoreRdmaDeviceMax, RdmaEvents as CoreRdmaEvents, RdmaMax as CoreRdmaMax,
-  RdmaResourceEvents as CoreRdmaResourceEvents,
+  RdmaCurrent as CoreRdmaCurrent, RdmaDevice as CoreRdmaDevice, RdmaDeviceCurrent as CoreRdmaDeviceCurrent,
+  RdmaDeviceEvents as CoreRdmaDeviceEvents, RdmaDeviceMax as CoreRdmaDeviceMax, RdmaEvents as CoreRdmaEvents,
+  RdmaMax as CoreRdmaMax, RdmaResourceEvents as CoreRdmaResourceEvents,
 };
 
-use super::{MaxOr, PythonError};
+use super::{MaxOr, PythonError, mapping::mapping};
 
 type DeviceKey = (String, Option<u32>);
 
@@ -114,15 +111,7 @@ pub(super) struct RdmaCurrent {
 }
 
 impl From<CoreRdmaCurrent> for RdmaCurrent {
-  fn from(value: CoreRdmaCurrent) -> Self {
-    Self {
-      devices: value
-        .devices()
-        .iter()
-        .map(|(device, value)| ((device.name().to_owned(), device.index()), (*value).into()))
-        .collect(),
-    }
-  }
+  fn from(value: CoreRdmaCurrent) -> Self { Self { devices: devices(value.devices()) } }
 }
 
 #[pymethods]
@@ -133,7 +122,7 @@ impl RdmaCurrent {
   /// returns stored data without opening an interface file.
   #[getter]
   fn devices(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
-    mapping(py, &self.devices, |value| Py::new(py, value.clone()).map(Py::into_any))
+    mapping(py, &self.devices, |value| Py::new(py, value.clone()))
   }
 }
 
@@ -170,15 +159,7 @@ pub(super) struct RdmaMax {
 }
 
 impl From<CoreRdmaMax> for RdmaMax {
-  fn from(value: CoreRdmaMax) -> Self {
-    Self {
-      devices: value
-        .devices()
-        .iter()
-        .map(|(device, value)| ((device.name().to_owned(), device.index()), (*value).into()))
-        .collect(),
-    }
-  }
+  fn from(value: CoreRdmaMax) -> Self { Self { devices: devices(value.devices()) } }
 }
 
 #[pymethods]
@@ -188,7 +169,7 @@ impl RdmaMax {
   /// None means the kernel omitted the index, not zero. Performs no I/O.
   #[getter]
   fn devices(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
-    mapping(py, &self.devices, |value| Py::new(py, value.clone()).map(Py::into_any))
+    mapping(py, &self.devices, |value| Py::new(py, value.clone()))
   }
 }
 
@@ -225,15 +206,7 @@ pub(super) struct RdmaEvents {
 }
 
 impl From<CoreRdmaEvents> for RdmaEvents {
-  fn from(value: CoreRdmaEvents) -> Self {
-    Self {
-      devices: value
-        .devices()
-        .iter()
-        .map(|(device, value)| ((device.name().to_owned(), device.index()), (*value).into()))
-        .collect(),
-    }
-  }
+  fn from(value: CoreRdmaEvents) -> Self { Self { devices: devices(value.devices()) } }
 }
 
 #[pymethods]
@@ -243,7 +216,7 @@ impl RdmaEvents {
   /// None means the kernel omitted the index, not zero. Performs no I/O.
   #[getter]
   fn devices(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
-    mapping(py, &self.devices, |value| Py::new(py, value.clone()).map(Py::into_any))
+    mapping(py, &self.devices, |value| Py::new(py, value.clone()))
   }
 }
 
@@ -290,16 +263,8 @@ impl From<CoreRdmaResourceEvents> for RdmaResourceEvents {
   }
 }
 
-fn mapping<T>(
-  py: Python<'_>,
-  values: &BTreeMap<DeviceKey, T>,
-  convert: impl Fn(&T) -> PyResult<Py<PyAny>>,
-) -> PyResult<Py<PyMappingProxy>> {
-  let dict = PyDict::new(py);
-  for (device, value) in values {
-    dict.set_item(device, convert(value)?)?;
-  }
-  Ok(PyMappingProxy::new(py, dict.as_mapping()).unbind())
+fn devices<T: Copy, O: From<T>>(values: &BTreeMap<CoreRdmaDevice, T>) -> BTreeMap<DeviceKey, O> {
+  values.iter().map(|(device, value)| ((device.name().to_owned(), device.index()), (*value).into())).collect()
 }
 
 #[cfg(test)]

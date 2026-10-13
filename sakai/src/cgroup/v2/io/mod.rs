@@ -33,7 +33,6 @@ mod weight;
 /// Every method opens a fresh read-only descriptor. Missing interfaces,
 /// including disabled controllers, kernel configuration omissions, and root
 /// exemptions, return [`crate::Error::FileMissing`].
-///
 /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
 #[cfg(target_os = "linux")]
 #[derive(Debug, Clone, Copy)]
@@ -47,45 +46,35 @@ impl Io<'_> {
   ///
   /// Reads a fresh [`IoStat`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn stat(&self) -> Result<IoStat, Error> { self.cgroup.parse(IoStat::FILE_NAME) }
 
   /// I/O PSI rolling averages and cumulative stall time; never writes a trigger.
   ///
   /// Reads a fresh [`Pressure`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn pressure(&self) -> Result<Pressure, Error> { self.cgroup.parse(Pressure::IO_FILE_NAME) }
 
   /// Default scheduling weight and explicit per-device overrides.
   ///
   /// Reads a fresh [`IoWeight`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn weight(&self) -> Result<IoWeight, Error> { self.cgroup.parse(IoWeight::FILE_NAME) }
 
   /// Per-device byte-per-second and operation-per-second limits.
   ///
   /// Reads a fresh [`IoMax`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn max(&self) -> Result<IoMax, Error> { self.cgroup.parse(IoMax::FILE_NAME) }
 
   /// Per-device latency protection targets, where the kernel supports them.
   ///
   /// Reads a fresh [`IoLatency`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn latency(&self) -> Result<IoLatency, Error> { self.cgroup.parse(IoLatency::FILE_NAME) }
 
   /// Reads the device I/O cost controller's QoS configuration at the root.
@@ -114,9 +103,7 @@ impl Io<'_> {
   ///
   /// Requires `CONFIG_BLK_CGROUP_IOPRIO`; see [`IoPriorityClass`].
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn priority_class(&self) -> Result<IoPriorityClass, Error> { self.cgroup.parse(IoPriorityClass::FILE_NAME) }
 }
 
@@ -132,19 +119,16 @@ pub struct Device {
 
 impl Device {
   /// Constructs a device key without resolving it to a currently present device.
-  ///
   /// See [`Device`] and [makedev(3)](https://man7.org/linux/man-pages/man3/makedev.3.html).
   #[must_use]
   pub const fn new(major: u32, minor: u32) -> Self { Self { major, minor } }
 
   /// Returns the major device number.
-  ///
   /// See [`Device`] and [makedev(3)](https://man7.org/linux/man-pages/man3/makedev.3.html).
   #[must_use]
   pub const fn major(&self) -> u32 { self.major }
 
   /// Returns the minor device number.
-  ///
   /// See [`Device`] and [makedev(3)](https://man7.org/linux/man-pages/man3/makedev.3.html).
   #[must_use]
   pub const fn minor(&self) -> u32 { self.minor }

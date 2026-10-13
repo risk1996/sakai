@@ -57,7 +57,6 @@ impl RdmaDevice {
 /// Each call reads a fresh, read-only snapshot. Separate calls are not atomic
 /// together. Interfaces are absent on the hierarchy root and when the RDMA
 /// controller is disabled or unavailable in the kernel configuration.
-///
 /// See [Linux RDMA interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#rdma-interface-files).
 #[cfg(target_os = "linux")]
 #[derive(Debug, Clone, Copy)]
@@ -72,9 +71,7 @@ impl Rdma<'_> {
   /// Returns a fresh [`RdmaCurrent`] snapshot keyed by [`RdmaDevice`]. See
   /// [Linux RDMA interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#rdma-interface-files).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn current(&self) -> Result<RdmaCurrent, Error> { self.cgroup.parse(RdmaCurrent::FILE_NAME) }
 
   /// Reads per-device HCA handle and object limits, measured in counts.
@@ -83,9 +80,7 @@ impl Rdma<'_> {
   /// configured limit here; ancestor limits still apply. See
   /// [Linux RDMA interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#rdma-interface-files).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn max(&self) -> Result<RdmaMax, Error> { self.cgroup.parse(RdmaMax::FILE_NAME) }
 
   /// Reads historical hierarchical HCA resource high-water marks in counts.
@@ -137,7 +132,6 @@ impl Rdma<'_> {
 /// since cgroup creation. Device removal also removes its reported history.
 /// Optional device indices are preserved in the map keys.
 /// Unknown resource keys are ignored; the two baseline counters are required.
-///
 /// See [Linux RDMA interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#rdma-interface-files).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct RdmaCurrent {
@@ -206,7 +200,6 @@ impl FromStr for RdmaCurrent {
 /// change between reads. An empty map means no devices were reported.
 /// Optional device indices are preserved in the map keys.
 /// Unknown resource keys are ignored; the two baseline limits are required.
-///
 /// See [Linux RDMA interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#rdma-interface-files).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct RdmaMax {
@@ -223,7 +216,6 @@ impl RdmaMax {
 }
 
 /// HCA handle and object limits for one RDMA device, measured in counts.
-///
 /// See [Linux RDMA interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#rdma-interface-files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RdmaDeviceMax {
