@@ -72,9 +72,7 @@ impl Rdma<'_> {
   /// Returns a fresh [`RdmaCurrent`] snapshot keyed by [`RdmaDevice`]. See
   /// [Linux RDMA interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#rdma-interface-files).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn current(&self) -> Result<RdmaCurrent, Error> { self.cgroup.parse(RdmaCurrent::FILE_NAME) }
 
   /// Reads per-device HCA handle and object limits, measured in counts.
@@ -83,9 +81,7 @@ impl Rdma<'_> {
   /// configured limit here; ancestor limits still apply. See
   /// [Linux RDMA interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#rdma-interface-files).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn max(&self) -> Result<RdmaMax, Error> { self.cgroup.parse(RdmaMax::FILE_NAME) }
 
   /// Reads historical hierarchical HCA resource high-water marks in counts.

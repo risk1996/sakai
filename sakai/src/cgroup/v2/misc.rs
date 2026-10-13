@@ -35,54 +35,42 @@ impl Misc<'_> {
   ///
   /// Reads a fresh [`MiscCapacity`] snapshot. See [Linux misc interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#misc).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn capacity(&self) -> Result<MiscCapacity, Error> { self.cgroup.parse(MiscCapacity::FILE_NAME) }
 
   /// Hierarchical resource usage in counts; older kernels omit the root file.
   ///
   /// Reads a fresh [`MiscCurrent`] snapshot. See [Linux misc interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#misc).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn current(&self) -> Result<MiscCurrent, Error> { self.cgroup.parse(MiscCurrent::FILE_NAME) }
 
   /// Historical hierarchical maximum resource usage; since Linux 6.11.
   ///
   /// Reads a fresh [`MiscPeak`] snapshot. See [Linux misc interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#misc).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn peak(&self) -> Result<MiscPeak, Error> { self.cgroup.parse(MiscPeak::FILE_NAME) }
 
   /// Configured resource limits in counts; absent at the hierarchy root.
   ///
   /// Reads a fresh [`MiscMax`] snapshot. See [Linux misc interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#misc).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn max(&self) -> Result<MiscMax, Error> { self.cgroup.parse(MiscMax::FILE_NAME) }
 
   /// Hierarchical resource limit or capacity failures; absent at the root.
   ///
   /// Reads a fresh [`MiscEvents`] snapshot. See [Linux misc interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#misc).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn events(&self) -> Result<MiscEvents, Error> { self.cgroup.parse(MiscEvents::FILE_NAME) }
 
   /// Failures at this cgroup's limit or platform capacity; since Linux 6.11.
   ///
   /// Reads a fresh [`MiscEvents`] snapshot. See [Linux misc interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#misc).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn events_local(&self) -> Result<MiscEvents, Error> { self.cgroup.parse(MiscEvents::LOCAL_FILE_NAME) }
 }
 
@@ -112,12 +100,7 @@ impl FromStr for MiscCapacity {
   type Err = ParseError<ParseValueError>;
 
   fn from_str(raw: &str) -> Result<Self, Self::Err> {
-    let fields = KeyedFields::parse(raw, |_| "value")?;
-    let resources = fields
-      .iter()
-      .map(|(name, value)| Ok((name.to_owned(), <Count as ParseCgroup<ParseCount>>::parse_field(raw, "value", value)?)))
-      .collect::<Result<_, Self::Err>>()?;
-    Ok(Self { resources })
+    Ok(Self { resources: KeyedFields::parse(raw, |_| "value")?.parse_values::<ParseCount, _>("value")? })
   }
 }
 
@@ -149,12 +132,7 @@ impl FromStr for MiscCurrent {
   type Err = ParseError<ParseValueError>;
 
   fn from_str(raw: &str) -> Result<Self, Self::Err> {
-    let fields = KeyedFields::parse(raw, |_| "value")?;
-    let resources = fields
-      .iter()
-      .map(|(name, value)| Ok((name.to_owned(), <Count as ParseCgroup<ParseCount>>::parse_field(raw, "value", value)?)))
-      .collect::<Result<_, Self::Err>>()?;
-    Ok(Self { resources })
+    Ok(Self { resources: KeyedFields::parse(raw, |_| "value")?.parse_values::<ParseCount, _>("value")? })
   }
 }
 
@@ -187,12 +165,7 @@ impl FromStr for MiscPeak {
   type Err = ParseError<ParseValueError>;
 
   fn from_str(raw: &str) -> Result<Self, Self::Err> {
-    let fields = KeyedFields::parse(raw, |_| "value")?;
-    let resources = fields
-      .iter()
-      .map(|(name, value)| Ok((name.to_owned(), <Count as ParseCgroup<ParseCount>>::parse_field(raw, "value", value)?)))
-      .collect::<Result<_, Self::Err>>()?;
-    Ok(Self { resources })
+    Ok(Self { resources: KeyedFields::parse(raw, |_| "value")?.parse_values::<ParseCount, _>("value")? })
   }
 }
 
@@ -224,14 +197,7 @@ impl FromStr for MiscMax {
   type Err = ParseError<ParseValueError>;
 
   fn from_str(raw: &str) -> Result<Self, Self::Err> {
-    let fields = KeyedFields::parse(raw, |_| "value")?;
-    let resources = fields
-      .iter()
-      .map(|(name, value)| {
-        Ok((name.to_owned(), <MaxOr<Count> as ParseCgroup<ParseCount>>::parse_field(raw, "value", value)?))
-      })
-      .collect::<Result<_, Self::Err>>()?;
-    Ok(Self { resources })
+    Ok(Self { resources: KeyedFields::parse(raw, |_| "value")?.parse_values::<ParseCount, _>("value")? })
   }
 }
 

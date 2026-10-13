@@ -55,9 +55,7 @@ impl Memory<'_> {
   ///
   /// Reads a fresh [`MemoryCurrent`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn current(&self) -> Result<MemoryCurrent, Error> { self.cgroup.parse(MemoryCurrent::FILE_NAME) }
 
   /// Live peak usage, in bytes, since cgroup creation for this fresh descriptor.
@@ -67,18 +65,14 @@ impl Memory<'_> {
   /// Since Linux 5.19; see the [upstream Linux 5.19 source](https://github.com/torvalds/linux/blob/v5.19/Documentation/admin-guide/cgroup-v2.rst).
   /// Older kernels return [`crate::Error::FileMissing`] when this interface is read.
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn peak(&self) -> Result<MemoryPeak, Error> { self.cgroup.parse(MemoryPeak::FILE_NAME) }
 
   /// Live breakdown of memory usage, page quantities, and event counts.
   ///
   /// Reads a fresh [`MemoryStat`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn stat(&self) -> Result<MemoryStat, Error> { self.cgroup.parse(MemoryStat::FILE_NAME) }
 
   /// Live memory event counters for this cgroup and its descendants.
@@ -87,27 +81,21 @@ impl Memory<'_> {
   ///
   /// Reads a fresh [`MemoryEvents`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn events(&self) -> Result<MemoryEvents, Error> { self.cgroup.parse(MemoryEvents::FILE_NAME) }
 
   /// Live memory event counters originating in this cgroup only.
   ///
   /// Reads a fresh [`MemoryEventsLocal`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn events_local(&self) -> Result<MemoryEventsLocal, Error> { self.cgroup.parse(MemoryEventsLocal::FILE_NAME) }
 
   /// Live per-NUMA-node memory amounts, page quantities, and event counts.
   ///
   /// Reads a fresh [`MemoryNumaStat`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn numa_stat(&self) -> Result<MemoryNumaStat, Error> { self.cgroup.parse(MemoryNumaStat::FILE_NAME) }
 
   /// Live PSI averages and totals. Never registers a pressure trigger.
@@ -117,54 +105,42 @@ impl Memory<'_> {
   ///
   /// Reads a fresh [`Pressure`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn pressure(&self) -> Result<Pressure, Error> { self.cgroup.parse(Pressure::MEMORY_FILE_NAME) }
 
   /// Configuration snapshot of this cgroup's hard memory limit in bytes.
   ///
   /// Reads a fresh [`MemoryMax`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn max(&self) -> Result<MemoryMax, Error> { self.cgroup.parse(MemoryMax::FILE_NAME) }
 
   /// Configuration snapshot of this cgroup's throttling limit in bytes.
   ///
   /// Reads a fresh [`MemoryHigh`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn high(&self) -> Result<MemoryHigh, Error> { self.cgroup.parse(MemoryHigh::FILE_NAME) }
 
   /// Configuration snapshot of this cgroup's best-effort memory protection, in bytes or `max`.
   ///
   /// Reads a fresh [`MemoryLow`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn low(&self) -> Result<MemoryLow, Error> { self.cgroup.parse(MemoryLow::FILE_NAME) }
 
   /// Configuration snapshot of this cgroup's hard memory protection, in bytes or `max`.
   ///
   /// Reads a fresh [`MemoryMin`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn min(&self) -> Result<MemoryMin, Error> { self.cgroup.parse(MemoryMin::FILE_NAME) }
 
   /// Configuration snapshot of group OOM kill behavior.
   ///
   /// Reads a fresh [`MemoryOomGroup`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn oom_group(&self) -> Result<MemoryOomGroup, Error> { self.cgroup.parse(MemoryOomGroup::FILE_NAME) }
 }
 

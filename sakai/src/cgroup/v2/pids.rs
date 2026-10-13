@@ -33,36 +33,28 @@ impl Pids<'_> {
   ///
   /// Reads a fresh [`PidsCurrent`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#pid).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn current(&self) -> Result<PidsCurrent, Error> { self.cgroup.parse(PidsCurrent::FILE_NAME) }
 
   /// Reads the historical hierarchical task-count peak, including threads.
   ///
   /// Since Linux 6.1; see [`PidsPeak`]. Reading does not reset the peak.
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn peak(&self) -> Result<PidsPeak, Error> { self.cgroup.parse(PidsPeak::FILE_NAME) }
 
   /// Configured task limit in counts, or `max` for no limit at this cgroup.
   ///
   /// Reads a fresh [`PidsMax`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#pid).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn max(&self) -> Result<PidsMax, Error> { self.cgroup.parse(PidsMax::FILE_NAME) }
 
   /// Hierarchical process-limit event counts.
   ///
   /// Reads a fresh [`PidsEvents`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#pid).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn events(&self) -> Result<PidsEvents, Error> { self.cgroup.parse(PidsEvents::FILE_NAME) }
 
   /// Reads local process-limit failures; available since Linux 6.11.
@@ -71,9 +63,7 @@ impl Pids<'_> {
   /// requests. With `pids_localevents`, it counts fork failures originating in
   /// this cgroup, including ancestor-limit failures. See [`PidsEvents`].
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn events_local(&self) -> Result<PidsEvents, Error> { self.cgroup.parse(PidsEvents::LOCAL_FILE_NAME) }
 }
 

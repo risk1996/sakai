@@ -32,9 +32,7 @@ impl Swap<'_> {
   ///
   /// Reads a fresh [`SwapCurrent`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn current(&self) -> Result<SwapCurrent, Error> { self.cgroup.parse(SwapCurrent::FILE_NAME) }
 
   /// Peak swap usage since cgroup creation for this fresh descriptor.
@@ -44,27 +42,21 @@ impl Swap<'_> {
   /// Since Linux 6.5; see the [upstream Linux 6.5 source](https://github.com/torvalds/linux/blob/v6.5/Documentation/admin-guide/cgroup-v2.rst).
   /// Older kernels return [`crate::Error::FileMissing`] when this interface is read.
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn peak(&self) -> Result<SwapPeak, Error> { self.cgroup.parse(SwapPeak::FILE_NAME) }
 
   /// Hard swap limit configured for this cgroup.
   ///
   /// Reads a fresh [`SwapMax`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn max(&self) -> Result<SwapMax, Error> { self.cgroup.parse(SwapMax::FILE_NAME) }
 
   /// Swap throttling limit configured for this cgroup.
   ///
   /// Reads a fresh [`SwapHigh`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn high(&self) -> Result<SwapHigh, Error> { self.cgroup.parse(SwapHigh::FILE_NAME) }
 
   /// Swap high, max, and allocation failure counters.
@@ -74,9 +66,7 @@ impl Swap<'_> {
   ///
   /// Reads a fresh [`SwapEvents`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn events(&self) -> Result<SwapEvents, Error> { self.cgroup.parse(SwapEvents::FILE_NAME) }
 }
 

@@ -2,16 +2,18 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
+#[cfg(test)]
+use pyo3::types::PyDict;
 use pyo3::{
   prelude::*,
-  types::{IntoPyDict, PyDict, PyMappingProxy},
+  types::{IntoPyDict, PyMappingProxy},
 };
 use sakai::v2::misc::{
   MiscCapacity as CoreCapacity, MiscCurrent as CoreCurrent, MiscEvents as CoreEvents, MiscMax as CoreMax,
   MiscPeak as CorePeak,
 };
 
-use super::{MaxOr, PythonError, limit::PythonLimitValue};
+use super::{MaxOr, PythonError, mapping::mapping};
 
 /// Fresh read-only miscellaneous-resource snapshots for a pinned cgroup.
 ///
@@ -189,11 +191,7 @@ pub(super) struct MiscMax {
 impl From<CoreMax> for MiscMax {
   fn from(value: CoreMax) -> Self {
     Self {
-      resources: value
-        .resources()
-        .iter()
-        .map(|(name, value)| (name.clone(), MaxOr::from_value(*value, |value| PythonLimitValue::Integer(value.value))))
-        .collect(),
+      resources: value.resources().iter().map(|(name, value)| (name.clone(), MaxOr::from_count(*value))).collect(),
     }
   }
 }
@@ -205,11 +203,7 @@ impl MiscMax {
   /// Check is_max before value; value raises ValueError for an unlimited limit.
   #[getter]
   fn resources(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
-    let dict = PyDict::new(py);
-    for (name, value) in &self.resources {
-      dict.set_item(name, Py::new(py, *value)?)?;
-    }
-    Ok(PyMappingProxy::new(py, dict.as_mapping()).unbind())
+    mapping(py, &self.resources, |value| Py::new(py, *value))
   }
 }
 

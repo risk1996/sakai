@@ -201,63 +201,49 @@ impl Core<'_> {
   /// tasks invisible in the reader's PID namespace. IDs can be
   /// recycled while reading. Available at the hierarchy root too. See [`TaskId`].
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn threads(&self) -> Result<Vec<TaskId>, Error> { self.task_ids(TaskId::THREADS_FILE_NAME) }
 
   /// Volatile populated and frozen lifecycle state; root cgroups lack this file.
   ///
   /// Reads a fresh [`CgroupEvents`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn events(&self) -> Result<CgroupEvents, Error> { self.cgroup.parse(CgroupEvents::FILE_NAME) }
 
   /// Volatile descendant and subsystem counts, including at the hierarchy root.
   ///
   /// Reads a fresh [`CgroupStat`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn stat(&self) -> Result<CgroupStat, Error> { self.cgroup.parse(CgroupStat::FILE_NAME) }
 
   /// Reads cumulative local freezing time, including ancestor-imposed freezing.
   ///
   /// Since Linux 6.18; non-root only. See [`CgroupStatLocal`].
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn stat_local(&self) -> Result<CgroupStatLocal, Error> { self.cgroup.parse(CgroupStatLocal::FILE_NAME) }
 
   /// Reads this cgroup's own freeze request, excluding ancestor requests.
   ///
   /// This reports configuration, not completed freezing. See [`CgroupFreeze`].
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn freeze(&self) -> Result<CgroupFreeze, Error> { self.cgroup.parse(CgroupFreeze::FILE_NAME) }
 
   /// Reads the configured descendant depth limit, including at the root.
   ///
   /// See [`CgroupMaxDepth`] for units and ancestor restrictions.
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn max_depth(&self) -> Result<CgroupMaxDepth, Error> { self.cgroup.parse(CgroupMaxDepth::FILE_NAME) }
 
   /// Reads the configured descendant cgroup count limit, including at the root.
   ///
   /// See [`CgroupMaxDescendants`] for units and ancestor restrictions.
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn max_descendants(&self) -> Result<CgroupMaxDescendants, Error> {
     self.cgroup.parse(CgroupMaxDescendants::FILE_NAME)
   }
@@ -266,18 +252,14 @@ impl Core<'_> {
   ///
   /// Since Linux 6.1; see [`CgroupPressure`] for configuration requirements.
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn pressure_enabled(&self) -> Result<CgroupPressure, Error> { self.cgroup.parse(CgroupPressure::FILE_NAME) }
 
   /// Configuration snapshot; the hierarchy root may lack this file.
   ///
   /// Reads a fresh [`CgroupType`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn kind(&self) -> Result<CgroupType, Error> {
     let contents = self.cgroup.read(CgroupType::FILE_NAME)?;
     contents.trim().parse().map_err(|source| Error::Parse {
@@ -290,9 +272,7 @@ impl Core<'_> {
   ///
   /// See [Linux core cgroup interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn controllers(&self) -> Result<Vec<CgroupController>, Error> {
     self.controller_list(CgroupController::CONTROLLERS_FILE_NAME)
   }
@@ -301,9 +281,7 @@ impl Core<'_> {
   ///
   /// See [Linux core cgroup interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn subtree_control(&self) -> Result<Vec<CgroupController>, Error> {
     self.controller_list(CgroupController::SUBTREE_CONTROL_FILE_NAME)
   }

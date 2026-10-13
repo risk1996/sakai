@@ -45,6 +45,13 @@ impl<'a> KeyedFields<'a> {
     self.values.iter().map(|(&key, &value)| (key, value))
   }
 
+  /// Parses named values using one interface's units and diagnostic label.
+  pub(crate) fn parse_values<Unit, T>(&self, field: &'static str) -> Result<BTreeMap<String, T>, ParseError<T::Error>>
+  where
+    T: ParseCgroup<Unit>, {
+    self.iter().map(|(key, value)| Ok((key.to_owned(), T::parse_field(self.raw, field, value)?))).collect()
+  }
+
   pub(crate) fn required<Unit, T>(&self, field: impl Into<&'static str>) -> Result<T, ParseError<T::Error>>
   where
     T: ParseCgroup<Unit>, {

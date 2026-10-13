@@ -112,9 +112,7 @@ impl Hugetlb<'_> {
   ///
   /// See [Linux HugeTLB usage](https://docs.kernel.org/admin-guide/cgroup-v2.html#hugetlb).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn current(&self, size: &PageSize) -> Result<HugetlbCurrent, Error> {
     self.cgroup.parse(&size.file_name(HugetlbCurrent::SUFFIX))
   }
@@ -124,9 +122,7 @@ impl Hugetlb<'_> {
   /// Ancestor limits still apply when this cgroup reports `max`.
   /// See [Linux HugeTLB limits](https://docs.kernel.org/admin-guide/cgroup-v2.html#hugetlb).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn max(&self, size: &PageSize) -> Result<HugetlbMax, Error> {
     self.cgroup.parse(&size.file_name(HugetlbMax::SUFFIX))
   }
@@ -137,9 +133,7 @@ impl Hugetlb<'_> {
   /// reservation are also charged. This is not a count of unused reservations.
   /// See [Linux reservation accounting](https://docs.kernel.org/admin-guide/cgroup-v1/hugetlb.html).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn reserved_current(&self, size: &PageSize) -> Result<HugetlbReservedCurrent, Error> {
     self.cgroup.parse(&size.file_name(HugetlbReservedCurrent::SUFFIX))
   }
@@ -150,9 +144,7 @@ impl Hugetlb<'_> {
   /// Ancestor limits still apply when this cgroup reports `max`.
   /// See [Linux reservation accounting](https://docs.kernel.org/admin-guide/cgroup-v1/hugetlb.html).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn reserved_max(&self, size: &PageSize) -> Result<HugetlbReservedMax, Error> {
     self.cgroup.parse(&size.file_name(HugetlbReservedMax::SUFFIX))
   }
@@ -161,9 +153,7 @@ impl Hugetlb<'_> {
   ///
   /// See [Linux HugeTLB events](https://docs.kernel.org/admin-guide/cgroup-v2.html#hugetlb).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn events(&self, size: &PageSize) -> Result<HugetlbEvents, Error> {
     self.cgroup.parse(&size.file_name(HugetlbEvents::SUFFIX))
   }
@@ -172,9 +162,7 @@ impl Hugetlb<'_> {
   ///
   /// See [Linux HugeTLB events](https://docs.kernel.org/admin-guide/cgroup-v2.html#hugetlb).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn events_local(&self, size: &PageSize) -> Result<HugetlbEvents, Error> {
     self.cgroup.parse(&size.file_name(HugetlbEvents::LOCAL_SUFFIX))
   }
@@ -184,9 +172,7 @@ impl Hugetlb<'_> {
   /// Since Linux 5.17; older kernels return [`crate::Error::FileMissing`]. See
   /// [Linux 5.17 implementation](https://github.com/torvalds/linux/blob/v5.17/mm/hugetlb_cgroup.c).
   ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn numa_stat(&self, size: &PageSize) -> Result<HugetlbNumaStat, Error> {
     self.cgroup.parse(&size.file_name(HugetlbNumaStat::SUFFIX))
   }

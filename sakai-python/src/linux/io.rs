@@ -2,9 +2,11 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
+#[cfg(test)]
+use pyo3::types::PyDict;
 use pyo3::{
   prelude::*,
-  types::{IntoPyDict, PyAny, PyDict, PyMappingProxy},
+  types::{IntoPyDict, PyMappingProxy},
 };
 use sakai::v2::io::{
   Device, IoCostModel as CoreIoCostModel, IoCostQos as CoreIoCostQos, IoDeviceCostModel as CoreIoDeviceCostModel,
@@ -13,7 +15,7 @@ use sakai::v2::io::{
 };
 use uom::si::{frequency::hertz, information::byte, information_rate::byte_per_second, ratio::ratio, time::nanosecond};
 
-use super::{MaxOr, Pressure, PythonError, limit::PythonLimitValue};
+use super::{MaxOr, Pressure, PythonError, limit::PythonLimitValue, mapping::mapping};
 
 type DeviceKey = (u32, u32);
 
@@ -93,7 +95,7 @@ impl IoStat {
   /// Read-only mapping of (major, minor) keys to immutable device counters.
   #[getter]
   fn devices(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
-    IoValues::mapping(py, &self.devices, |value| Py::new(py, value.clone()).map(Py::into_any))
+    mapping(py, &self.devices, |value| Py::new(py, value.clone()))
   }
 }
 
@@ -239,7 +241,7 @@ impl IoMax {
   /// Read-only mapping of (major, minor) keys to immutable per-device limits.
   #[getter]
   fn devices(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
-    IoValues::mapping(py, &self.devices, |value| Py::new(py, value.clone()).map(Py::into_any))
+    mapping(py, &self.devices, |value| Py::new(py, value.clone()))
   }
 }
 
@@ -318,7 +320,7 @@ impl IoCostQos {
   /// Read-only mapping of (major, minor) device keys to QoS parameters.
   #[getter]
   fn devices(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
-    IoValues::mapping(py, &self.devices, |value| Py::new(py, value.clone()).map(Py::into_any))
+    mapping(py, &self.devices, |value| Py::new(py, value.clone()))
   }
 }
 
@@ -382,7 +384,7 @@ impl IoCostModel {
   /// Read-only mapping of (major, minor) device keys to cost model parameters.
   #[getter]
   fn devices(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
-    IoValues::mapping(py, &self.devices, |value| Py::new(py, value.clone()).map(Py::into_any))
+    mapping(py, &self.devices, |value| Py::new(py, value.clone()))
   }
 }
 
@@ -430,18 +432,6 @@ struct IoValues;
 impl IoValues {
   fn devices<T, Output>(values: &BTreeMap<Device, T>, convert: impl Fn(&T) -> Output) -> BTreeMap<DeviceKey, Output> {
     values.iter().map(|(device, value)| ((device.major(), device.minor()), convert(value))).collect()
-  }
-
-  fn mapping<T>(
-    py: Python<'_>,
-    values: &BTreeMap<DeviceKey, T>,
-    convert: impl Fn(&T) -> PyResult<Py<PyAny>>,
-  ) -> PyResult<Py<PyMappingProxy>> {
-    let dict = PyDict::new(py);
-    for (device, value) in values {
-      dict.set_item(device, convert(value)?)?;
-    }
-    Ok(PyMappingProxy::new(py, dict.as_mapping()).unbind())
   }
 }
 

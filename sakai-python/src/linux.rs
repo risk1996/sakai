@@ -38,6 +38,7 @@ mod handle;
 mod hugetlb;
 mod io;
 mod limit;
+mod mapping;
 mod memory;
 mod misc;
 mod notification;

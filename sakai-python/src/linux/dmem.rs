@@ -2,9 +2,11 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
+#[cfg(test)]
+use pyo3::types::PyDict;
 use pyo3::{
   prelude::*,
-  types::{IntoPyDict, PyDict, PyMappingProxy},
+  types::{IntoPyDict, PyMappingProxy},
 };
 use sakai::v2::dmem::{
   DmemCapacity as CoreDmemCapacity, DmemCurrent as CoreDmemCurrent, DmemLimits as CoreDmemLimits,
@@ -12,7 +14,7 @@ use sakai::v2::dmem::{
 };
 use uom::si::information::byte;
 
-use super::{MaxOr, PythonError};
+use super::{MaxOr, PythonError, mapping::mapping};
 
 /// Fresh device-memory reads for one pinned cgroup, available since Linux 6.14.
 ///
@@ -152,7 +154,9 @@ impl From<CoreDmemCurrent> for DmemCurrent {
 impl DmemCurrent {
   /// Read-only mapping from opaque region names to MaxOr[int] hierarchical bytes.
   #[getter]
-  fn regions(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> { region_values(py, &self.regions) }
+  fn regions(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
+    mapping(py, &self.regions, |value| Py::new(py, *value))
+  }
 }
 
 /// Immutable hierarchical device-memory peak snapshot, since Linux 7.3 release candidates.
@@ -177,7 +181,9 @@ impl From<CoreDmemPeak> for DmemPeak {
 impl DmemPeak {
   /// Read-only mapping from opaque region names to MaxOr[int] historical byte peaks.
   #[getter]
-  fn regions(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> { region_values(py, &self.regions) }
+  fn regions(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
+    mapping(py, &self.regions, |value| Py::new(py, *value))
+  }
 }
 
 /// Immutable configuration from dmem.max, dmem.min, or dmem.low.
@@ -204,15 +210,9 @@ impl From<CoreDmemLimits> for DmemLimits {
 impl DmemLimits {
   /// Read-only mapping from opaque region names to immutable MaxOr[int] bytes.
   #[getter]
-  fn regions(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> { region_values(py, &self.regions) }
-}
-
-fn region_values(py: Python<'_>, regions: &BTreeMap<String, MaxOr>) -> PyResult<Py<PyMappingProxy>> {
-  let dict = PyDict::new(py);
-  for (name, value) in regions {
-    dict.set_item(name, Py::new(py, *value)?)?;
+  fn regions(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
+    mapping(py, &self.regions, |value| Py::new(py, *value))
   }
-  Ok(PyMappingProxy::new(py, dict.as_mapping()).unbind())
 }
 
 #[cfg(test)]
