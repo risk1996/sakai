@@ -209,15 +209,15 @@ impl CoreReader {
 
 #[cfg(test)]
 mod tests {
-  use assertables::{assert_err, assert_ok};
-  use pyo3::{
-    exceptions::{PyAttributeError, PyTypeError},
-    types::{PyDict, PyInt},
-  };
+  use assertables::assert_ok;
+  use pyo3::types::PyDict;
   use sakai::v2::pids::PidsEvents as CorePidsEvents;
 
   use super::{
-    super::{MaxOr, PidsEvents},
+    super::{
+      MaxOr, PidsEvents,
+      tests::{check_frozen, check_limit, readonly},
+    },
     *,
   };
 
@@ -229,21 +229,11 @@ mod tests {
       assert_eq!(local, CgroupStatLocal { frozen_time_ns: 123_456_000 });
       let object = assert_ok!(Py::new(py, local));
       assert_eq!(assert_ok!(assert_ok!(object.bind(py).getattr("frozen_time_ns")).extract::<u64>()), 123_456_000);
-      assert!(assert_err!(object.bind(py).setattr("frozen_time_ns", 0)).is_instance_of::<PyAttributeError>(py));
+      check_frozen(object.bind(py).as_any(), &["frozen_time_ns"]);
       for (input, expected) in [("0", Some(0)), ("18446744073709551615", Some(u64::MAX)), ("max", None)] {
         let limit = MaxOr::from_count(assert_ok!(input.parse::<sakai::v2::pids::PidsMax>()).value());
-        assert_eq!(limit.is_max(), expected.is_none());
-        match expected {
-          | Some(expected) => {
-            let object = assert_ok!(Py::new(py, limit));
-            let value = assert_ok!(object.bind(py).getattr("value"));
-            assert!(value.is_instance_of::<PyInt>());
-            assert_eq!(assert_ok!(value.extract::<u64>()), expected);
-          },
-          | None => {
-            assert_err!(limit.value());
-          },
-        }
+        let object = assert_ok!(Py::new(py, limit));
+        check_limit(object.bind(py).as_any(), expected);
       }
       for (input, expected) in [
         ("populated 1", CgroupEvents { populated: true, frozen: None }),
@@ -257,13 +247,13 @@ mod tests {
           assert_ok!(assert_ok!(object.bind(py).getattr("frozen")).extract::<Option<bool>>()),
           expected.frozen
         );
-        assert!(assert_err!(object.bind(py).setattr("populated", false)).is_instance_of::<PyAttributeError>(py));
+        check_frozen(object.bind(py).as_any(), &["populated"]);
       }
       let events = PidsEvents::from(assert_ok!("max 18446744073709551615".parse::<CorePidsEvents>()));
       assert_eq!(events, PidsEvents { max: u64::MAX });
       let object = assert_ok!(Py::new(py, events));
       assert_eq!(assert_ok!(assert_ok!(object.bind(py).getattr("max")).extract::<u64>()), u64::MAX);
-      assert!(assert_err!(object.bind(py).setattr("max", 0)).is_instance_of::<PyAttributeError>(py));
+      check_frozen(object.bind(py).as_any(), &["max"]);
       for (input, expected) in [
         (
           "nr_descendants 2\nnr_dying_descendants 1\nnr_subsys_memory 3\nnr_dying_subsys_future_controller 0",
@@ -285,12 +275,11 @@ mod tests {
         assert_eq!(stat, expected);
         let object = assert_ok!(Py::new(py, stat));
         for (name, expected) in [("subsystems", expected.subsystems), ("dying_subsystems", expected.dying_subsystems)] {
-          let mapping = assert_ok!(object.bind(py).getattr(name));
+          let mapping = readonly(object.bind(py).as_any(), name, "memory");
           let values = assert_ok!(py.get_type::<PyDict>().call1((&mapping,)));
           assert_eq!(assert_ok!(values.extract::<BTreeMap<String, u64>>()), expected);
-          assert!(assert_err!(mapping.set_item("memory", 0)).is_instance_of::<PyTypeError>(py));
         }
-        assert!(assert_err!(object.bind(py).setattr("descendants", 0)).is_instance_of::<PyAttributeError>(py));
+        check_frozen(object.bind(py).as_any(), &["descendants"]);
       }
     });
   }

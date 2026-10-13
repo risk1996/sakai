@@ -217,10 +217,12 @@ fn region_values(py: Python<'_>, regions: &BTreeMap<String, MaxOr>) -> PyResult<
 
 #[cfg(test)]
 mod tests {
-  use assertables::{assert_err, assert_ok};
-  use pyo3::exceptions::{PyAttributeError, PyTypeError, PyValueError};
+  use assertables::assert_ok;
 
-  use super::*;
+  use super::{
+    super::tests::{check_frozen, check_limit, readonly},
+    *,
+  };
 
   #[test]
   fn converts_byte_snapshots_into_immutable_region_maps() {
@@ -233,11 +235,9 @@ mod tests {
         ("future/device".to_owned(), u64::MAX),
       ]);
       let capacity = assert_ok!(Py::new(py, DmemCapacity::from(assert_ok!(input.parse::<CoreDmemCapacity>()))));
-      let mapping = assert_ok!(capacity.bind(py).getattr("regions"));
+      let mapping = readonly(capacity.bind(py).as_any(), "regions", "future/device");
       let copied = assert_ok!(py.get_type::<PyDict>().call1((&mapping,)));
       assert_eq!(assert_ok!(copied.extract::<BTreeMap<String, u64>>()), expected);
-      assert!(assert_err!(mapping.set_item("future/device", 1)).is_instance_of::<PyTypeError>(py));
-      assert!(assert_err!(capacity.bind(py).setattr("regions", 1)).is_instance_of::<PyAttributeError>(py));
       assert!(DmemCurrent::from(assert_ok!("".parse::<CoreDmemCurrent>())).regions.is_empty());
       assert!(DmemCapacity::from(assert_ok!("".parse::<CoreDmemCapacity>())).regions.is_empty());
     });
@@ -252,24 +252,16 @@ mod tests {
         let current = assert_ok!(Py::new(py, DmemCurrent::from(assert_ok!(input.parse::<CoreDmemCurrent>()))));
         let peak = assert_ok!(Py::new(py, DmemPeak::from(assert_ok!(input.parse::<CoreDmemPeak>()))));
         for object in [limits.into_any(), current.into_any(), peak.into_any()] {
-          let mapping = assert_ok!(object.bind(py).getattr("regions"));
+          let mapping = readonly(object.bind(py), "regions", "device");
           if input.is_empty() {
             assert_eq!(assert_ok!(mapping.len()), 0);
           } else {
             for (name, expected) in [("device", Some(u64::MAX)), ("other", None), ("zero", Some(0))] {
               let limit = assert_ok!(mapping.get_item(name));
-              assert_eq!(assert_ok!(assert_ok!(limit.getattr("is_max")).extract::<bool>()), expected.is_none());
-              match expected {
-                | Some(expected) => {
-                  assert_eq!(assert_ok!(assert_ok!(limit.getattr("value")).extract::<u64>()), expected)
-                },
-                | None => assert!(assert_err!(limit.getattr("value")).is_instance_of::<PyValueError>(py)),
-              }
-              assert!(assert_err!(limit.setattr("value", 0)).is_instance_of::<PyAttributeError>(py));
+              check_limit(&limit, expected);
+              check_frozen(&limit, &["value"]);
             }
           }
-          assert!(assert_err!(mapping.set_item("device", 1)).is_instance_of::<PyTypeError>(py));
-          assert!(assert_err!(object.bind(py).setattr("regions", 1)).is_instance_of::<PyAttributeError>(py));
         }
       }
     });

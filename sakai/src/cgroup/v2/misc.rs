@@ -352,20 +352,12 @@ mod tests {
     for fixture in ["p6_misc", "p6_misc_root", "p6_misc_older", "p6_misc_older_root"] {
       let group = Cgroup::fixture(&format!("fixtures/{fixture}"));
       let reader = group.misc();
-      for (name, result) in [
-        (MiscCapacity::FILE_NAME, reader.capacity().map(|_| ())),
-        (MiscCurrent::FILE_NAME, reader.current().map(|_| ())),
-        (MiscPeak::FILE_NAME, reader.peak().map(|_| ())),
-        (MiscMax::FILE_NAME, reader.max().map(|_| ())),
-        (MiscEvents::FILE_NAME, reader.events().map(|_| ())),
-        (MiscEvents::LOCAL_FILE_NAME, reader.events_local().map(|_| ())),
-      ] {
-        if group.path().join(name).exists() {
-          assert_ok!(result);
-        } else {
-          assert!(matches!(result, Err(Error::FileMissing { path }) if path == group.path().join(name)));
-        }
-      }
+      group.check_fixture(MiscCapacity::FILE_NAME, true, || reader.capacity());
+      group.check_fixture(MiscCurrent::FILE_NAME, true, || reader.current());
+      group.check_fixture(MiscPeak::FILE_NAME, true, || reader.peak());
+      group.check_fixture(MiscMax::FILE_NAME, true, || reader.max());
+      group.check_fixture(MiscEvents::FILE_NAME, true, || reader.events());
+      group.check_fixture(MiscEvents::LOCAL_FILE_NAME, true, || reader.events_local());
     }
   }
 }

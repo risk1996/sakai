@@ -215,13 +215,12 @@ impl MiscMax {
 
 #[cfg(test)]
 mod tests {
-  use assertables::{assert_err, assert_ok};
-  use pyo3::{
-    exceptions::{PyAttributeError, PyTypeError, PyValueError},
-    types::PyInt,
-  };
+  use assertables::assert_ok;
 
-  use super::*;
+  use super::{
+    super::tests::{check_frozen, check_limit, readonly},
+    *,
+  };
 
   #[test]
   fn converts_unsigned_counts_and_limits_to_immutable_snapshots() {
@@ -243,33 +242,21 @@ mod tests {
           .into_any(),
         ];
         for object in objects {
-          let values = assert_ok!(object.bind(py).getattr("resources"));
+          let values = readonly(object.bind(py), "resources", "sev");
           let dict = assert_ok!(py.get_type::<PyDict>().call1((&values,)));
           assert_eq!(assert_ok!(dict.extract::<BTreeMap<String, u64>>()), expected);
-          assert!(assert_err!(values.set_item("sev", 1)).is_instance_of::<PyTypeError>(py));
-          assert!(assert_err!(object.bind(py).setattr("resources", 0)).is_instance_of::<PyAttributeError>(py));
         }
       }
       let object = assert_ok!(Py::new(
         py,
         MiscMax::from(assert_ok!("sev max\nsev_es 18446744073709551615\nfuture 0".parse::<CoreMax>()))
       ));
-      let values = assert_ok!(object.bind(py).getattr("resources"));
+      let values = readonly(object.bind(py).as_any(), "resources", "sev");
       for (key, expected) in [("sev", None), ("sev_es", Some(u64::MAX)), ("future", Some(0))] {
         let limit = assert_ok!(values.get_item(key));
-        assert_eq!(assert_ok!(assert_ok!(limit.getattr("is_max")).extract::<bool>()), expected.is_none());
-        match expected {
-          | Some(expected) => {
-            let value = assert_ok!(limit.getattr("value"));
-            assert!(value.is_instance_of::<PyInt>());
-            assert_eq!(assert_ok!(value.extract::<u64>()), expected);
-          },
-          | None => assert!(assert_err!(limit.getattr("value")).is_instance_of::<PyValueError>(py)),
-        }
-        assert!(assert_err!(limit.setattr("value", 1)).is_instance_of::<PyAttributeError>(py));
+        check_limit(&limit, expected);
+        check_frozen(&limit, &["value"]);
       }
-      assert!(assert_err!(values.set_item("sev", 0)).is_instance_of::<PyTypeError>(py));
-      assert!(assert_err!(object.bind(py).setattr("resources", 0)).is_instance_of::<PyAttributeError>(py));
     });
   }
 }
