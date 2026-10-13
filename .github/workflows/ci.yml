@@ -86,7 +86,7 @@ jobs:
             venv="$RUNNER_TEMP/sakai-$extension"
             python -m venv "$venv"
             "$venv/bin/python" -m pip install --no-cache-dir dist/*."$extension"
-            devenv --profile python shell -- rtk env -u LD_LIBRARY_PATH uv pip install --python "$venv/bin/python" --group sakai-python/pyproject.toml:test
+            devenv --profile python shell -- rtk proxy env -u LD_LIBRARY_PATH uv pip install --python "$venv/bin/python" --group sakai-python/pyproject.toml:test
             (cd "$RUNNER_TEMP" && "$venv/bin/python" -m unittest discover -s "$GITHUB_WORKSPACE/sakai-python/tests" && "$venv/bin/python" -m mypy.stubtest sakai --ignore-disjoint-bases --allowlist "$GITHUB_WORKSPACE/sakai-python/tests/stubtest-allowlist.txt")
           done
 

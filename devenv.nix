@@ -75,7 +75,12 @@
     "check:workflow".exec = "actionlint";
     # Explicit opt-in: security checks fetch current advisories and registry data.
     "check:security".after = [ "check:audit" "check:deny" ];
-    "check:audit".exec = "cargo audit --file Cargo.lock";
+    "check:audit".exec =
+      let
+        # Keep the documented dependency-policy exceptions authoritative.
+        ignoredAdvisories = (builtins.fromTOML (builtins.readFile ./deny.toml)).advisories.ignore or [ ];
+      in
+      "cargo audit --file Cargo.lock${lib.concatMapStrings (id: " --ignore ${lib.escapeShellArg id}") ignoredAdvisories}";
     "check:deny".exec = "cargo deny --locked check";
     # Explicit opt-in: this integration check requires a running Docker daemon.
     "check:kubernetes".exec = ''
