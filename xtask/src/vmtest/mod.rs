@@ -7,7 +7,7 @@ use std::{
 };
 
 use anyhow::{Context, Result, bail, ensure};
-use cargo_metadata::Message;
+use cargo_metadata::{Message, TargetKind};
 use clap::{Args, ValueEnum};
 use kernel::Kernel;
 
@@ -57,7 +57,7 @@ impl Vmtest {
   fn executable(message: Message) -> Option<PathBuf> {
     match message {
       | Message::CompilerArtifact(artifact)
-        if artifact.target.name == Self::LIVE_TEST_TARGET && artifact.target.is_test() =>
+        if artifact.target.name == Self::LIVE_TEST_TARGET && artifact.target.is_kind(TargetKind::Test) =>
       {
         artifact.executable.map(Into::into)
       },
