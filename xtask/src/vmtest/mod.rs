@@ -1,59 +1,17 @@
 use std::{
   env, fs,
-  io::{BufRead, BufReader},
+  io::BufReader,
   path::{Path, PathBuf},
   process::{Command, Stdio},
   time::{Duration, Instant},
 };
 
 use anyhow::{Context, Result, bail, ensure};
+use cargo_metadata::{Message, TargetKind};
 use clap::{Args, ValueEnum};
 use kernel::Kernel;
-use serde::Deserialize;
 
 mod kernel;
-
-#[derive(Deserialize)]
-#[serde(tag = "reason", rename_all = "kebab-case")]
-enum CargoMessage {
-  CompilerArtifact {
-    target: CargoTarget,
-    executable: Option<PathBuf>,
-  },
-  CompilerMessage {
-    message: CargoDiagnostic,
-  },
-  #[serde(other)]
-  Other,
-}
-
-#[derive(Deserialize)]
-struct CargoTarget {
-  name: String,
-  kind: Vec<String>,
-}
-
-#[derive(Deserialize)]
-struct CargoDiagnostic {
-  rendered: Option<String>,
-}
-
-impl CargoMessage {
-  fn executable(self) -> Option<PathBuf> {
-    match self {
-      | Self::CompilerArtifact { target, executable }
-        if target.name == Vmtest::LIVE_TEST_TARGET && target.kind.iter().any(|kind| kind == "test") =>
-      {
-        executable
-      },
-      | Self::CompilerMessage { message: CargoDiagnostic { rendered: Some(rendered) } } => {
-        eprint!("{rendered}");
-        None
-      },
-      | _ => None,
-    }
-  }
-}
 
 #[derive(Debug, Args)]
 pub(crate) struct Vmtest {
@@ -95,6 +53,23 @@ impl Vmtest {
   const LIVE_TEST_TARGET: &str = "linux_live";
   const METADATA_PATH: &str = "bin/linux_live.meta";
   const RUN_TIMEOUT: Duration = Duration::from_secs(480);
+
+  fn executable(message: Message) -> Option<PathBuf> {
+    match message {
+      | Message::CompilerArtifact(artifact)
+        if artifact.target.name == Self::LIVE_TEST_TARGET && artifact.target.is_kind(TargetKind::Test) =>
+      {
+        artifact.executable.map(Into::into)
+      },
+      | Message::CompilerMessage(message) => {
+        if let Some(rendered) = message.message.rendered {
+          eprint!("{rendered}");
+        }
+        None
+      },
+      | _ => None,
+    }
+  }
 
   pub(crate) fn kernel_matrix(profile: Profile) -> Result<()> {
     let names =
@@ -231,16 +206,12 @@ impl Vmtest {
       .spawn()
       .context("failed to start Cargo")?;
     let output = cargo.stdout.take().context("Cargo stdout unavailable")?;
-    let artifacts = BufReader::new(output)
-      .lines()
-      .map(|line| -> Result<Option<PathBuf>> {
-        let message: CargoMessage = serde_json::from_str(&line?)?;
-        Ok(message.executable())
-      })
-      .collect::<Result<Vec<_>>>()?;
+    let artifacts = Message::parse_stream(BufReader::new(output))
+      .map(|message| message.map(Self::executable))
+      .collect::<std::io::Result<Vec<_>>>();
     ensure!(cargo.wait()?.success(), "Cargo failed to build linux_live");
     let executable =
-      artifacts.into_iter().flatten().last().context("Cargo did not report the linux_live executable")?;
+      artifacts?.into_iter().flatten().last().context("Cargo did not report the linux_live executable")?;
     let destination = cache.join(Self::BINARY_PATH);
     fs::create_dir_all(destination.parent().context("binary has no parent")?)?;
     fs::copy(&executable, &destination)?;
@@ -293,29 +264,30 @@ impl Vmtest {
 mod tests {
   use std::path::PathBuf;
 
-  use super::CargoMessage;
+  use anyhow::{Result, ensure};
+  use cargo_metadata::Message;
+  use serde_json::json;
+
+  use super::Vmtest;
 
   #[test]
-  fn selects_only_linux_live_test_executable() {
-    let cases = [
-      (
-        r#"{"reason":"compiler-artifact","target":{"name":"linux_live","kind":["test"]},"executable":"/tmp/linux_live"}"#,
-        Some(PathBuf::from("/tmp/linux_live")),
-      ),
-      (
-        r#"{"reason":"compiler-artifact","target":{"name":"linux_live","kind":["bin"]},"executable":"/tmp/wrong-kind"}"#,
-        None,
-      ),
-      (
-        r#"{"reason":"compiler-artifact","target":{"name":"other","kind":["test"]},"executable":"/tmp/wrong-target"}"#,
-        None,
-      ),
-      (r#"{"reason":"build-finished","success":true}"#, None),
-    ];
-
-    for (json, expected) in cases {
-      let message = serde_json::from_str::<CargoMessage>(json).expect("Cargo JSON should deserialize");
-      assert_eq!(message.executable(), expected);
+  fn selects_only_linux_live_test_executable() -> Result<()> {
+    for (name, kind, executable, expected) in [
+      ("linux_live", "test", Some("/tmp/linux_live"), Some(PathBuf::from("/tmp/linux_live"))),
+      ("linux_live", "bin", Some("/tmp/wrong-kind"), None),
+      ("other", "test", Some("/tmp/wrong-target"), None),
+      ("linux_live", "test", None, None),
+    ] {
+      let message = json!({
+        "reason": "compiler-artifact", "package_id": "sakai 0.1.0", "manifest_path": "/tmp/Cargo.toml",
+        "target": { "name": name, "kind": [kind], "crate_types": ["bin"], "src_path": "/tmp/linux_live.rs", "edition": "2024" },
+        "profile": { "opt_level": "0", "debuginfo": 0, "debug_assertions": true, "overflow_checks": true, "test": true },
+        "features": [], "filenames": [], "executable": executable, "fresh": false,
+      });
+      ensure!(Vmtest::executable(serde_json::from_value(message)?) == expected, "unexpected artifact: {name}/{kind}");
     }
+    let message: Message = serde_json::from_str(r#"{"reason":"build-finished","success":true}"#)?;
+    ensure!(Vmtest::executable(message).is_none(), "build-finished must not select an executable");
+    Ok(())
   }
 }
