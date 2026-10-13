@@ -26,13 +26,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
-      - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
-        with:
-          name: devenv
-          skipPush: true
-      - name: Install the locked devenv
-        run: nix profile add "github:NixOS/nixpkgs/$(jq -r '.nodes.nixpkgs.locked.rev' devenv.lock)#devenv"
+      - uses: ./.github/actions/setup-devenv
       - name: Wait for the manually published first release and its stable tag
         id: baseline
         run: devenv shell -- rtk cargo xtask release baseline
