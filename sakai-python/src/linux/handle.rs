@@ -24,6 +24,7 @@ impl PythonPath {
 /// Readers retain this handle's ownership, so they remain usable after the
 /// Python Cgroup object is released. Each read fetches a fresh kernel value;
 /// separate calls do not form an atomic snapshot.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 pub(super) struct Cgroup {
   pub(super) owner: Arc<sakai::Cgroup>,
@@ -33,6 +34,8 @@ impl From<sakai::Cgroup> for Cgroup {
   fn from(owner: sakai::Cgroup) -> Self { Self { owner: Arc::new(owner) } }
 }
 
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[cfg_attr(not(feature = "stubs"), pyo3_stub_gen_derive::remove_gen_stub)]
 #[pymethods]
 impl Cgroup {
   /// Open the cgroup containing the current process.
@@ -52,7 +55,12 @@ impl Cgroup {
   ///
   /// Accepts str, bytes, and os.PathLike without lossy path conversion.
   #[staticmethod]
-  fn from_path(py: Python<'_>, #[pyo3(from_py_with = PythonPath::extract)] path: PathBuf) -> PyResult<Self> {
+  fn from_path(
+    py: Python<'_>,
+    #[gen_stub(override_type(type_repr = "PathArg"))]
+    #[pyo3(from_py_with = PythonPath::extract)]
+    path: PathBuf,
+  ) -> PyResult<Self> {
     PythonError::result(py, py.detach(move || sakai::Cgroup::from_path(&path))).map(Into::into)
   }
 
@@ -62,7 +70,13 @@ impl Cgroup {
   fn path(&self) -> PathBuf { self.owner.path().to_owned() }
 
   /// Open a direct child by one filesystem name, without following slashes.
-  fn child(&self, py: Python<'_>, #[pyo3(from_py_with = PythonPath::extract)] name: PathBuf) -> PyResult<Self> {
+  fn child(
+    &self,
+    py: Python<'_>,
+    #[gen_stub(override_type(type_repr = "PathArg"))]
+    #[pyo3(from_py_with = PythonPath::extract)]
+    name: PathBuf,
+  ) -> PyResult<Self> {
     PythonError::read(py, &self.owner, move |owner| owner.child(name.as_os_str())).map(Into::into)
   }
 

@@ -2,11 +2,15 @@
 
 use std::{io, path::PathBuf, sync::Arc};
 
+#[cfg(not(feature = "stubs"))]
+use pyo3::create_exception;
 use pyo3::{
-  PyTypeInfo, create_exception,
+  PyTypeInfo,
   exceptions::{PyException, PyOSError},
   prelude::*,
 };
+#[cfg(feature = "stubs")]
+use pyo3_stub_gen::create_exception;
 use sakai::Error;
 
 create_exception!(_sakai, SakaiError, PyException, "Base error for Sakai cgroup operations.");

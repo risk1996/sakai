@@ -14,11 +14,13 @@ use super::PythonError;
 /// CgroupParseError; unsupported operations raise NotSupportedError and other
 /// OS failures raise OSError. Reads never change placement or migrate memory.
 /// See https://docs.kernel.org/admin-guide/cgroup-v2.html#cpuset-interface-files.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 pub(super) struct CpusetReader {
   pub(super) owner: Arc<sakai::Cgroup>,
 }
 
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
 #[pymethods]
 impl CpusetReader {
   /// Read requested CPU IDs; an empty list means inheritance from ancestors.
@@ -79,6 +81,7 @@ impl CpusetReader {
 /// access performs no kernel I/O. Exclusive and isolated lists describe partition
 /// allocation; their empty-list semantics are documented on their readers.
 /// See https://docs.kernel.org/admin-guide/cgroup-v2.html#cpuset-interface-files.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 pub(super) struct CpuList {
   inner: CoreCpuList,
@@ -88,11 +91,14 @@ impl From<CoreCpuList> for CpuList {
   fn from(inner: CoreCpuList) -> Self { Self { inner } }
 }
 
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[cfg_attr(not(feature = "stubs"), pyo3_stub_gen_derive::remove_gen_stub)]
 #[pymethods]
 impl CpuList {
   /// Stored ascending inclusive (start, end) pairs in an immutable tuple.
   /// Single IDs have equal endpoints; large ranges are never expanded.
   #[getter]
+  #[gen_stub(override_return_type(type_repr = "tuple[tuple[int, int], ...]"))]
   fn ranges(&self, py: Python<'_>) -> PyResult<Py<PyTuple>> {
     PyTuple::new(py, self.inner.ranges().iter().map(|range| (*range.start(), *range.end()))).map(Bound::unbind)
   }
@@ -109,6 +115,7 @@ impl CpuList {
 /// grants can differ from requests and change with hotplug. This is placement
 /// policy, not current page residency. Snapshot access performs no kernel I/O.
 /// See https://docs.kernel.org/admin-guide/cgroup-v2.html#cpuset-interface-files.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 pub(super) struct MemoryNodeList {
   inner: CoreNodeList,
@@ -118,11 +125,14 @@ impl From<CoreNodeList> for MemoryNodeList {
   fn from(inner: CoreNodeList) -> Self { Self { inner } }
 }
 
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[cfg_attr(not(feature = "stubs"), pyo3_stub_gen_derive::remove_gen_stub)]
 #[pymethods]
 impl MemoryNodeList {
   /// Stored ascending inclusive (start, end) pairs in an immutable tuple.
   /// Single IDs have equal endpoints; large ranges are never expanded.
   #[getter]
+  #[gen_stub(override_return_type(type_repr = "tuple[tuple[int, int], ...]"))]
   fn ranges(&self, py: Python<'_>) -> PyResult<Py<PyTuple>> {
     PyTuple::new(py, self.inner.ranges().iter().map(|range| (*range.start(), *range.end()))).map(Bound::unbind)
   }
@@ -139,6 +149,7 @@ impl MemoryNodeList {
 /// text without treating it as a fixed vocabulary. Isolated states and reasons
 /// are available since Linux 6.1; older kernels can omit reasons.
 /// See https://docs.kernel.org/admin-guide/cgroup-v2.html#cpuset-interface-files.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, get_all, module = "sakai._sakai")]
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct CpusetPartition {

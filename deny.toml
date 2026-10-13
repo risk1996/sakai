@@ -9,6 +9,17 @@ unmaintained = "all"
 unsound = "all"
 yanked = "deny"
 unused-ignored-advisory = "deny"
+# RustPython's Unicode tables are used by the stub derive macro and the opt-in
+# generator, not linked into the normal extension. These notices concern
+# maintenance, with no available upgrade; retain all other advisory checks.
+ignore = [
+  "RUSTSEC-2025-0075", # unic-char-range
+  "RUSTSEC-2025-0080", # unic-common
+  "RUSTSEC-2025-0081", # unic-char-property
+  "RUSTSEC-2025-0090", # unic-emoji-char
+  "RUSTSEC-2025-0098", # unic-ucd-version
+  "RUSTSEC-2025-0100", # unic-ucd-ident
+]
 
 [licenses]
 include-dev = true
@@ -26,6 +37,16 @@ allow = [
 # Mozilla's root certificate data is distributed under this permissive data license.
 crate = "webpki-root-certs"
 allow = ["CDLA-Permissive-2.0"]
+
+[[licenses.exceptions]]
+# RustPython's build-time hashing dependency is dedicated to the public domain.
+crate = "tiny-keccak"
+allow = ["CC0-1.0"]
+
+[[licenses.exceptions]]
+# RustPython uses Unicode's older data license through this parser dependency.
+crate = "unicode_names2"
+allow = ["Apache-2.0", "MIT", "Unicode-DFS-2016"]
 
 [bans]
 # Transitive dependencies can legitimately require different major versions.

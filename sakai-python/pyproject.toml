@@ -20,3 +20,6 @@ build-backend = "maturin"
 python-source = "python"
 module-name = "sakai._sakai"
 bindings = "pyo3"
+
+[dependency-groups]
+test = ["mypy>=2.4,<3"]

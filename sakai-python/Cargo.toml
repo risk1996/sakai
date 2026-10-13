@@ -7,7 +7,12 @@ publish = false
 
 [lib]
 name = "_sakai"
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "stub_gen"
+path = "src/bin/stub_gen.rs"
+required-features = ["stubs"]
 
 [lints]
 workspace = true
@@ -18,8 +23,13 @@ workspace = true
 # PyO3's deprecated extension-module feature here would interfere with Rust tests.
 # https://pyo3.rs/v0.29.2/building-and-distribution
 pyo3 = { version = "=0.29.3", features = ["abi3-py311"] }
+pyo3-stub-gen = { version = "0.23.1", default-features = false, optional = true }
+pyo3-stub-gen-derive = "0.23.1"
 sakai = { path = "../sakai" }
 uom.workspace = true
 
 [dev-dependencies]
 assertables.workspace = true
+
+[features]
+stubs = ["dep:pyo3-stub-gen"]

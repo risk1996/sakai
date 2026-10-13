@@ -1,6 +1,5 @@
 """Installed-package contract checks. Run on Linux from outside the checkout."""
 
-import ast
 import errno
 import inspect
 import os
@@ -11,7 +10,7 @@ import threading
 import unittest
 from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import Any, TypeVar, cast, get_origin
+from typing import Any, TypeVar, assert_type, cast, get_origin
 
 import sakai
 import sakai._sakai as native
@@ -261,58 +260,27 @@ class ContractTest(unittest.TestCase):
       "Python Cgroup object is released. Each read fetches a fresh kernel value;\n"
       "separate calls do not form an atomic snapshot.",
     )
-    # Validate the installed extension against its separately maintained stub.
     package = Path(sakai.__file__).parent
     self.assertTrue((package / "py.typed").is_file())
+    self.assertTrue((package / "_sakai.pyi").is_file())
     self.assertEqual(Path(native.__file__).parent, package)
-    stub = ast.parse((package / "_sakai.pyi").read_text())
-    classes = [node for node in stub.body if isinstance(node, ast.ClassDef)]
-    self.assertTrue(classes)
-    self.assertEqual({node.name for node in classes}, set(sakai.__all__))
     self.assertEqual(len(sakai.__all__), len(set(sakai.__all__)))
     self.assertEqual(
       {name for name in vars(native) if not name.startswith("_")},
       set(sakai.__all__),
     )
-    for declaration in classes:
-      with self.subTest(class_name=declaration.name):
-        cls = getattr(sakai, declaration.name)
-        self.assertIs(cls, getattr(native, declaration.name))
-        # getdoc can inherit object/Exception docs when a class has no own docs.
+    for name in sakai.__all__:
+      with self.subTest(class_name=name):
+        cls = getattr(sakai, name)
+        self.assertIs(cls, getattr(native, name))
+        # Require each class's own docs; inherited Exception docs do not count.
         self.assertTrue((cls.__doc__ or "").strip())
-        members = {
-          member.name: member
-          for member in declaration.body
-          if isinstance(member, ast.FunctionDef) and not member.name.startswith("_")
-        }
-        # Inspect own public descriptors; inherited Exception members and
-        # dynamic diagnostic attributes are covered by exception tests.
-        self.assertEqual(
-          {
-            name
-            for name, member in vars(cls).items()
-            if not name.startswith("_")
-            and (callable(member) or inspect.isdatadescriptor(member))
-          },
-          set(members),
-        )
-        for name, member in members.items():
-          with self.subTest(member_name=name):
-            actual = getattr(cls, name)
-            self.assertTrue(inspect.getdoc(actual))
-            is_property = any(
-              isinstance(decorator, ast.Name) and decorator.id == "property"
-              for decorator in member.decorator_list
-            )
-            if is_property:
-              self.assertTrue(inspect.isdatadescriptor(actual))
-            else:
-              self.assertTrue(callable(actual))
-              self.assertEqual(
-                list(inspect.signature(actual).parameters),
-                [arg.arg for arg in member.args.posonlyargs + member.args.args]
-                + [arg.arg for arg in member.args.kwonlyargs],
-              )
+        for member_name, member in vars(cls).items():
+          if not member_name.startswith("_") and (
+            callable(member) or inspect.isdatadescriptor(member)
+          ):
+            with self.subTest(member_name=member_name):
+              self.assertTrue(inspect.getdoc(member))
 
   def test_pinned_handle_and_pathlike(self) -> None:
     self.assertIsInstance(self.group.path, Path)
@@ -525,8 +493,8 @@ class ContractTest(unittest.TestCase):
     self.assertIsInstance(maximum, CpuMax)
     self.assertGreater(maximum.period_ns, 0)
     self.assertIs(get_origin(MaxOr[int]), MaxOr)
-    self.check_limit(maximum.quota_ns)
-    self.check_limit(maximum.cpu_count, float)
+    self.check_limit(assert_type(maximum.quota_ns, MaxOr[int]))
+    self.check_limit(assert_type(maximum.cpu_count, MaxOr[float]), float)
     self.assertEqual(maximum.quota_ns.is_max, maximum.cpu_count.is_max)
     if not maximum.quota_ns.is_max:
       self.assertAlmostEqual(

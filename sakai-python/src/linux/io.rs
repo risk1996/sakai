@@ -24,11 +24,14 @@ type DeviceKey = (u32, u32);
 /// Missing files, including optional kernel features and root exemptions,
 /// raise InterfaceMissingError with the interface path. Reads never write PSI
 /// triggers or change controller configuration.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 pub(super) struct IoReader {
   pub(super) owner: Arc<sakai::Cgroup>,
 }
 
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[cfg_attr(not(feature = "stubs"), pyo3_stub_gen_derive::remove_gen_stub)]
 #[pymethods]
 impl IoReader {
   /// Read hierarchical per-device byte and operation counters.
@@ -71,6 +74,7 @@ impl IoReader {
   /// Read the I/O request-priority policy, including at root.
   /// Requires CONFIG_BLK_CGROUP_IOPRIO. Legacy none-to-rt has the same behavior
   /// as promote-to-rt since Linux 6.5; earlier kernels only promote unclassified I/O.
+  #[gen_stub(override_return_type(type_repr = "typing.Literal['no-change', 'promote-to-rt', 'none-to-rt', 'restrict-to-be', 'idle']", imports = ("typing",)))]
   fn priority_class(&self, py: Python<'_>) -> PyResult<String> {
     PythonError::read(py, &self.owner, |owner| owner.io().priority_class()).map(|value| value.to_string())
   }
@@ -80,6 +84,7 @@ impl IoReader {
 ///
 /// An empty map means no devices were reported. Missing counters remain None;
 /// latency debug fields describe the device group; unknown nested keys are ignored.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 #[derive(Debug, PartialEq)]
 pub(super) struct IoStat {
@@ -90,16 +95,20 @@ impl From<CoreIoStat> for IoStat {
   fn from(value: CoreIoStat) -> Self { Self { devices: IoValues::devices(value.devices(), |value| (*value).into()) } }
 }
 
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[cfg_attr(not(feature = "stubs"), pyo3_stub_gen_derive::remove_gen_stub)]
 #[pymethods]
 impl IoStat {
   /// Read-only mapping of (major, minor) keys to immutable device counters.
   #[getter]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[tuple[int, int], IoDeviceStat]", imports = ("collections.abc",)))]
   fn devices(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     mapping(py, &self.devices, |value| Py::new(py, value.clone()))
   }
 }
 
 /// Immutable cumulative counters for one block device; absent values are None.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, skip_from_py_object, module = "sakai._sakai")]
 #[derive(Debug, Clone, PartialEq, Default)]
 pub(super) struct IoDeviceStat {
@@ -183,10 +192,13 @@ impl From<CoreIoDeviceStat> for IoDeviceStat {
   }
 }
 
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[cfg_attr(not(feature = "stubs"), pyo3_stub_gen_derive::remove_gen_stub)]
 #[pymethods]
 impl IoDeviceStat {
   /// Queue-depth limit, or max when unrestricted; None means the field was omitted.
   #[getter]
+  #[gen_stub(override_return_type(type_repr = "MaxOr[int] | None"))]
   fn depth(&self) -> Option<MaxOr> {
     self.depth.map(|value| MaxOr::from_value(value, |value| PythonLimitValue::Integer(value.value)))
   }
@@ -196,6 +208,7 @@ impl IoDeviceStat {
 ///
 /// Only explicit device overrides are reported. Configuration can change
 /// between reads; weights describe relative I/O time among siblings.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct IoWeight {
@@ -214,10 +227,13 @@ impl From<CoreIoWeight> for IoWeight {
   }
 }
 
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[cfg_attr(not(feature = "stubs"), pyo3_stub_gen_derive::remove_gen_stub)]
 #[pymethods]
 impl IoWeight {
   /// Read-only mapping of (major, minor) device keys to numeric weight overrides.
   #[getter]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[tuple[int, int], int]", imports = ("collections.abc",)))]
   fn devices(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     Ok(PyMappingProxy::new(py, (&self.devices).into_py_dict(py)?.as_mapping()).unbind())
   }
@@ -227,6 +243,7 @@ impl IoWeight {
 ///
 /// The map can be empty. MaxOr's max means unlimited here; ancestor limits
 /// can still apply, and the kernel permits temporary bursts.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 pub(super) struct IoMax {
   devices: BTreeMap<DeviceKey, IoDeviceMax>,
@@ -236,16 +253,20 @@ impl From<CoreIoMax> for IoMax {
   fn from(value: CoreIoMax) -> Self { Self { devices: IoValues::devices(value.devices(), |value| (*value).into()) } }
 }
 
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[cfg_attr(not(feature = "stubs"), pyo3_stub_gen_derive::remove_gen_stub)]
 #[pymethods]
 impl IoMax {
   /// Read-only mapping of (major, minor) keys to immutable per-device limits.
   #[getter]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[tuple[int, int], IoDeviceMax]", imports = ("collections.abc",)))]
   fn devices(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     mapping(py, &self.devices, |value| Py::new(py, value.clone()))
   }
 }
 
 /// Immutable read and write bandwidth and operation-rate limits for one device.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
 #[derive(Clone)]
 pub(super) struct IoDeviceMax {
@@ -279,6 +300,7 @@ impl From<CoreIoDeviceMax> for IoDeviceMax {
 /// Targets are integer nanoseconds, not observed latency or guarantees. Only
 /// configured nonzero targets appear; disabled targets are omitted. The map
 /// can be empty, and targets can change between reads.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct IoLatency {
@@ -291,10 +313,13 @@ impl From<CoreIoLatency> for IoLatency {
   }
 }
 
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[cfg_attr(not(feature = "stubs"), pyo3_stub_gen_derive::remove_gen_stub)]
 #[pymethods]
 impl IoLatency {
   /// Read-only mapping of (major, minor) device keys to latency targets in nanoseconds.
   #[getter]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[tuple[int, int], int]", imports = ("collections.abc",)))]
   fn targets_ns(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     Ok(PyMappingProxy::new(py, self.targets_ns.clone().into_py_dict(py)?.as_mapping()).unbind())
   }
@@ -304,6 +329,7 @@ impl IoLatency {
 ///
 /// Requires CONFIG_BLK_CGROUP_IOCOST. Device maps can be empty; automatic
 /// parameters may change between reads. This snapshot performs no kernel I/O.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 pub(super) struct IoCostQos {
   devices: BTreeMap<DeviceKey, IoDeviceCostQos>,
@@ -315,10 +341,13 @@ impl From<CoreIoCostQos> for IoCostQos {
   }
 }
 
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[cfg_attr(not(feature = "stubs"), pyo3_stub_gen_derive::remove_gen_stub)]
 #[pymethods]
 impl IoCostQos {
   /// Read-only mapping of (major, minor) device keys to QoS parameters.
   #[getter]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[tuple[int, int], IoDeviceCostQos]", imports = ("collections.abc",)))]
   fn devices(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     mapping(py, &self.devices, |value| Py::new(py, value.clone()))
   }
@@ -328,6 +357,7 @@ impl IoCostQos {
 ///
 /// Ratios represent the kernel's percentages: 150% is 1.5. Latency thresholds
 /// use nanoseconds. Parameters describe configuration, not measured throughput.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
 #[derive(Clone)]
 pub(super) struct IoDeviceCostQos {
@@ -368,6 +398,7 @@ impl From<CoreIoDeviceCostQos> for IoDeviceCostQos {
 ///
 /// Requires CONFIG_BLK_CGROUP_IOCOST. Device maps can be empty; automatic
 /// parameters may change between reads. This snapshot performs no kernel I/O.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 pub(super) struct IoCostModel {
   devices: BTreeMap<DeviceKey, IoDeviceCostModel>,
@@ -379,10 +410,13 @@ impl From<CoreIoCostModel> for IoCostModel {
   }
 }
 
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[cfg_attr(not(feature = "stubs"), pyo3_stub_gen_derive::remove_gen_stub)]
 #[pymethods]
 impl IoCostModel {
   /// Read-only mapping of (major, minor) device keys to cost model parameters.
   #[getter]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[tuple[int, int], IoDeviceCostModel]", imports = ("collections.abc",)))]
   fn devices(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     mapping(py, &self.devices, |value| Py::new(py, value.clone()))
   }
@@ -391,6 +425,7 @@ impl IoCostModel {
 /// Immutable I/O cost model rates for one device, not observed or enforced rates.
 ///
 /// Sequential and random IOPS describe 4 KiB I/O operations per second.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
 #[derive(Clone)]
 pub(super) struct IoDeviceCostModel {

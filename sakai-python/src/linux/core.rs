@@ -14,6 +14,7 @@ use uom::si::time::nanosecond;
 use super::{MaxOr, PythonError};
 
 /// Immutable lifecycle snapshot; states can change immediately after a read.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct CgroupEvents {
@@ -34,6 +35,7 @@ impl From<CoreCgroupEvents> for CgroupEvents {
 /// Subsystem counts, available since Linux 6.12, include this cgroup and its
 /// descendants. Properties inspect stored snapshots without performing I/O.
 /// See https://github.com/torvalds/linux/blob/v6.12/kernel/cgroup/cgroup.c.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct CgroupStat {
@@ -58,6 +60,8 @@ impl From<CoreCgroupStat> for CgroupStat {
   }
 }
 
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[cfg_attr(not(feature = "stubs"), pyo3_stub_gen_derive::remove_gen_stub)]
 #[pymethods]
 impl CgroupStat {
   /// Visible descendant cgroup count, excluding this cgroup.
@@ -70,12 +74,14 @@ impl CgroupStat {
 
   /// Read-only live subsystem counts at and beneath this cgroup.
   #[getter]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, int]", imports = ("collections.abc",)))]
   fn subsystems(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     Ok(PyMappingProxy::new(py, self.subsystems.clone().into_py_dict(py)?.as_mapping()).unbind())
   }
 
   /// Read-only dying subsystem counts at and beneath this cgroup.
   #[getter]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, int]", imports = ("collections.abc",)))]
   fn dying_subsystems(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     Ok(PyMappingProxy::new(py, self.dying_subsystems.clone().into_py_dict(py)?.as_mapping()).unbind())
   }
@@ -88,6 +94,7 @@ impl CgroupStat {
 /// frozen state; it is neither CPU time nor the sum of descendants' durations.
 /// Properties inspect stored snapshots without I/O.
 /// See https://github.com/torvalds/linux/blob/v6.18/kernel/cgroup/cgroup.c.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct CgroupStatLocal {
@@ -106,11 +113,14 @@ impl From<CoreCgroupStatLocal> for CgroupStatLocal {
 /// CgroupParseError, unsupported reads raise NotSupportedError, and other
 /// operating-system failures raise OSError with their cause and interface path.
 /// See https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 pub(super) struct CoreReader {
   pub(super) owner: Arc<sakai::Cgroup>,
 }
 
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[cfg_attr(not(feature = "stubs"), pyo3_stub_gen_derive::remove_gen_stub)]
 #[pymethods]
 impl CoreReader {
   /// Read process IDs in the reader's PID namespace, preserving order and duplicates.
@@ -166,6 +176,7 @@ impl CoreReader {
   ///
   /// Zero prevents children; max removes this cgroup's restriction. Ancestor
   /// restrictions still apply. Available at the root. See CoreReader for errors.
+  #[gen_stub(override_return_type(type_repr = "MaxOr[int]"))]
   fn max_depth(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, |owner| owner.core().max_depth()).map(|value| MaxOr::from_count(value.value()))
   }
@@ -175,6 +186,7 @@ impl CoreReader {
   /// Zero prevents children; max removes this cgroup's restriction. Ancestors
   /// still restrict creation, and existing descendants may exceed a lowered
   /// limit. Available at the root. See CoreReader for read errors.
+  #[gen_stub(override_return_type(type_repr = "MaxOr[int]"))]
   fn max_descendants(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, |owner| owner.core().max_descendants())
       .map(|value| MaxOr::from_count(value.value()))
@@ -190,6 +202,7 @@ impl CoreReader {
   }
 
   /// Read the cgroup type: domain, domain threaded, domain invalid, or threaded.
+  #[gen_stub(override_return_type(type_repr = "CgroupKind"))]
   fn kind(&self, py: Python<'_>) -> PyResult<String> {
     PythonError::read(py, &self.owner, |owner| owner.core().kind()).map(|kind| kind.to_string())
   }

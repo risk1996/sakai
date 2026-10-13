@@ -14,11 +14,14 @@ use super::{MaxOr, PythonError};
 /// NotSupportedError; other operating-system failures raise OSError with the
 /// interface path and original cause. The hierarchy root lacks these files.
 /// See https://docs.kernel.org/admin-guide/cgroup-v2.html#pid.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 pub(super) struct PidsReader {
   pub(super) owner: Arc<sakai::Cgroup>,
 }
 
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[cfg_attr(not(feature = "stubs"), pyo3_stub_gen_derive::remove_gen_stub)]
 #[pymethods]
 impl PidsReader {
   /// Read the volatile hierarchical task count, which can exceed pids.max.
@@ -37,6 +40,7 @@ impl PidsReader {
   }
 
   /// Read the configured task limit as MaxOr[int]; zero is a valid limit.
+  #[gen_stub(override_return_type(type_repr = "MaxOr[int]"))]
   fn max(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, |owner| owner.pids().max()).map(|value| MaxOr::from_count(value.value()))
   }
@@ -62,6 +66,7 @@ impl PidsReader {
 /// Hierarchical versus local semantics depend on the reader, kernel version,
 /// and pids_localevents mount option. Properties inspect stored counts without
 /// I/O. See PidsReader and https://docs.kernel.org/admin-guide/cgroup-v2.html#pid.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct PidsEvents {

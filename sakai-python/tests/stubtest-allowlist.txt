@@ -1,0 +1,7 @@
+# Dynamic exports are checked by test_native_documentation.
+sakai\.__all__
+sakai\._sakai\.__all__
+# These aliases exist only for static typing.
+sakai\._sakai\.(CgroupKind|PathArg|RdmaDeviceKey)
+# Generic[_ValueT] supplies subscription to type checkers; PyO3 implements it at runtime.
+sakai\._sakai\.MaxOr\.__class_getitem__

@@ -125,6 +125,11 @@
       tasks."check:ruff".exec = "ruff check .";
       tasks."check:ruff-format".exec = "ruff format --check .";
       tasks."check:ty".exec = "ty check --project sakai-python .";
+      tasks."generate:stubs".exec = ''
+        set -e
+        cargo run --package sakai-python --features stubs --bin stub_gen --locked
+        ruff format sakai-python/python/sakai
+      '';
     };
   };
   # See full reference at https://devenv.sh/reference/options/

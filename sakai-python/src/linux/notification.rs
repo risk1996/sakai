@@ -40,6 +40,7 @@ impl WaitTimeout {
 /// released. Notifications are coalesced, volatile hints to make a fresh read;
 /// they do not contain counts or snapshots. PSI trigger files are excluded.
 /// Only one wait may run at a time; concurrent waits raise RuntimeError.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 pub(super) struct EventPoller {
   inner: Mutex<CoreEventPoller>,
@@ -50,6 +51,7 @@ impl From<CoreEventPoller> for EventPoller {
   fn from(inner: CoreEventPoller) -> Self { Self { descriptor: inner.as_fd().as_raw_fd(), inner: Mutex::new(inner) } }
 }
 
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
 #[pymethods]
 impl EventPoller {
   /// Wait for and acknowledge a kernel event notification, releasing the GIL.
@@ -93,6 +95,7 @@ impl EventPoller {
 /// Cgroup interface removal need not emit inotify deletion events: a watch
 /// can remain idle after removal. Use bounded waits and fresh lifecycle reads.
 /// Only one wait may run at a time; concurrent waits raise RuntimeError.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 pub(super) struct ConfigurationWatcher {
   inner: Mutex<CoreConfigurationWatcher>,
@@ -105,6 +108,7 @@ impl From<CoreConfigurationWatcher> for ConfigurationWatcher {
   }
 }
 
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
 #[pymethods]
 impl ConfigurationWatcher {
   /// Wait for and consume queued configuration hints, releasing the GIL.
@@ -144,6 +148,7 @@ impl ConfigurationWatcher {
 ///
 /// These flags are volatile hints, not configuration snapshots or event counts.
 /// Multiple flags may be True, and repeated changes may be coalesced.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct ChangeNotification {
