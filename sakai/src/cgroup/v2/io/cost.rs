@@ -14,6 +14,7 @@ use crate::{
 };
 
 /// Who controls one device's I/O cost parameters.
+///
 /// See [Linux I/O cost interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::EnumString, strum::Display)]
 #[strum(serialize_all = "snake_case")]
@@ -34,6 +35,7 @@ impl ParseCgroup<Self> for IoCostControl {
 }
 
 /// The model used to estimate a device's I/O cost.
+///
 /// See [Linux I/O cost interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::EnumString, strum::Display)]
 #[strum(serialize_all = "snake_case")]
@@ -58,6 +60,7 @@ impl ParseCgroup<Self> for IoCostModelName {
 /// change between reads. Percentages are stored as dimensionless ratios;
 /// latency thresholds are converted from microseconds to [`Time`].
 /// Unknown nested keys are ignored.
+///
 /// See [Linux I/O cost interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct IoCostQos {
@@ -74,6 +77,7 @@ impl IoCostQos {
 }
 
 /// I/O cost controller enablement, latency targets, and scaling bounds for a device.
+///
 /// See [Linux I/O cost interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct IoDeviceCostQos {
@@ -161,6 +165,7 @@ impl ParseCgroup<ParseScalingPercent> for Ratio {
 /// Requires `CONFIG_BLK_CGROUP_IOCOST`. An empty file is valid. Automatic
 /// parameters may change between reads. Rates are model inputs, not measured
 /// throughput or enforced limits. Unknown nested keys are ignored.
+///
 /// See [Linux I/O cost interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct IoCostModel {
@@ -177,6 +182,7 @@ impl IoCostModel {
 }
 
 /// Device cost-model rates, with sequential and random IOPS measured for 4 KiB I/O.
+///
 /// See [Linux I/O cost interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct IoDeviceCostModel {

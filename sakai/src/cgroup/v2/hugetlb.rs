@@ -98,6 +98,7 @@ impl FromStr for PageSize {
 /// cgroups with the controller enabled and a supported HugeTLB page size.
 /// Missing files return [`crate::Error::FileMissing`], including unsupported
 /// sizes, kernel configuration omissions, and older kernels.
+///
 /// See [Linux HugeTLB interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#hugetlb).
 #[cfg(target_os = "linux")]
 #[derive(Debug, Clone, Copy)]
@@ -108,6 +109,7 @@ pub struct Hugetlb<'a> {
 #[cfg(target_os = "linux")]
 impl Hugetlb<'_> {
   /// Reads current hierarchical faulted HugeTLB usage in bytes for this size.
+  ///
   /// See [Linux HugeTLB usage](https://docs.kernel.org/admin-guide/cgroup-v2.html#hugetlb).
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
@@ -148,6 +150,7 @@ impl Hugetlb<'_> {
   }
 
   /// Reads cumulative hierarchical allocation failures caused by HugeTLB limits.
+  ///
   /// See [Linux HugeTLB events](https://docs.kernel.org/admin-guide/cgroup-v2.html#hugetlb).
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
@@ -156,6 +159,7 @@ impl Hugetlb<'_> {
   }
 
   /// Reads cumulative allocation failures originating in this cgroup alone.
+  ///
   /// See [Linux HugeTLB events](https://docs.kernel.org/admin-guide/cgroup-v2.html#hugetlb).
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
@@ -237,6 +241,7 @@ scalar!(
 /// `events` includes this cgroup and descendants; `events.local` includes only
 /// this cgroup. Both fault and reservation limits contribute to the shared
 /// `max` counter. Counts are volatile; unknown future keys are ignored.
+///
 /// See [Linux HugeTLB events](https://docs.kernel.org/admin-guide/cgroup-v2.html#hugetlb)
 /// and [reservation charge implementation](https://github.com/torvalds/linux/blob/v5.15/mm/hugetlb_cgroup.c).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -274,6 +279,7 @@ impl FromStr for HugetlbEvents {
 /// reservations. Total and node counters are read independently by the kernel;
 /// the node sum need not equal the total while usage changes. Unknown future
 /// keys are ignored. Node IDs are unsigned integers and values are bytes.
+///
 /// See [Linux 5.17 source](https://github.com/torvalds/linux/blob/v5.17/mm/hugetlb_cgroup.c).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HugetlbNumaStat {

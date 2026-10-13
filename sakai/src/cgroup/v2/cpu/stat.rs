@@ -11,6 +11,7 @@ use crate::{
 /// Values are a point-in-time read of the kernel interface. Read the file
 /// again to obtain fresh values. All durations are reported by the kernel in
 /// microseconds and stored as [`Time`].
+///
 /// See [Linux `cpu.stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CpuStat {
@@ -20,15 +21,18 @@ pub struct CpuStat {
 
 impl CpuStat {
   /// The cgroup v2 `cpu.stat` interface filename.
+  ///
   /// See [Linux `cpu.stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
   pub const FILE_NAME: &'static str = "cpu.stat";
 
   /// Returns CPU usage times.
+  ///
   /// See [Linux CPU interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
   #[must_use]
   pub const fn time(&self) -> CpuTimeStat { self.time }
 
   /// Returns CPU bandwidth counters when the CPU controller reports them.
+  ///
   /// See [Linux CPU interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
   #[must_use]
   pub const fn bandwidth(&self) -> Option<CpuBandwidthStat> { self.bandwidth }
@@ -38,6 +42,7 @@ impl CpuStat {
 ///
 /// This is a live snapshot. An empty file means the controller reports no
 /// local counter; an absent file is handled separately by the reader.
+///
 /// See [Linux `cpu.stat.local` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
 ///
 /// Since Linux 6.6; see the [upstream Linux 6.6 source](https://github.com/torvalds/linux/blob/v6.6/kernel/cgroup/cgroup.c).
@@ -49,10 +54,12 @@ pub struct CpuStatLocal {
 
 impl CpuStatLocal {
   /// The cgroup v2 `cpu.stat.local` interface filename.
+  ///
   /// See [Linux `cpu.stat.local` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
   pub const FILE_NAME: &'static str = "cpu.stat.local";
 
   /// Returns throttling of this cgroup's own runqueues, when reported.
+  ///
   /// See [Linux CPU interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
   pub const fn throttled(&self) -> Option<Time> { self.throttled }
 }
@@ -67,6 +74,7 @@ impl FromStr for CpuStatLocal {
 }
 
 /// CPU usage times from a cgroup's `cpu.stat` file.
+///
 /// See [Linux `cpu.stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CpuTimeStat {
@@ -79,16 +87,19 @@ pub struct CpuTimeStat {
 
 impl CpuTimeStat {
   /// Returns total CPU time consumed by the cgroup and its descendants.
+  ///
   /// See [Linux CPU interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
   #[must_use]
   pub const fn usage(&self) -> Time { self.usage }
 
   /// Returns CPU time consumed in user mode.
+  ///
   /// See [Linux CPU interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
   #[must_use]
   pub const fn user(&self) -> Time { self.user }
 
   /// Returns CPU time consumed in kernel mode.
+  ///
   /// See [Linux CPU interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
   #[must_use]
   pub const fn system(&self) -> Time { self.system }
@@ -124,6 +135,7 @@ impl CpuTimeStat {
 /// The kernel's period, throttling, and burst event counters are 32-bit and
 /// wrap; signed decimal output after the sign bit is set is exposed as the
 /// corresponding unsigned count. Do not assume snapshots are monotonic forever.
+///
 /// See [Linux `cpu.stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files)
 /// and the [counter implementation](https://github.com/torvalds/linux/blob/v6.13/kernel/sched/sched.h).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -136,21 +148,25 @@ pub struct CpuBandwidthStat {
 
 impl CpuBandwidthStat {
   /// Returns the number of elapsed enforcement periods.
+  ///
   /// See [Linux CPU interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
   #[must_use]
   pub const fn nr_periods(&self) -> Count { self.nr_periods }
 
   /// Returns the number of periods in which the cgroup was throttled.
+  ///
   /// See [Linux CPU interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
   #[must_use]
   pub const fn nr_throttled(&self) -> Count { self.nr_throttled }
 
   /// Returns the total time for which the cgroup was throttled.
+  ///
   /// See [Linux CPU interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
   #[must_use]
   pub const fn throttled(&self) -> Time { self.throttled }
 
   /// Returns CPU burst counters when reported by the kernel.
+  ///
   /// See [Linux CPU interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
   ///
   /// Since Linux 5.16; see the [upstream Linux 5.16 source](https://github.com/torvalds/linux/blob/v5.16/kernel/sched/core.c).
@@ -175,6 +191,7 @@ impl CpuBandwidthStat {
 }
 
 /// CPU burst counters from a cgroup's `cpu.stat` file.
+///
 /// See [Linux `cpu.stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
 ///
 /// Since Linux 5.16; see the [upstream Linux 5.16 source](https://github.com/torvalds/linux/blob/v5.16/kernel/sched/core.c).
@@ -186,11 +203,13 @@ pub struct CpuBurstStat {
 
 impl CpuBurstStat {
   /// Returns the number of periods in which a burst occurred.
+  ///
   /// See [Linux CPU interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
   #[must_use]
   pub const fn nr_bursts(&self) -> Count { self.nr_bursts }
 
   /// Returns cumulative CPU time consumed above quota during bursts.
+  ///
   /// See [Linux CPU interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
   #[must_use]
   pub const fn burst(&self) -> Time { self.burst }

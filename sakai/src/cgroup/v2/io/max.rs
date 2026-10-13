@@ -43,16 +43,19 @@ pub struct IoMax {
 
 impl IoMax {
   /// The cgroup v2 `io.max` interface filename.
+  ///
   /// See [Linux `io.max` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   pub const FILE_NAME: &'static str = "io.max";
 
   /// Returns each reported device's configured limits.
+  ///
   /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   #[must_use]
   pub const fn devices(&self) -> &BTreeMap<Device, IoDeviceMax> { &self.devices }
 }
 
 /// Read and write bandwidth and IOPS limits for a block device.
+///
 /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct IoDeviceMax {
@@ -64,21 +67,25 @@ pub struct IoDeviceMax {
 
 impl IoDeviceMax {
   /// Read bandwidth limit in bytes per second (`rbps`).
+  ///
   /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   #[must_use]
   pub const fn read_bandwidth(&self) -> MaxOr<BytesPerSecond> { self.read_bandwidth }
 
   /// Write bandwidth limit in bytes per second (`wbps`).
+  ///
   /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   #[must_use]
   pub const fn write_bandwidth(&self) -> MaxOr<BytesPerSecond> { self.write_bandwidth }
 
   /// Read operation limit in operations per second (`riops`).
+  ///
   /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   #[must_use]
   pub const fn read_iops(&self) -> MaxOr<OperationsPerSecond> { self.read_iops }
 
   /// Write operation limit in operations per second (`wiops`).
+  ///
   /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   #[must_use]
   pub const fn write_iops(&self) -> MaxOr<OperationsPerSecond> { self.write_iops }

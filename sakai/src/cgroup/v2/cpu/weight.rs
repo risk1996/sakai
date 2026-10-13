@@ -12,6 +12,7 @@ use crate::{
 /// Active sibling cgroups compete in proportion to their weights. This is
 /// neither a CPU count nor a bandwidth guarantee. Use `try_new` to validate
 /// a weight and `into_inner` to recover its integer value.
+///
 /// See [Linux CPU interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
 #[nutype(
   validate(greater_or_equal = 1, less_or_equal = 10_000),
@@ -24,19 +25,23 @@ pub struct Weight(u16);
 /// Values are a point-in-time read of the kernel interface. Read the file
 /// again to obtain a fresh value. Idle cgroups use a distinct scheduler mode
 /// instead of participating with a share weight.
+///
 /// See [Linux `cpu.weight` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CpuWeight {
   /// The cgroup uses idle scheduling, encoded as `0` in `cpu.weight`.
+  ///
   /// See [Linux CPU interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
   Idle,
   /// The cgroup participates with a relative weight from 1 through 10,000.
+  ///
   /// See [Linux CPU interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
   Shares(Weight),
 }
 
 impl CpuWeight {
   /// The cgroup v2 `cpu.weight` interface filename.
+  ///
   /// See [Linux `cpu.weight` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
   pub const FILE_NAME: &'static str = "cpu.weight";
 }

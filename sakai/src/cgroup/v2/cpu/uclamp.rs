@@ -8,6 +8,7 @@ use crate::{
 ///
 /// The kernel percentage is exposed as a dimensionless [`Ratio`]. This is a
 /// performance hint rather than a CPU bandwidth guarantee.
+///
 /// See [Linux `cpu.uclamp.min` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
 pub type CpuUclampMin = Scalar<Ratio, interface::CpuUclampMin>;
 
@@ -16,5 +17,6 @@ pub type CpuUclampMin = Scalar<Ratio, interface::CpuUclampMin>;
 /// A concrete kernel percentage is exposed as a dimensionless [`Ratio`].
 /// [`MaxOr::Max`] requests no cap. This is a performance hint rather than a
 /// CPU bandwidth limit.
+///
 /// See [Linux `cpu.uclamp.max` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
 pub type CpuUclampMax = Scalar<MaxOr<Ratio>, interface::CpuUclampMax>;

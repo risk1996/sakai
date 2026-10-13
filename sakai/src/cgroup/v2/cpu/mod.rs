@@ -25,7 +25,9 @@ mod weight_nice;
 ///
 /// Each method reads a fresh snapshot through the cgroup's directory. Missing
 /// optional interfaces return [`Error::FileMissing`]; separate reads are not
-/// atomic together. See [Linux CPU interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
+/// atomic together.
+///
+/// See [Linux CPU interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
 #[cfg(target_os = "linux")]
 #[derive(Debug, Clone, Copy)]
 pub struct Cpu<'a> {

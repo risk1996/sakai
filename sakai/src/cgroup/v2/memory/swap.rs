@@ -18,6 +18,7 @@ use crate::{
 ///
 /// Each method reads a fresh snapshot. Root cgroups and kernels without a
 /// given interface return [`crate::Error::FileMissing`].
+///
 /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
 #[cfg(target_os = "linux")]
 #[derive(Debug, Clone, Copy)]
@@ -70,6 +71,7 @@ impl Swap<'_> {
 }
 
 /// Hierarchical swap usage reported by `memory.swap.current`.
+///
 /// See [Linux `memory.swap.current` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
 pub type SwapCurrent = Scalar<Bytes, interface::SwapCurrent>;
 
@@ -79,6 +81,7 @@ pub type SwapCurrent = Scalar<Bytes, interface::SwapCurrent>;
 /// This reader opens a fresh read-only descriptor, so its value is the peak
 /// since cgroup creation, in bytes. Older kernels may lack this file. See the
 /// [Linux 6.12 reset semantics](https://github.com/torvalds/linux/blob/v6.12/Documentation/admin-guide/cgroup-v2.rst).
+///
 /// See [Linux `memory.swap.peak` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
 ///
 /// Since Linux 6.5; see the [upstream Linux 6.5 source](https://github.com/torvalds/linux/blob/v6.5/Documentation/admin-guide/cgroup-v2.rst).
@@ -88,6 +91,7 @@ pub type SwapPeak = Scalar<Bytes, interface::SwapPeak>;
 /// Hard swap limit reported by `memory.swap.max`.
 ///
 /// `max` means no limit is configured here; ancestor limits can still apply.
+///
 /// See [Linux `memory.swap.max` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
 pub type SwapMax = Scalar<MaxOr<Bytes>, interface::SwapMax>;
 
@@ -95,6 +99,7 @@ pub type SwapMax = Scalar<MaxOr<Bytes>, interface::SwapMax>;
 ///
 /// Exceeding this limit throttles further allocations. It is intended for
 /// userspace out-of-memory handling rather than routine swap control.
+///
 /// See [Linux `memory.swap.high` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
 pub type SwapHigh = Scalar<MaxOr<Bytes>, interface::SwapHigh>;
 
@@ -105,6 +110,7 @@ pub type SwapHigh = Scalar<MaxOr<Bytes>, interface::SwapHigh>;
 /// ancestors, so parent counters exclude descendant failures.
 /// The `high` counter is absent on older kernels. Unknown future keys are
 /// ignored; known counters must contain valid unsigned event counts.
+///
 /// See [Linux `memory.swap.events` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
 /// The [event propagation implementation](https://github.com/torvalds/linux/blob/v6.12/include/linux/memcontrol.h)
 /// applies the mount option to both memory and swap events.
@@ -117,20 +123,24 @@ pub struct SwapEvents {
 
 impl SwapEvents {
   /// The cgroup v2 `memory.swap.events` interface filename.
+  ///
   /// See [Linux `memory.swap.events` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   pub const FILE_NAME: &'static str = "memory.swap.events";
 
   /// Times swap usage exceeded the high threshold, when reported.
+  ///
   /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   #[must_use]
   pub const fn high(&self) -> Option<Count> { self.high }
 
   /// Times a swap allocation failed at the max boundary.
+  ///
   /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   #[must_use]
   pub const fn max(&self) -> Count { self.max }
 
   /// Swap allocation failures from the limit or system-wide exhaustion.
+  ///
   /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   #[must_use]
   pub const fn fail(&self) -> Count { self.fail }

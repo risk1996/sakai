@@ -37,6 +37,7 @@ const CGROUP2_SUPER_MAGIC: fs::FsWord = 0x6367_7270;
 ///
 /// Each read opens a fresh, read-only interface descriptor. Reads across files
 /// are separate snapshots, not a transaction. No controller is enabled or changed.
+///
 /// See [cgroups(7)](https://man7.org/linux/man-pages/man7/cgroups.7.html),
 /// [proc_pid_cgroup(5)](https://man7.org/linux/man-pages/man5/proc_pid_cgroup.5.html), and
 /// [proc_pid_mountinfo(5)](https://man7.org/linux/man-pages/man5/proc_pid_mountinfo.5.html).
@@ -48,6 +49,7 @@ pub struct Cgroup {
 
 impl Cgroup {
   /// Discovers this process's cgroup through its visible cgroup2 mounts.
+  ///
   /// See [cgroups(7)](https://man7.org/linux/man-pages/man7/cgroups.7.html),
   /// [proc_pid_cgroup(5)](https://man7.org/linux/man-pages/man5/proc_pid_cgroup.5.html), and
   /// [proc_pid_mountinfo(5)](https://man7.org/linux/man-pages/man5/proc_pid_mountinfo.5.html).
@@ -58,6 +60,7 @@ impl Cgroup {
   pub fn from_current_process() -> Result<Self, Error> { Self::from_pid(std::process::id()) }
 
   /// Resolves a process's membership using the caller's mount namespace.
+  ///
   /// See [cgroups(7)](https://man7.org/linux/man-pages/man7/cgroups.7.html),
   /// [proc_pid_cgroup(5)](https://man7.org/linux/man-pages/man5/proc_pid_cgroup.5.html), and
   /// [proc_pid_mountinfo(5)](https://man7.org/linux/man-pages/man5/proc_pid_mountinfo.5.html).
@@ -110,6 +113,7 @@ impl Cgroup {
 
   /// Opens a directory and verifies cgroup2 filesystem magic.
   /// Symlinks and parent traversal are rejected, including on old kernels.
+  ///
   /// See [openat2(2)](https://man7.org/linux/man-pages/man2/openat2.2.html) for path-resolution flags
   /// and [statfs(2)](https://man7.org/linux/man-pages/man2/statfs.2.html) for filesystem identification.
   ///
@@ -174,6 +178,7 @@ impl Cgroup {
   }
 
   /// Opens one child by name; names containing slashes or traversal are invalid.
+  ///
   /// See [openat2(2)](https://man7.org/linux/man-pages/man2/openat2.2.html) for path-resolution flags
   /// and [statfs(2)](https://man7.org/linux/man-pages/man2/statfs.2.html) for filesystem identification.
   ///
@@ -238,42 +243,52 @@ impl Cgroup {
   pub fn path(&self) -> &Path { &self.path }
 
   /// Borrows this handle to read CPU controller interfaces.
+  ///
   /// See [`crate::v2::cpu`] for the supported readers and [Linux cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html#controllers).
   pub fn cpu(&self) -> Cpu<'_> { Cpu { cgroup: self } }
 
   /// Borrows this handle to read CPU and NUMA memory-node placement.
+  ///
   /// See [`crate::v2::cpuset`] and [Linux cpuset interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpuset-interface-files).
   pub fn cpuset(&self) -> Cpuset<'_> { Cpuset { cgroup: self } }
 
   /// Borrows this handle to read memory controller interfaces.
+  ///
   /// See [`crate::v2::memory`] for the supported readers and [Linux cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html#controllers).
   pub fn memory(&self) -> Memory<'_> { Memory { cgroup: self } }
 
   /// Borrows this handle to read I/O controller interfaces.
+  ///
   /// See [`crate::v2::io`] for the supported readers and [Linux cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html#controllers).
   pub fn io(&self) -> Io<'_> { Io { cgroup: self } }
 
   /// Borrows this handle to read huge-page accounting and limits by page size.
+  ///
   /// See [`crate::v2::hugetlb`] for units, availability and supported interfaces.
   pub fn hugetlb(&self) -> Hugetlb<'_> { Hugetlb { cgroup: self } }
 
   /// Borrows this handle to read per-device RDMA resources.
+  ///
   /// See [`crate::v2::rdma`] for units, availability and supported interfaces.
   pub fn rdma(&self) -> Rdma<'_> { Rdma { cgroup: self } }
 
   /// Borrows this handle to read device-memory regions.
+  ///
   /// See [`crate::v2::dmem`] for units, availability and supported interfaces.
   pub fn dmem(&self) -> Dmem<'_> { Dmem { cgroup: self } }
 
   /// Borrows this handle to read miscellaneous scalar resources.
+  ///
   /// See [`crate::v2::misc`] for units, availability and supported interfaces.
   pub fn misc(&self) -> Misc<'_> { Misc { cgroup: self } }
 
   /// Borrows this handle to read process-number controller interfaces.
+  ///
   /// See [`crate::v2::pids`] for the supported readers and [Linux cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html#controllers).
   pub fn pids(&self) -> Pids<'_> { Pids { cgroup: self } }
 
   /// Borrows this handle to read core cgroup interfaces.
+  ///
   /// See [`crate::v2::core`] for the supported readers and [Linux cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html#controllers).
   pub fn core(&self) -> Core<'_> { Core { cgroup: self } }
 

@@ -6,5 +6,6 @@ use crate::scalar::{Scalar, interface};
 /// `0`) selects normal weight-based scheduling. Idle groups receive CPU time
 /// only when competing non-idle groups do not need it. The associated
 /// `cpu.weight` read reports `0` while idle scheduling is enabled.
+///
 /// See [Linux `cpu.idle` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
 pub type CpuIdle = Scalar<bool, interface::CpuIdle>;

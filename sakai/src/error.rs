@@ -103,6 +103,7 @@ impl Error {
 }
 
 /// An error parsing a cgroup interface file.
+///
 /// See [Linux cgroup file formats and availability](https://docs.kernel.org/admin-guide/cgroup-v2.html#interface-files).
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
@@ -154,6 +155,7 @@ impl<E> ParseError<E> {
 }
 
 /// A numeric field is malformed or outside the target type's supported range.
+///
 /// See [Linux cgroup file formats and availability](https://docs.kernel.org/admin-guide/cgroup-v2.html#interface-files).
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
@@ -170,6 +172,7 @@ pub enum ParseValueError {
 }
 
 /// Whether a cgroup interface file has too few or too many fields.
+///
 /// See [Linux cgroup file formats and availability](https://docs.kernel.org/admin-guide/cgroup-v2.html#interface-files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::Display)]
 #[strum(serialize_all = "lowercase")]

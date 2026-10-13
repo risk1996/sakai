@@ -65,22 +65,27 @@ struct CgroupTypeParseError {
 /// cgroup is invalid until converted to threaded. These four values are
 /// defined for `cgroup.type` in the Linux kernel's
 /// `Documentation/admin-guide/cgroup-v2.rst` (Core Interface Files).
+///
 /// See [Linux `cgroup.type` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::EnumString, strum::Display)]
 pub enum CgroupType {
   /// A normal, valid domain cgroup.
+  ///
   /// See [Linux core cgroup interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
   #[strum(serialize = "domain")]
   Domain,
   /// The resource domain at the root of a threaded subtree.
+  ///
   /// See [Linux core cgroup interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
   #[strum(serialize = "domain threaded")]
   DomainThreaded,
   /// A domain with invalid threaded topology; it cannot be populated.
+  ///
   /// See [Linux core cgroup interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
   #[strum(serialize = "domain invalid")]
   DomainInvalid,
   /// A member of a threaded subtree.
+  ///
   /// See [Linux core cgroup interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
   #[strum(serialize = "threaded")]
   Threaded,
@@ -88,6 +93,7 @@ pub enum CgroupType {
 
 impl CgroupType {
   /// The cgroup v2 `cgroup.type` interface filename.
+  ///
   /// See [Linux `cgroup.type` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
   pub const FILE_NAME: &'static str = "cgroup.type";
 }
@@ -97,36 +103,46 @@ impl CgroupType {
 ///
 /// The kernel may add controllers; [`Other`](Self::Other) retains names this
 /// version of the library does not recognize.
+///
 /// See [Linux `cgroup.controllers` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, strum::EnumString, strum::Display)]
 #[strum(serialize_all = "snake_case")]
 #[non_exhaustive]
 pub enum CgroupController {
   /// CPU scheduling time and bandwidth (`cpu`).
+  ///
   /// See [Linux controller documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu).
   Cpu,
   /// CPU and NUMA memory-node placement (`cpuset`).
+  ///
   /// See [Linux controller documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpuset).
   Cpuset,
   /// Block-device I/O accounting and limits (`io`).
+  ///
   /// See [Linux controller documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#io).
   Io,
   /// Memory accounting, protection, and limits (`memory`).
+  ///
   /// See [Linux controller documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory).
   Memory,
   /// Explicit hugepage accounting and limits (`hugetlb`).
+  ///
   /// See [Linux controller documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#hugetlb).
   Hugetlb,
   /// Task-count limits, including threads (`pids`).
+  ///
   /// See [Linux controller documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#pid).
   Pids,
   /// RDMA resource accounting and limits (`rdma`).
+  ///
   /// See [Linux controller documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#rdma).
   Rdma,
   /// Miscellaneous non-memory resource limits (`misc`).
+  ///
   /// See [Linux controller documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#misc).
   Misc,
   /// Device-memory accounting and limits (`dmem`).
+  ///
   /// See [Linux controller documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#dmem).
   ///
   /// Since Linux 6.14; see the [upstream Linux 6.14 source](https://github.com/torvalds/linux/blob/v6.14/Documentation/admin-guide/cgroup-v2.rst).
@@ -134,6 +150,7 @@ pub enum CgroupController {
   /// Cgroup-based performance-event monitoring (`perf_event`); see [perf_event_open(2)](https://man7.org/linux/man-pages/man2/perf_event_open.2.html).
   PerfEvent,
   /// An unrecognized controller name, retained verbatim for forward compatibility.
+  ///
   /// See [Linux controller documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#controllers).
   #[strum(default, to_string = "{0}")]
   Other(String),
@@ -141,9 +158,11 @@ pub enum CgroupController {
 
 impl CgroupController {
   /// The cgroup v2 `cgroup.controllers` interface filename.
+  ///
   /// See [Linux `cgroup.controllers` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
   pub const CONTROLLERS_FILE_NAME: &'static str = "cgroup.controllers";
   /// The cgroup v2 `cgroup.subtree_control` interface filename.
+  ///
   /// See [Linux `cgroup.subtree_control` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
   pub const SUBTREE_CONTROL_FILE_NAME: &'static str = "cgroup.subtree_control";
 }
@@ -151,6 +170,7 @@ impl CgroupController {
 /// A borrowed view of one open cgroup's core interfaces.
 ///
 /// Each method reads a fresh snapshot; separate reads are not atomic together.
+///
 /// See [Linux core cgroup interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
 #[cfg(target_os = "linux")]
 #[derive(Debug, Clone, Copy)]
@@ -213,12 +233,14 @@ impl Core<'_> {
   pub fn freeze(&self) -> Result<CgroupFreeze, Error> { self.cgroup.parse(CgroupFreeze::FILE_NAME) }
 
   /// Reads the configured descendant depth limit, including at the root.
+  ///
   /// See [`CgroupMaxDepth`] for units and ancestor restrictions.
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn max_depth(&self) -> Result<CgroupMaxDepth, Error> { self.cgroup.parse(CgroupMaxDepth::FILE_NAME) }
 
   /// Reads the configured descendant cgroup count limit, including at the root.
+  ///
   /// See [`CgroupMaxDescendants`] for units and ancestor restrictions.
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
@@ -247,6 +269,7 @@ impl Core<'_> {
   }
 
   /// Configuration snapshot of controllers available to enable for children.
+  ///
   /// See [Linux core cgroup interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
@@ -255,6 +278,7 @@ impl Core<'_> {
   }
 
   /// Configuration snapshot of controllers enabled for children.
+  ///
   /// See [Linux core cgroup interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).

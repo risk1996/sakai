@@ -25,6 +25,7 @@ use crate::{
 /// and root exemptions. Capacity is root-only; protection and limit files are
 /// non-root. The kernel also exposes current usage at the root, although the
 /// interface guide describes it as non-root.
+///
 /// See [Linux 6.14 DMEM source](https://github.com/torvalds/linux/blob/v6.14/kernel/cgroup/dmem.c).
 #[cfg(target_os = "linux")]
 #[derive(Debug, Clone, Copy)]

@@ -11,6 +11,7 @@ use crate::{
 /// An I/O scheduling weight in the kernel-supported range, 1 through 10,000.
 ///
 /// Weights are dimensionless and specify relative I/O time among siblings.
+///
 /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
 #[nutype(
   validate(greater_or_equal = 1, less_or_equal = 10_000),
@@ -24,6 +25,7 @@ pub struct Weight(u16);
 /// are reported; the map is not an inventory of devices. Configuration can
 /// change between reads. Unlike writes, read output always has a `default`
 /// line and numeric overrides; the write-only reset token is not accepted.
+///
 /// See [Linux `io.weight` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IoWeight {
@@ -33,15 +35,18 @@ pub struct IoWeight {
 
 impl IoWeight {
   /// The cgroup v2 `io.weight` interface filename.
+  ///
   /// See [Linux `io.weight` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   pub const FILE_NAME: &'static str = "io.weight";
 
   /// Returns the default scheduling weight.
+  ///
   /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   #[must_use]
   pub const fn default_weight(&self) -> Weight { self.default }
 
   /// Returns explicit per-device scheduling-weight overrides.
+  ///
   /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   #[must_use]
   pub const fn devices(&self) -> &BTreeMap<Device, Weight> { &self.devices }

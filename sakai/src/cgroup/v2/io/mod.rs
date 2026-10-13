@@ -33,6 +33,7 @@ mod weight;
 /// Every method opens a fresh read-only descriptor. Missing interfaces,
 /// including disabled controllers, kernel configuration omissions, and root
 /// exemptions, return [`crate::Error::FileMissing`].
+///
 /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
 #[cfg(target_os = "linux")]
 #[derive(Debug, Clone, Copy)]
@@ -119,16 +120,19 @@ pub struct Device {
 
 impl Device {
   /// Constructs a device key without resolving it to a currently present device.
+  ///
   /// See [`Device`] and [makedev(3)](https://man7.org/linux/man-pages/man3/makedev.3.html).
   #[must_use]
   pub const fn new(major: u32, minor: u32) -> Self { Self { major, minor } }
 
   /// Returns the major device number.
+  ///
   /// See [`Device`] and [makedev(3)](https://man7.org/linux/man-pages/man3/makedev.3.html).
   #[must_use]
   pub const fn major(&self) -> u32 { self.major }
 
   /// Returns the minor device number.
+  ///
   /// See [`Device`] and [makedev(3)](https://man7.org/linux/man-pages/man3/makedev.3.html).
   #[must_use]
   pub const fn minor(&self) -> u32 { self.minor }

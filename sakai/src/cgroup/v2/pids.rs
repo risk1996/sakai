@@ -19,6 +19,7 @@ use crate::{
 /// Each read is a fresh snapshot; separate reads are not atomic together.
 /// Missing interfaces, including disabled controllers and root exemptions,
 /// return [`crate::Error::FileMissing`].
+///
 /// See [Linux pid interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#pid).
 #[cfg(target_os = "linux")]
 #[derive(Debug, Clone, Copy)]
@@ -71,6 +72,7 @@ impl Pids<'_> {
 /// Measured in counts of kernel TIDs, including individual threads. This
 /// volatile value can exceed `pids.max` after task migration or a limit
 /// reduction; no relationship with a separately read limit is enforced.
+///
 /// See [Linux `pids.current` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#pid).
 pub type PidsCurrent = Scalar<Count, interface::PidsCurrent>;
 
@@ -87,6 +89,7 @@ pub type PidsPeak = Scalar<Count, interface::PidsPeak>;
 ///
 /// This configuration snapshot can change between reads. Zero is a valid
 /// limit. `max` means no limit here; ancestor limits can still apply.
+///
 /// See [Linux `pids.max` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#pid).
 pub type PidsMax = Scalar<MaxOr<Count>, interface::PidsMax>;
 
@@ -101,6 +104,7 @@ pub type PidsMax = Scalar<MaxOr<Count>, interface::PidsMax>;
 /// `pids.events.local`, since Linux 6.11, normally counts failures at this
 /// cgroup's own limit, including descendant requests; with `pids_localevents`,
 /// both files instead count local fork failures, including ancestor-limit hits.
+///
 /// See [Linux `pids.events` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#pid).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PidsEvents {
@@ -109,13 +113,16 @@ pub struct PidsEvents {
 
 impl PidsEvents {
   /// The cgroup v2 `pids.events` interface filename.
+  ///
   /// See [Linux `pids.events` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#pid).
   pub const FILE_NAME: &'static str = "pids.events";
   /// The non-root local event filename, available since Linux 6.11.
+  ///
   /// See [Linux 6.11 source](https://github.com/torvalds/linux/blob/v6.11/kernel/cgroup/pids.c).
   pub const LOCAL_FILE_NAME: &'static str = "pids.events.local";
 
   /// Number of occurrences of the process limit being hit.
+  ///
   /// See [Linux pid interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#pid).
   #[must_use]
   pub const fn max(&self) -> Count { self.max }
