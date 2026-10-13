@@ -14,6 +14,7 @@ use sakai::v2::misc::{
 };
 
 use super::{MaxOr, PythonError, mapping::mapping};
+use crate::quantity::Quantity;
 
 /// Fresh read-only miscellaneous-resource snapshots for a pinned cgroup.
 ///
@@ -52,7 +53,7 @@ impl MiscReader {
     PythonError::read(py, &self.owner, |owner| owner.misc().peak()).map(Into::into)
   }
 
-  /// Read resource limits as MaxOr[int]; absent at the hierarchy root.
+  /// Read resource limits as MaxOr[pint.Quantity[int]]; absent at the hierarchy root.
   ///
   /// Performs fresh read-only I/O with the exception policy documented on MiscReader.
   fn max(&self, py: Python<'_>) -> PyResult<MiscMax> {
@@ -82,12 +83,12 @@ impl MiscReader {
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 pub(super) struct MiscCapacity {
-  resources: BTreeMap<String, u64>,
+  resources: BTreeMap<String, Quantity<sakai::Count>>,
 }
 
 impl From<CoreCapacity> for MiscCapacity {
   fn from(value: CoreCapacity) -> Self {
-    Self { resources: value.resources().iter().map(|(key, value)| (key.clone(), value.value)).collect() }
+    Self { resources: value.resources().iter().map(|(key, value)| (key.clone(), value.into())).collect() }
   }
 }
 
@@ -97,7 +98,7 @@ impl From<CoreCapacity> for MiscCapacity {
 impl MiscCapacity {
   /// Read-only resource-name mapping to integer resource counts in this stored snapshot.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, int]", imports = ("collections.abc",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, pint.Quantity[int]]", imports = ("collections.abc", "pint",)))]
   fn resources(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     Ok(PyMappingProxy::new(py, (&self.resources).into_py_dict(py)?.as_mapping()).unbind())
   }
@@ -111,12 +112,12 @@ impl MiscCapacity {
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 pub(super) struct MiscCurrent {
-  resources: BTreeMap<String, u64>,
+  resources: BTreeMap<String, Quantity<sakai::Count>>,
 }
 
 impl From<CoreCurrent> for MiscCurrent {
   fn from(value: CoreCurrent) -> Self {
-    Self { resources: value.resources().iter().map(|(key, value)| (key.clone(), value.value)).collect() }
+    Self { resources: value.resources().iter().map(|(key, value)| (key.clone(), value.into())).collect() }
   }
 }
 
@@ -126,7 +127,7 @@ impl From<CoreCurrent> for MiscCurrent {
 impl MiscCurrent {
   /// Read-only resource-name mapping to integer resource counts in this stored snapshot.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, int]", imports = ("collections.abc",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, pint.Quantity[int]]", imports = ("collections.abc", "pint",)))]
   fn resources(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     Ok(PyMappingProxy::new(py, (&self.resources).into_py_dict(py)?.as_mapping()).unbind())
   }
@@ -140,12 +141,12 @@ impl MiscCurrent {
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 pub(super) struct MiscPeak {
-  resources: BTreeMap<String, u64>,
+  resources: BTreeMap<String, Quantity<sakai::Count>>,
 }
 
 impl From<CorePeak> for MiscPeak {
   fn from(value: CorePeak) -> Self {
-    Self { resources: value.resources().iter().map(|(key, value)| (key.clone(), value.value)).collect() }
+    Self { resources: value.resources().iter().map(|(key, value)| (key.clone(), value.into())).collect() }
   }
 }
 
@@ -155,7 +156,7 @@ impl From<CorePeak> for MiscPeak {
 impl MiscPeak {
   /// Read-only resource-name mapping to integer resource counts in this stored snapshot.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, int]", imports = ("collections.abc",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, pint.Quantity[int]]", imports = ("collections.abc", "pint",)))]
   fn resources(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     Ok(PyMappingProxy::new(py, (&self.resources).into_py_dict(py)?.as_mapping()).unbind())
   }
@@ -175,12 +176,12 @@ impl MiscPeak {
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 pub(super) struct MiscEvents {
-  resources: BTreeMap<String, u64>,
+  resources: BTreeMap<String, Quantity<sakai::Count>>,
 }
 
 impl From<CoreEvents> for MiscEvents {
   fn from(value: CoreEvents) -> Self {
-    Self { resources: value.resources().iter().map(|(key, value)| (key.clone(), value.value)).collect() }
+    Self { resources: value.resources().iter().map(|(key, value)| (key.clone(), value.into())).collect() }
   }
 }
 
@@ -190,7 +191,7 @@ impl From<CoreEvents> for MiscEvents {
 impl MiscEvents {
   /// Read-only resource-name mapping to integer event counts in this stored snapshot.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, int]", imports = ("collections.abc",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, pint.Quantity[int]]", imports = ("collections.abc", "pint",)))]
   fn resources(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     Ok(PyMappingProxy::new(py, (&self.resources).into_py_dict(py)?.as_mapping()).unbind())
   }
@@ -219,11 +220,11 @@ impl From<CoreMax> for MiscMax {
 #[cfg_attr(not(feature = "stubs"), pyo3_stub_gen_derive::remove_gen_stub)]
 #[pymethods]
 impl MiscMax {
-  /// Read-only resource-name mapping to immutable MaxOr[int] resource limits.
+  /// Read-only resource-name mapping to immutable MaxOr[pint.Quantity[int]] resource limits.
   ///
   /// Check is_max before value; value raises ValueError for an unlimited limit.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, MaxOr[int]]", imports = ("collections.abc",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, MaxOr[pint.Quantity[int]]]", imports = ("collections.abc", "pint",)))]
   fn resources(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     mapping(py, &self.resources, |value| Py::new(py, *value))
   }
@@ -240,11 +241,11 @@ mod tests {
 
   #[test]
   fn converts_unsigned_counts_and_limits_to_immutable_snapshots() {
-    Python::initialize();
+    crate::quantity::tests::initialize_python();
     Python::attach(|py| {
       for (input, expected) in [
-        ("sev 0", BTreeMap::from([("sev".to_owned(), 0_u64)])),
-        ("sev 18446744073709551615", BTreeMap::from([("sev".to_owned(), u64::MAX)])),
+        ("sev 0", BTreeMap::from([("sev".to_owned(), Quantity::<sakai::Count>::from(0_u64))])),
+        ("sev 18446744073709551615", BTreeMap::from([("sev".to_owned(), u64::MAX.into())])),
         ("", BTreeMap::new()),
       ] {
         let objects = [
@@ -260,7 +261,7 @@ mod tests {
         for object in objects {
           let values = readonly(object.bind(py), "resources", "sev");
           let dict = assert_ok!(py.get_type::<PyDict>().call1((&values,)));
-          assert_eq!(assert_ok!(dict.extract::<BTreeMap<String, u64>>()), expected);
+          assert_eq!(assert_ok!(dict.extract::<BTreeMap<String, Quantity<sakai::Count>>>()), expected);
         }
       }
       let object = assert_ok!(Py::new(

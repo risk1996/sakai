@@ -2,7 +2,7 @@ use assertables::{assert_err, assert_ok};
 use pyo3::{
   exceptions::{PyAttributeError, PyTypeError, PyValueError},
   prelude::*,
-  types::PyInt,
+  types::PyDict,
 };
 
 pub(super) fn check_limit(limit: &Bound<'_, PyAny>, expected: Option<u64>) {
@@ -10,10 +10,25 @@ pub(super) fn check_limit(limit: &Bound<'_, PyAny>, expected: Option<u64>) {
   match expected {
     | Some(expected) => {
       let value = assert_ok!(limit.getattr("value"));
-      assert!(value.is_instance_of::<PyInt>());
-      assert_eq!(assert_ok!(value.extract::<u64>()), expected);
+      assert_eq!(assert_ok!(assert_ok!(value.getattr("magnitude")).extract::<u64>()), expected);
     },
     | None => assert!(assert_err!(limit.getattr("value")).is_instance_of::<PyValueError>(limit.py())),
+  }
+}
+
+pub(super) fn magnitudes<'py>(object: &Bound<'py, PyAny>) -> Bound<'py, PyAny> {
+  if assert_ok!(object.hasattr("magnitude")) {
+    assert_ok!(object.getattr("magnitude"))
+  } else if object.is_none() {
+    object.clone()
+  } else if let Ok(mapping) = object.cast::<PyDict>() {
+    let values = PyDict::new(object.py());
+    for (key, value) in mapping.iter() {
+      assert_ok!(values.set_item(key, magnitudes(&value)));
+    }
+    values.into_any()
+  } else {
+    object.clone()
   }
 }
 

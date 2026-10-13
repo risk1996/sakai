@@ -2,6 +2,8 @@
 
 #[cfg(target_os = "linux")]
 mod linux;
+#[cfg(any(target_os = "linux", test))]
+mod quantity;
 
 #[cfg(all(target_os = "linux", feature = "stubs"))]
 pub use linux::stubs::generate_stubs;

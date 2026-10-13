@@ -7,9 +7,9 @@ use sakai::v2::cpu::{
   CpuBandwidthStat as CoreCpuBandwidthStat, CpuBurstStat as CoreCpuBurstStat, CpuMax as CoreCpuMax,
   CpuStat as CoreCpuStat, CpuStatLocal as CoreCpuStatLocal, CpuTimeStat as CoreCpuTimeStat, CpuWeight as CoreCpuWeight,
 };
-use uom::si::{ratio::ratio, time::nanosecond};
 
 use super::{MaxOr, Pressure, PythonError};
+use crate::quantity::Quantity;
 
 /// Fresh reads of CPU controller files for one pinned cgroup.
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
@@ -48,8 +48,8 @@ impl CpuReader {
   }
 
   /// Read the allowed CPU bandwidth burst in nanoseconds.
-  fn max_burst(&self, py: Python<'_>) -> PyResult<u64> {
-    PythonError::read(py, &self.owner, |owner| owner.cpu().max_burst()).map(|burst| burst.value().get::<nanosecond>())
+  fn max_burst(&self, py: Python<'_>) -> PyResult<Quantity<sakai::Time>> {
+    PythonError::read(py, &self.owner, |owner| owner.cpu().max_burst()).map(|burst| burst.value().into())
   }
 
   /// Read whether this cgroup is configured for idle CPU scheduling.
@@ -58,12 +58,12 @@ impl CpuReader {
   }
 
   /// Read the minimum utilization clamp as a ratio from zero to one.
-  fn uclamp_min(&self, py: Python<'_>) -> PyResult<f64> {
-    PythonError::read(py, &self.owner, |owner| owner.cpu().uclamp_min()).map(|clamp| clamp.value().get::<ratio>())
+  fn uclamp_min(&self, py: Python<'_>) -> PyResult<Quantity<sakai::Ratio>> {
+    PythonError::read(py, &self.owner, |owner| owner.cpu().uclamp_min()).map(|clamp| clamp.value().into())
   }
 
   /// Read the maximum utilization clamp as `max` or a concrete ratio.
-  #[gen_stub(override_return_type(type_repr = "MaxOr[float]"))]
+  #[gen_stub(override_return_type(type_repr = "MaxOr[pint.Quantity[float]]"))]
   fn uclamp_max(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, |owner| owner.cpu().uclamp_max()).map(|clamp| MaxOr::from_ratio(clamp.value()))
   }
@@ -97,13 +97,11 @@ impl From<CoreCpuStat> for CpuStat {
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct CpuStatLocal {
   /// Locally throttled time in nanoseconds, if reported by the kernel.
-  throttled_ns: Option<u64>,
+  throttled: Option<Quantity<sakai::Time>>,
 }
 
 impl From<CoreCpuStatLocal> for CpuStatLocal {
-  fn from(value: CoreCpuStatLocal) -> Self {
-    Self { throttled_ns: value.throttled().map(|time| time.get::<nanosecond>()) }
-  }
+  fn from(value: CoreCpuStatLocal) -> Self { Self { throttled: value.throttled().map(|time| time.into()) } }
 }
 
 /// CPU usage times in nanoseconds.
@@ -112,27 +110,27 @@ impl From<CoreCpuStatLocal> for CpuStatLocal {
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct CpuTimeStat {
   /// Total CPU usage in nanoseconds.
-  usage_ns: u64,
+  usage: Quantity<sakai::Time>,
   /// CPU usage in user mode, in nanoseconds.
-  user_ns: u64,
+  user: Quantity<sakai::Time>,
   /// CPU usage in kernel mode, in nanoseconds.
-  system_ns: u64,
-  /// User time of positively niced tasks, included in user_ns; since Linux 6.13.
+  system: Quantity<sakai::Time>,
+  /// User time of positively niced tasks, included in user; since Linux 6.13.
   /// None means the kernel omitted the counter.
-  nice_ns: Option<u64>,
-  /// Sibling time forced idle by core scheduling, separate from usage_ns.
+  nice: Option<Quantity<sakai::Time>>,
+  /// Sibling time forced idle by core scheduling, separate from usage.
   /// Since Linux 6.0 with CONFIG_SCHED_CORE; None means omitted.
-  force_idle_ns: Option<u64>,
+  force_idle: Option<Quantity<sakai::Time>>,
 }
 
 impl From<CoreCpuTimeStat> for CpuTimeStat {
   fn from(value: CoreCpuTimeStat) -> Self {
     Self {
-      usage_ns: value.usage().get::<nanosecond>(),
-      user_ns: value.user().get::<nanosecond>(),
-      system_ns: value.system().get::<nanosecond>(),
-      nice_ns: value.nice().map(|time| time.get::<nanosecond>()),
-      force_idle_ns: value.force_idle().map(|time| time.get::<nanosecond>()),
+      usage: value.usage().into(),
+      user: value.user().into(),
+      system: value.system().into(),
+      nice: value.nice().map(|time| time.into()),
+      force_idle: value.force_idle().map(|time| time.into()),
     }
   }
 }
@@ -146,11 +144,11 @@ impl From<CoreCpuTimeStat> for CpuTimeStat {
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct CpuBandwidthStat {
   /// Number of elapsed bandwidth periods.
-  nr_periods: u64,
+  nr_periods: Quantity<sakai::Count>,
   /// Number of bandwidth periods in which the cgroup was throttled.
-  nr_throttled: u64,
+  nr_throttled: Quantity<sakai::Count>,
   /// Cumulative throttled time in nanoseconds.
-  throttled_ns: u64,
+  throttled: Quantity<sakai::Time>,
   /// Burst counters, if the kernel reports them.
   burst: Option<CpuBurstStat>,
 }
@@ -158,9 +156,9 @@ pub(super) struct CpuBandwidthStat {
 impl From<CoreCpuBandwidthStat> for CpuBandwidthStat {
   fn from(value: CoreCpuBandwidthStat) -> Self {
     Self {
-      nr_periods: value.nr_periods().value,
-      nr_throttled: value.nr_throttled().value,
-      throttled_ns: value.throttled().get::<nanosecond>(),
+      nr_periods: value.nr_periods().into(),
+      nr_throttled: value.nr_throttled().into(),
+      throttled: value.throttled().into(),
       burst: value.burst().map(Into::into),
     }
   }
@@ -172,15 +170,13 @@ impl From<CoreCpuBandwidthStat> for CpuBandwidthStat {
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct CpuBurstStat {
   /// Number of bursts.
-  nr_bursts: u64,
+  nr_bursts: Quantity<sakai::Count>,
   /// Cumulative burst time in nanoseconds.
-  burst_ns: u64,
+  burst: Quantity<sakai::Time>,
 }
 
 impl From<CoreCpuBurstStat> for CpuBurstStat {
-  fn from(value: CoreCpuBurstStat) -> Self {
-    Self { nr_bursts: value.nr_bursts().value, burst_ns: value.burst().get::<nanosecond>() }
-  }
+  fn from(value: CoreCpuBurstStat) -> Self { Self { nr_bursts: value.nr_bursts().into(), burst: value.burst().into() } }
 }
 
 /// This cgroup's CPU quota and period, independent of ancestor limits.
@@ -189,9 +185,9 @@ impl From<CoreCpuBurstStat> for CpuBurstStat {
 #[derive(Clone)]
 pub(super) struct CpuMax {
   /// Quota in nanoseconds or the kernel's `max`.
-  quota_ns: MaxOr,
+  quota: MaxOr,
   /// Bandwidth period in nanoseconds.
-  period_ns: u64,
+  period: Quantity<sakai::Time>,
   /// Quota divided by period, or `max` at this cgroup only.
   cpu_count: MaxOr,
 }
@@ -199,8 +195,8 @@ pub(super) struct CpuMax {
 impl From<CoreCpuMax> for CpuMax {
   fn from(value: CoreCpuMax) -> Self {
     Self {
-      quota_ns: MaxOr::from_time(value.quota()),
-      period_ns: value.period().as_ref().get::<nanosecond>(),
+      quota: MaxOr::from_time(value.quota()),
+      period: value.period().as_ref().into(),
       cpu_count: MaxOr::from_ratio(value.cpu_count()),
     }
   }
@@ -237,29 +233,32 @@ mod tests {
 
   #[test]
   fn converts_cpu_stat_optional_fields_and_nanoseconds() {
-    let time = CpuTimeStat { usage_ns: 10_000, user_ns: 7_000, system_ns: 3_000, nice_ns: None, force_idle_ns: None };
+    let time =
+      CpuTimeStat { usage: 10_000.into(), user: 7_000.into(), system: 3_000.into(), nice: None, force_idle: None };
     for (input, bandwidth) in [
       ("usage_usec 10\nuser_usec 7\nsystem_usec 3\n", None),
       (
         "usage_usec 10\nuser_usec 7\nsystem_usec 3\nnr_periods 5\nnr_throttled 2\nthrottled_usec 4\nnr_bursts \
          1\nburst_usec 6\n",
         Some(CpuBandwidthStat {
-          nr_periods: 5,
-          nr_throttled: 2,
-          throttled_ns: 4_000,
-          burst: Some(CpuBurstStat { nr_bursts: 1, burst_ns: 6_000 }),
+          nr_periods: 5.into(),
+          nr_throttled: 2.into(),
+          throttled: 4_000.into(),
+          burst: Some(CpuBurstStat { nr_bursts: 1.into(), burst: 6_000.into() }),
         }),
       ),
     ] {
       assert_eq!(CpuStat::from(assert_ok!(input.parse::<CoreCpuStat>())), CpuStat { time: time.clone(), bandwidth });
     }
-    for (input, throttled_ns) in [("", None), ("throttled_usec 0", Some(0))] {
-      assert_eq!(CpuStatLocal::from(assert_ok!(input.parse::<CoreCpuStatLocal>())), CpuStatLocal { throttled_ns });
+    for (input, throttled) in [("", None), ("throttled_usec 0", Some(0))] {
+      assert_eq!(CpuStatLocal::from(assert_ok!(input.parse::<CoreCpuStatLocal>())), CpuStatLocal {
+        throttled: throttled.map(Into::into)
+      });
     }
     let input = "usage_usec 10\nuser_usec 7\nsystem_usec 3\nnice_usec 2\ncore_sched.force_idle_usec 0";
     assert_eq!(CpuTimeStat::from(assert_ok!(input.parse::<CoreCpuTimeStat>())), CpuTimeStat {
-      nice_ns: Some(2_000),
-      force_idle_ns: Some(0),
+      nice: Some(2_000.into()),
+      force_idle: Some(0.into()),
       ..time
     });
   }
@@ -268,13 +267,13 @@ mod tests {
   fn converts_limits_and_idle_without_collapsing_zero() {
     let unlimited = CpuMax::from(assert_ok!("max 100000".parse::<CoreCpuMax>()));
     let limited = CpuMax::from(assert_ok!("25000 100000".parse::<CoreCpuMax>()));
-    assert!(unlimited.quota_ns.is_max());
-    assert_err!(unlimited.quota_ns.value());
+    assert!(unlimited.quota.is_max());
+    assert_err!(unlimited.quota.value());
     assert!(unlimited.cpu_count.is_max());
     assert_err!(unlimited.cpu_count.value());
-    assert!(matches!(assert_ok!(limited.quota_ns.value()), PythonLimitValue::Integer(25_000_000)));
-    assert_eq!(limited.period_ns, 100_000_000);
-    assert!(matches!(assert_ok!(limited.cpu_count.value()), PythonLimitValue::Ratio(0.25)));
+    assert!(matches!(assert_ok!(limited.quota.value()), PythonLimitValue::Time(value) if value == 25_000_000.into()));
+    assert_eq!(limited.period, 100_000_000.into());
+    assert!(matches!(assert_ok!(limited.cpu_count.value()), PythonLimitValue::Ratio(value) if value == 0.25.into()));
 
     let idle = CpuWeight::from(assert_ok!("0".parse::<CoreCpuWeight>()));
     let weighted = CpuWeight::from(assert_ok!("100".parse::<CoreCpuWeight>()));
@@ -288,7 +287,7 @@ mod tests {
     assert_err!(max.value());
     assert!(matches!(
       assert_ok!(MaxOr::from_bytes(CoreMaxOr::Value(Bytes::new::<byte>(0))).value()),
-      PythonLimitValue::Integer(0)
+      PythonLimitValue::Bytes(value) if value == 0.into()
     ));
   }
 }

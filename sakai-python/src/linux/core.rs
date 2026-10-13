@@ -9,9 +9,9 @@ use pyo3::{
 use sakai::v2::core::{
   CgroupEvents as CoreCgroupEvents, CgroupStat as CoreCgroupStat, CgroupStatLocal as CoreCgroupStatLocal,
 };
-use uom::si::time::nanosecond;
 
 use super::{MaxOr, PythonError};
+use crate::quantity::Quantity;
 
 /// Immutable lifecycle snapshot; states can change immediately after a read.
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
@@ -39,22 +39,22 @@ impl From<CoreCgroupEvents> for CgroupEvents {
 #[pyclass(frozen, module = "sakai._sakai")]
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct CgroupStat {
-  descendants: u64,
-  dying_descendants: u64,
-  subsystems: BTreeMap<String, u64>,
-  dying_subsystems: BTreeMap<String, u64>,
+  descendants: Quantity<sakai::Count>,
+  dying_descendants: Quantity<sakai::Count>,
+  subsystems: BTreeMap<String, Quantity<sakai::Count>>,
+  dying_subsystems: BTreeMap<String, Quantity<sakai::Count>>,
 }
 
 impl From<CoreCgroupStat> for CgroupStat {
   fn from(value: CoreCgroupStat) -> Self {
     Self {
-      descendants: value.descendants().value,
-      dying_descendants: value.dying_descendants().value,
-      subsystems: value.subsystems().iter().map(|(controller, count)| (controller.to_string(), count.value)).collect(),
+      descendants: value.descendants().into(),
+      dying_descendants: value.dying_descendants().into(),
+      subsystems: value.subsystems().iter().map(|(controller, count)| (controller.to_string(), count.into())).collect(),
       dying_subsystems: value
         .dying_subsystems()
         .iter()
-        .map(|(controller, count)| (controller.to_string(), count.value))
+        .map(|(controller, count)| (controller.to_string(), count.into()))
         .collect(),
     }
   }
@@ -66,22 +66,22 @@ impl From<CoreCgroupStat> for CgroupStat {
 impl CgroupStat {
   /// Visible descendant cgroup count, excluding this cgroup.
   #[getter]
-  fn descendants(&self) -> u64 { self.descendants }
+  fn descendants(&self) -> Quantity<sakai::Count> { self.descendants }
 
   /// Deleted descendant cgroups awaiting final destruction.
   #[getter]
-  fn dying_descendants(&self) -> u64 { self.dying_descendants }
+  fn dying_descendants(&self) -> Quantity<sakai::Count> { self.dying_descendants }
 
   /// Read-only live subsystem counts at and beneath this cgroup.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, int]", imports = ("collections.abc",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, pint.Quantity[int]]", imports = ("collections.abc", "pint",)))]
   fn subsystems(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     Ok(PyMappingProxy::new(py, self.subsystems.clone().into_py_dict(py)?.as_mapping()).unbind())
   }
 
   /// Read-only dying subsystem counts at and beneath this cgroup.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, int]", imports = ("collections.abc",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, pint.Quantity[int]]", imports = ("collections.abc", "pint",)))]
   fn dying_subsystems(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     Ok(PyMappingProxy::new(py, self.dying_subsystems.clone().into_py_dict(py)?.as_mapping()).unbind())
   }
@@ -99,11 +99,11 @@ impl CgroupStat {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct CgroupStatLocal {
   /// Stored cumulative local freezing duration in integer nanoseconds.
-  frozen_time_ns: u64,
+  frozen_time: Quantity<sakai::Time>,
 }
 
 impl From<CoreCgroupStatLocal> for CgroupStatLocal {
-  fn from(value: CoreCgroupStatLocal) -> Self { Self { frozen_time_ns: value.frozen_time().get::<nanosecond>() } }
+  fn from(value: CoreCgroupStatLocal) -> Self { Self { frozen_time: value.frozen_time().into() } }
 }
 
 /// Fresh reads of cgroup topology, membership, configuration, and lifecycle files.
@@ -172,21 +172,21 @@ impl CoreReader {
     PythonError::read(py, &self.owner, |owner| owner.core().freeze()).map(|value| value.value())
   }
 
-  /// Read the configured maximum descendant depth as MaxOr[int] cgroup levels.
+  /// Read the configured maximum descendant depth as MaxOr[pint.Quantity[int]] cgroup levels.
   ///
   /// Zero prevents children; max removes this cgroup's restriction. Ancestor
   /// restrictions still apply. Available at the root. See CoreReader for errors.
-  #[gen_stub(override_return_type(type_repr = "MaxOr[int]"))]
+  #[gen_stub(override_return_type(type_repr = "MaxOr[pint.Quantity[int]]"))]
   fn max_depth(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, |owner| owner.core().max_depth()).map(|value| MaxOr::from_count(value.value()))
   }
 
-  /// Read the maximum descendant cgroup count, excluding this cgroup, as MaxOr[int].
+  /// Read the maximum descendant cgroup count, excluding this cgroup, as MaxOr[pint.Quantity[int]].
   ///
   /// Zero prevents children; max removes this cgroup's restriction. Ancestors
   /// still restrict creation, and existing descendants may exceed a lowered
   /// limit. Available at the root. See CoreReader for read errors.
-  #[gen_stub(override_return_type(type_repr = "MaxOr[int]"))]
+  #[gen_stub(override_return_type(type_repr = "MaxOr[pint.Quantity[int]]"))]
   fn max_descendants(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, |owner| owner.core().max_descendants())
       .map(|value| MaxOr::from_count(value.value()))
@@ -236,13 +236,16 @@ mod tests {
 
   #[test]
   fn preserves_process_limits_states_and_immutable_subsystem_counts() {
-    Python::initialize();
+    crate::quantity::tests::initialize_python();
     Python::attach(|py| {
       let local = CgroupStatLocal::from(assert_ok!("frozen_usec 123456".parse::<CoreCgroupStatLocal>()));
-      assert_eq!(local, CgroupStatLocal { frozen_time_ns: 123_456_000 });
+      assert_eq!(local, CgroupStatLocal { frozen_time: 123_456_000.into() });
       let object = assert_ok!(Py::new(py, local));
-      assert_eq!(assert_ok!(assert_ok!(object.bind(py).getattr("frozen_time_ns")).extract::<u64>()), 123_456_000);
-      check_frozen(object.bind(py).as_any(), &["frozen_time_ns"]);
+      assert_eq!(
+        assert_ok!(assert_ok!(object.bind(py).getattr("frozen_time")).extract::<Quantity<sakai::Time>>()),
+        123_456_000.into()
+      );
+      check_frozen(object.bind(py).as_any(), &["frozen_time"]);
       for (input, expected) in [("0", Some(0)), ("18446744073709551615", Some(u64::MAX)), ("max", None)] {
         let limit = MaxOr::from_count(assert_ok!(input.parse::<sakai::v2::pids::PidsMax>()).value());
         let object = assert_ok!(Py::new(py, limit));
@@ -263,23 +266,26 @@ mod tests {
         check_frozen(object.bind(py).as_any(), &["populated"]);
       }
       let events = PidsEvents::from(assert_ok!("max 18446744073709551615".parse::<CorePidsEvents>()));
-      assert_eq!(events, PidsEvents { max: u64::MAX });
+      assert_eq!(events, PidsEvents { max: u64::MAX.into() });
       let object = assert_ok!(Py::new(py, events));
-      assert_eq!(assert_ok!(assert_ok!(object.bind(py).getattr("max")).extract::<u64>()), u64::MAX);
+      assert_eq!(
+        assert_ok!(assert_ok!(object.bind(py).getattr("max")).extract::<Quantity<sakai::Count>>()),
+        u64::MAX.into()
+      );
       check_frozen(object.bind(py).as_any(), &["max"]);
       for (input, expected) in [
         (
           "nr_descendants 2\nnr_dying_descendants 1\nnr_subsys_memory 3\nnr_dying_subsys_future_controller 0",
           CgroupStat {
-            descendants: 2,
-            dying_descendants: 1,
-            subsystems: BTreeMap::from([("memory".into(), 3)]),
-            dying_subsystems: BTreeMap::from([("future_controller".into(), 0)]),
+            descendants: 2.into(),
+            dying_descendants: 1.into(),
+            subsystems: BTreeMap::from([("memory".into(), 3.into())]),
+            dying_subsystems: BTreeMap::from([("future_controller".into(), 0.into())]),
           },
         ),
         ("nr_descendants 0\nnr_dying_descendants 0", CgroupStat {
-          descendants: 0,
-          dying_descendants: 0,
+          descendants: 0.into(),
+          dying_descendants: 0.into(),
           subsystems: BTreeMap::new(),
           dying_subsystems: BTreeMap::new(),
         }),
@@ -290,7 +296,7 @@ mod tests {
         for (name, expected) in [("subsystems", expected.subsystems), ("dying_subsystems", expected.dying_subsystems)] {
           let mapping = readonly(object.bind(py).as_any(), name, "memory");
           let values = assert_ok!(py.get_type::<PyDict>().call1((&mapping,)));
-          assert_eq!(assert_ok!(values.extract::<BTreeMap<String, u64>>()), expected);
+          assert_eq!(assert_ok!(values.extract::<BTreeMap<String, Quantity<sakai::Count>>>()), expected);
         }
         check_frozen(object.bind(py).as_any(), &["descendants"]);
       }

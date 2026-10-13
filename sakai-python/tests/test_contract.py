@@ -12,6 +12,8 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any, TypeVar, assert_type, cast, get_origin
 
+import pint
+
 import sakai
 import sakai._sakai as native
 from sakai import (
@@ -88,14 +90,21 @@ class ContractTest(unittest.TestCase):
     return make(parent)
 
   def check_unsigned(
-    self, value: float, value_type: type[int] | type[float] = int
+    self,
+    value: pint.Quantity[int] | pint.Quantity[float],
+    value_type: type[int] | type[float] = int,
   ) -> None:
-    self.assertIsInstance(value, value_type)
+    self.assertIsInstance(value, pint.Quantity)
+    self.assertIsInstance(value.magnitude, value_type)
+    self.assertGreaterEqual(value.magnitude, 0)
+
+  def check_integer(self, value: int) -> None:
+    self.assertIsInstance(value, int)
     self.assertGreaterEqual(value, 0)
 
   def check_limit(
     self,
-    limit: MaxOr[int] | MaxOr[float],
+    limit: MaxOr[pint.Quantity[int]] | MaxOr[pint.Quantity[float]],
     value_type: type[int] | type[float] = int,
     maximum: int | None = None,
   ) -> None:
@@ -187,7 +196,7 @@ class ContractTest(unittest.TestCase):
         name, index = key
         self.assertIsInstance(name, str)
         if index is not None:
-          self.check_unsigned(index)
+          self.check_integer(index)
           self.assertLessEqual(index, 2**32 - 1)
         self.check_frozen(device, "hca_handle", "hca_object")
         for value in [device.hca_handle, device.hca_object]:
@@ -217,9 +226,9 @@ class ContractTest(unittest.TestCase):
     self.assertIsInstance(huge, sakai.HugetlbReader)
     for size in ["2MB", "1GB"]:
       for suffix, read, check, result_type in [
-        ("current", huge.current, self.check_unsigned, int),
+        ("current", huge.current, self.check_unsigned, pint.Quantity),
         ("max", huge.max, self.check_limit, MaxOr),
-        ("rsvd.current", huge.reserved_current, self.check_unsigned, int),
+        ("rsvd.current", huge.reserved_current, self.check_unsigned, pint.Quantity),
         ("rsvd.max", huge.reserved_max, self.check_limit, MaxOr),
         (
           "events",
@@ -334,7 +343,7 @@ class ContractTest(unittest.TestCase):
   def test_event_monitors_and_timeouts(self) -> None:
     def check_monitor(monitor: EventPoller) -> None:
       self.assertIsInstance(monitor, EventPoller)
-      self.check_unsigned(monitor.fileno())
+      self.check_integer(monitor.fileno())
       os.fstat(monitor.fileno())
       poll = select.poll()
       poll.register(monitor, select.POLLPRI | select.POLLERR)
@@ -361,7 +370,7 @@ class ContractTest(unittest.TestCase):
   def test_configuration_monitors_and_timeouts(self) -> None:
     def check_monitor(monitor: ConfigurationWatcher) -> None:
       self.assertIsInstance(monitor, ConfigurationWatcher)
-      self.check_unsigned(monitor.fileno())
+      self.check_integer(monitor.fileno())
       os.fstat(monitor.fileno())
       self.assertIsInstance(select.select([monitor], [], [], 0), tuple)
       notification = monitor.wait(0)
@@ -462,20 +471,23 @@ class ContractTest(unittest.TestCase):
       thread.join()
 
   def test_cpu_contract(self) -> None:
+    def check_uclamp(value: pint.Quantity[float]) -> None:
+      self.check_unsigned(value, float)
+      self.assertLessEqual(value, 1)
+
     cpu = self.group.cpu()
     stat = cpu.stat()
-    self.check_unsigned(stat.time.usage_ns)
-    self.check_frozen(stat.time, "usage_ns")
+    self.check_unsigned(stat.time.usage)
+    self.check_frozen(stat.time, "usage")
     weight = cpu.weight()
     self.assertEqual(weight.is_idle, weight.weight is None)
     if weight.weight is not None:
+      self.check_integer(weight.weight)
       self.assertTrue(1 <= weight.weight <= 10_000)
     self.assertTrue(-20 <= cpu.weight_nice() <= 19)
-    self.assertGreaterEqual(cpu.max_burst(), 0)
+    self.check_unsigned(cpu.max_burst())
     self.assertIsInstance(cpu.idle(), bool)
-    self.check_optional(
-      "cpu.uclamp.min", cpu.uclamp_min, lambda value: self.assertTrue(0 <= value <= 1)
-    )
+    self.check_optional("cpu.uclamp.min", cpu.uclamp_min, check_uclamp)
     self.check_optional(
       "cpu.uclamp.max", cpu.uclamp_max, lambda value: self.check_limit(value, float, 1)
     )
@@ -483,28 +495,28 @@ class ContractTest(unittest.TestCase):
     self.check_optional(
       "cpu.stat.local",
       cpu.stat_local,
-      lambda value: self.assertTrue(
-        value.throttled_ns is None or value.throttled_ns >= 0
-      ),
+      lambda value: self.check_counters(value, sakai.CpuStatLocal, "", "throttled"),
     )
 
   def test_cpu_max_contract(self) -> None:
     maximum = self.group.cpu().max()
     self.assertIsInstance(maximum, CpuMax)
-    self.assertGreater(maximum.period_ns, 0)
-    self.assertIs(get_origin(MaxOr[int]), MaxOr)
-    self.check_limit(assert_type(maximum.quota_ns, MaxOr[int]))
-    self.check_limit(assert_type(maximum.cpu_count, MaxOr[float]), float)
-    self.assertEqual(maximum.quota_ns.is_max, maximum.cpu_count.is_max)
-    if not maximum.quota_ns.is_max:
+    self.check_unsigned(maximum.period)
+    self.assertGreater(maximum.period, 0)
+    self.assertIs(get_origin(MaxOr[pint.Quantity[int]]), MaxOr)
+    self.check_limit(assert_type(maximum.quota, MaxOr[pint.Quantity[int]]))
+    self.check_limit(assert_type(maximum.cpu_count, MaxOr[pint.Quantity[float]]), float)
+    self.assertEqual(maximum.quota.is_max, maximum.cpu_count.is_max)
+    if not maximum.quota.is_max:
       self.assertAlmostEqual(
-        maximum.cpu_count.value, maximum.quota_ns.value / maximum.period_ns
+        maximum.cpu_count.value.magnitude,
+        (maximum.quota.value / maximum.period).to("dimensionless").magnitude,
       )
 
   def test_memory_contract(self) -> None:
     memory = self.group.memory()
     for read in (memory.current, memory.peak):
-      self.assertGreaterEqual(read(), 0)
+      self.check_unsigned(read())
     for read in (memory.max, memory.high, memory.low, memory.min):
       self.check_limit(read())
     stat = memory.stat()
@@ -512,15 +524,16 @@ class ContractTest(unittest.TestCase):
     self.assertIn("anon", stat.bytes)
     self.assertIn("file", stat.bytes)
     self.check_readonly(stat.bytes, "anon")
-    self.assertTrue(all(isinstance(v, int) for v in stat.pages.values()))
-    self.assertTrue(all(isinstance(v, int) for v in stat.counts.values()))
+    for values in (stat.bytes, stat.pages, stat.counts):
+      for value in values.values():
+        self.check_unsigned(value)
     self.assertIsInstance(memory.pressure(), Pressure)
 
   def check_device_key(self, key: tuple[int, int]) -> None:
     self.assertIsInstance(key, tuple)
     self.assertEqual(len(key), 2)
     for number in key:
-      self.check_unsigned(number)
+      self.check_integer(number)
 
   def test_io_stat_contract(self) -> None:
     def check_stat(stat: IoStat) -> None:
@@ -548,11 +561,11 @@ class ContractTest(unittest.TestCase):
   def test_io_weight_contract(self) -> None:
     def check_weight(weight: IoWeight) -> None:
       self.assertIsInstance(weight, IoWeight)
-      self.check_unsigned(weight.default_weight)
+      self.check_integer(weight.default_weight)
       self.assertTrue(1 <= weight.default_weight <= 10_000)
       for key, value in weight.devices.items():
         self.check_device_key(key)
-        self.check_unsigned(value)
+        self.check_integer(value)
         self.assertTrue(1 <= value <= 10_000)
       self.check_readonly(weight.devices, (8, 0))
       self.check_frozen(weight, "default_weight")
@@ -566,13 +579,13 @@ class ContractTest(unittest.TestCase):
         self.check_device_key(key)
         self.assertIsInstance(device, IoDeviceMax)
         for limit in (
-          device.read_bps,
-          device.write_bps,
+          device.read_bandwidth,
+          device.write_bandwidth,
           device.read_iops,
           device.write_iops,
         ):
           self.check_limit(limit)
-        self.check_frozen(device, "read_bps")
+        self.check_frozen(device, "read_bandwidth")
       self.check_readonly(maximum.devices, (8, 0))
       self.check_frozen(maximum, "devices")
 
@@ -581,13 +594,13 @@ class ContractTest(unittest.TestCase):
   def test_io_latency_contract(self) -> None:
     def check_latency(latency: IoLatency) -> None:
       self.assertIsInstance(latency, IoLatency)
-      for key, value in latency.targets_ns.items():
+      for key, value in latency.targets.items():
         self.check_device_key(key)
         self.check_unsigned(value)
         self.assertGreater(value, 0)
-        self.assertEqual(value % 1000, 0)
-      self.check_readonly(latency.targets_ns, (8, 0))
-      self.check_frozen(latency, "targets_ns")
+        self.assertEqual(value.to("nanosecond").magnitude % 1000, 0)
+      self.check_readonly(latency.targets, (8, 0))
+      self.check_frozen(latency, "targets")
 
     self.check_optional("io.latency", self.group.io().latency, check_latency)
 
@@ -599,12 +612,13 @@ class ContractTest(unittest.TestCase):
         self.assertIsInstance(device.enabled, bool)
         self.assertIn(device.control, {"auto", "user"})
         for percentile in (device.read_percentile, device.write_percentile):
+          self.check_unsigned(percentile, float)
           self.assertTrue(0 <= percentile <= 1)
         for scaling in (device.min_scaling, device.max_scaling):
           self.check_unsigned(scaling, float)
-        for latency in (device.read_latency_ns, device.write_latency_ns):
+        for latency in (device.read_latency, device.write_latency):
           self.check_unsigned(latency)
-          self.assertEqual(latency % 1000, 0)
+          self.assertEqual(latency.to("nanosecond").magnitude % 1000, 0)
         self.check_frozen(device, "enabled", "control")
 
     def check_model(value: sakai.IoCostModel) -> None:
@@ -614,15 +628,15 @@ class ContractTest(unittest.TestCase):
         self.assertIn(device.control, {"auto", "user"})
         self.assertEqual(device.model, "linear")
         for name in (
-          "read_bps",
-          "write_bps",
+          "read_bandwidth",
+          "write_bandwidth",
           "read_sequential_iops",
           "read_random_iops",
           "write_sequential_iops",
           "write_random_iops",
         ):
           self.check_unsigned(getattr(device, name))
-        self.check_frozen(device, "control", "read_bps")
+        self.check_frozen(device, "control", "read_bandwidth")
 
     reader = self.group.io()
     self.check_optional("io.cost.qos", reader.cost_qos, check_qos)
@@ -643,7 +657,7 @@ class ContractTest(unittest.TestCase):
           for average in (line.avg10, line.avg60, line.avg300):
             self.check_unsigned(average, float)
             self.assertLessEqual(average, 1)
-          self.check_unsigned(line.total_ns)
+          self.check_unsigned(line.total)
 
     self.check_optional("io.pressure", self.group.io().pressure, check_pressure)
 
@@ -665,8 +679,8 @@ class ContractTest(unittest.TestCase):
         self.assertIsInstance(pair, tuple)
         self.assertEqual(len(pair), 2)
         start, end = pair
-        self.check_unsigned(start)
-        self.check_unsigned(end)
+        self.check_integer(start)
+        self.check_integer(end)
         self.assertLessEqual(start, end)
         self.assertLessEqual(end, 2**32 - 1)
         self.assertGreater(start, previous)
@@ -736,13 +750,13 @@ class ContractTest(unittest.TestCase):
     self.check_optional(
       "cgroup.stat.local",
       core.stat_local,
-      lambda value: self.check_unsigned(value.frozen_time_ns),
+      lambda value: self.check_unsigned(value.frozen_time),
       sakai.CgroupStatLocal,
     )
     self.check_optional(
       "irq.pressure",
       self.group.irq_pressure,
-      lambda value: self.check_unsigned(value.full.total_ns),
+      lambda value: self.check_unsigned(value.full.total),
       sakai.IrqPressure,
     )
 
@@ -843,7 +857,9 @@ class ContractTest(unittest.TestCase):
       ("memory.swap.current", swap.current),
       ("memory.zswap.current", zswap.current),
     ):
-      self.check_optional(name, read, lambda value: self.assertIsInstance(value, int))
+      self.check_optional(
+        name, read, lambda value: self.assertIsInstance(value, pint.Quantity)
+      )
 
   def test_numa_contract(self) -> None:
     def check_stat(stat: MemoryNumaStat) -> None:
@@ -856,7 +872,10 @@ class ContractTest(unittest.TestCase):
           with self.subTest(field=field):
             self.assertTrue(all(isinstance(node, int) for node in nodes))
             self.assertTrue(
-              all(isinstance(value, int) and value >= 0 for value in nodes.values())
+              all(
+                isinstance(value, pint.Quantity) and value.magnitude >= 0
+                for value in nodes.values()
+              )
             )
             self.check_readonly(nodes, 0)
       self.check_frozen(stat, "bytes")

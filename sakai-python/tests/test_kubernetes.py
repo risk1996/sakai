@@ -25,12 +25,15 @@ class KubernetesResourceTest(unittest.TestCase):
     limit_millicores = int(os.environ["CPU_LIMIT_MILLICORES"])
     maximum = self.group.cpu().max()
     self.assertFalse(maximum.cpu_count.is_max)
-    self.assertFalse(maximum.quota_ns.is_max)
-    self.assertEqual(maximum.cpu_count.value, limit_millicores / MILLICORES_PER_CPU)
-    self.assertGreater(maximum.period_ns, 0)
+    self.assertFalse(maximum.quota.is_max)
     self.assertEqual(
-      maximum.quota_ns.value * MILLICORES_PER_CPU,
-      maximum.period_ns * limit_millicores,
+      maximum.cpu_count.value.to("dimensionless").magnitude,
+      limit_millicores / MILLICORES_PER_CPU,
+    )
+    self.assertGreater(maximum.period, 0)
+    self.assertEqual(
+      maximum.quota.value * MILLICORES_PER_CPU,
+      maximum.period * limit_millicores,
     )
 
   def test_cpu_request_weight(self) -> None:
@@ -57,14 +60,14 @@ class KubernetesResourceTest(unittest.TestCase):
     limit_bytes = int(os.environ["MEMORY_LIMIT_BYTES"])
     maximum = self.group.memory().max()
     self.assertFalse(maximum.is_max)
-    self.assertEqual(maximum.value, limit_bytes)
+    self.assertEqual(maximum.value.to("byte").magnitude, limit_bytes)
 
   def test_memory_request_protection(self) -> None:
     request_bytes = int(os.environ["MEMORY_REQUEST_BYTES"])
     # Kubernetes v1.32 sets memory.min from requests.memory only with MemoryQoS.
     minimum = self.group.memory().min()
     self.assertFalse(minimum.is_max)
-    self.assertEqual(minimum.value, request_bytes)
+    self.assertEqual(minimum.value.to("byte").magnitude, request_bytes)
 
 
 if __name__ == "__main__":

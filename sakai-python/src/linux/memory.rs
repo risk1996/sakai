@@ -10,9 +10,9 @@ use sakai::v2::memory::{
   MemoryEventCounts as CoreMemoryEventCounts, MemoryNumaStat as CoreMemoryNumaStat, MemoryStat as CoreMemoryStat,
   SwapEvents as CoreSwapEvents,
 };
-use uom::si::information::byte;
 
 use super::{MaxOr, Pressure, PythonError};
+use crate::quantity::Quantity;
 
 /// Fresh reads of memory controller files for one pinned cgroup.
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
@@ -32,38 +32,38 @@ impl MemoryReader {
   fn zswap(&self) -> ZswapReader { ZswapReader { owner: Arc::clone(&self.owner) } }
 
   /// Read current memory usage of this cgroup and its descendants, in bytes.
-  fn current(&self, py: Python<'_>) -> PyResult<u64> {
-    PythonError::read(py, &self.owner, |owner| owner.memory().current()).map(|value| value.value().get::<byte>())
+  fn current(&self, py: Python<'_>) -> PyResult<Quantity<sakai::Bytes>> {
+    PythonError::read(py, &self.owner, |owner| owner.memory().current()).map(|value| value.value().into())
   }
 
   /// Read peak hierarchical memory usage since cgroup creation, in bytes.
   /// This fresh read-only descriptor never resets the peak.
-  fn peak(&self, py: Python<'_>) -> PyResult<u64> {
-    PythonError::read(py, &self.owner, |owner| owner.memory().peak()).map(|value| value.value().get::<byte>())
+  fn peak(&self, py: Python<'_>) -> PyResult<Quantity<sakai::Bytes>> {
+    PythonError::read(py, &self.owner, |owner| owner.memory().peak()).map(|value| value.value().into())
   }
 
   /// Read the hard memory limit as `max` or a concrete byte count.
-  #[gen_stub(override_return_type(type_repr = "MaxOr[int]"))]
+  #[gen_stub(override_return_type(type_repr = "MaxOr[pint.Quantity[int]]"))]
   fn max(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, |owner| owner.memory().max()).map(|value| MaxOr::from_bytes(value.value()))
   }
 
   /// Read the throttling threshold as `max` or a concrete byte count.
-  #[gen_stub(override_return_type(type_repr = "MaxOr[int]"))]
+  #[gen_stub(override_return_type(type_repr = "MaxOr[pint.Quantity[int]]"))]
   fn high(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, |owner| owner.memory().high()).map(|value| MaxOr::from_bytes(value.value()))
   }
 
   /// Read best-effort memory protection as `max` or a concrete byte count.
   /// Ancestor boundaries and sibling competition affect effective protection.
-  #[gen_stub(override_return_type(type_repr = "MaxOr[int]"))]
+  #[gen_stub(override_return_type(type_repr = "MaxOr[pint.Quantity[int]]"))]
   fn low(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, |owner| owner.memory().low()).map(|value| MaxOr::from_bytes(value.value()))
   }
 
   /// Read hard memory protection as `max` or a concrete byte count.
   /// Ancestor boundaries and sibling competition affect effective protection.
-  #[gen_stub(override_return_type(type_repr = "MaxOr[int]"))]
+  #[gen_stub(override_return_type(type_repr = "MaxOr[pint.Quantity[int]]"))]
   fn min(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, |owner| owner.memory().min()).map(|value| MaxOr::from_bytes(value.value()))
   }
@@ -109,31 +109,31 @@ impl MemoryReader {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct MemoryEventCounts {
   /// Reclaims despite usage below the effective low boundary.
-  low: u64,
+  low: Quantity<sakai::Count>,
   /// Throttling and direct reclaim after crossing the high boundary.
-  high: u64,
+  high: Quantity<sakai::Count>,
   /// Attempts to cross the max boundary.
-  max: u64,
+  max: Quantity<sakai::Count>,
   /// Allocations about to fail at the memory limit.
-  oom: u64,
+  oom: Quantity<sakai::Count>,
   /// Processes killed by any OOM killer.
-  oom_kill: u64,
+  oom_kill: Quantity<sakai::Count>,
   /// Group OOM kills, or None when the kernel omits the counter.
-  oom_group_kill: Option<u64>,
+  oom_group_kill: Option<Quantity<sakai::Count>>,
   /// Network socket throttling events, or None when the kernel omits the counter.
-  sock_throttled: Option<u64>,
+  sock_throttled: Option<Quantity<sakai::Count>>,
 }
 
 impl From<CoreMemoryEventCounts> for MemoryEventCounts {
   fn from(value: CoreMemoryEventCounts) -> Self {
     Self {
-      low: value.low().value,
-      high: value.high().value,
-      max: value.max().value,
-      oom: value.oom().value,
-      oom_kill: value.oom_kill().value,
-      oom_group_kill: value.oom_group_kill().map(|count| count.value),
-      sock_throttled: value.sock_throttled().map(|count| count.value),
+      low: value.low().into(),
+      high: value.high().into(),
+      max: value.max().into(),
+      oom: value.oom().into(),
+      oom_kill: value.oom_kill().into(),
+      oom_group_kill: value.oom_group_kill().map(|count| count.into()),
+      sock_throttled: value.sock_throttled().map(|count| count.into()),
     }
   }
 }
@@ -150,24 +150,24 @@ pub(super) struct SwapReader {
 #[pymethods]
 impl SwapReader {
   /// Read current hierarchical swap usage in bytes.
-  fn current(&self, py: Python<'_>) -> PyResult<u64> {
-    PythonError::read(py, &self.owner, |owner| owner.memory().swap().current()).map(|value| value.value().get::<byte>())
+  fn current(&self, py: Python<'_>) -> PyResult<Quantity<sakai::Bytes>> {
+    PythonError::read(py, &self.owner, |owner| owner.memory().swap().current()).map(|value| value.value().into())
   }
 
   /// Read peak swap usage since cgroup creation; this never resets the peak.
-  fn peak(&self, py: Python<'_>) -> PyResult<u64> {
-    PythonError::read(py, &self.owner, |owner| owner.memory().swap().peak()).map(|value| value.value().get::<byte>())
+  fn peak(&self, py: Python<'_>) -> PyResult<Quantity<sakai::Bytes>> {
+    PythonError::read(py, &self.owner, |owner| owner.memory().swap().peak()).map(|value| value.value().into())
   }
 
   /// Read the hard swap limit as `max` or a concrete byte count.
-  #[gen_stub(override_return_type(type_repr = "MaxOr[int]"))]
+  #[gen_stub(override_return_type(type_repr = "MaxOr[pint.Quantity[int]]"))]
   fn max(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, |owner| owner.memory().swap().max())
       .map(|value| MaxOr::from_bytes(value.value()))
   }
 
   /// Read the swap throttling threshold as `max` or a concrete byte count.
-  #[gen_stub(override_return_type(type_repr = "MaxOr[int]"))]
+  #[gen_stub(override_return_type(type_repr = "MaxOr[pint.Quantity[int]]"))]
   fn high(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, |owner| owner.memory().swap().high())
       .map(|value| MaxOr::from_bytes(value.value()))
@@ -191,16 +191,16 @@ impl SwapReader {
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct SwapEvents {
   /// Times swap usage exceeded the high threshold; absent on older kernels.
-  high: Option<u64>,
+  high: Option<Quantity<sakai::Count>>,
   /// Times swap allocation failed at the max boundary.
-  max: u64,
+  max: Quantity<sakai::Count>,
   /// Swap allocation failures from the limit or system-wide exhaustion.
-  fail: u64,
+  fail: Quantity<sakai::Count>,
 }
 
 impl From<CoreSwapEvents> for SwapEvents {
   fn from(value: CoreSwapEvents) -> Self {
-    Self { high: value.high().map(|count| count.value), max: value.max().value, fail: value.fail().value }
+    Self { high: value.high().map(|count| count.into()), max: value.max().into(), fail: value.fail().into() }
   }
 }
 
@@ -216,13 +216,12 @@ pub(super) struct ZswapReader {
 #[pymethods]
 impl ZswapReader {
   /// Read zswap compression-backend memory for this cgroup and descendants, in bytes.
-  fn current(&self, py: Python<'_>) -> PyResult<u64> {
-    PythonError::read(py, &self.owner, |owner| owner.memory().zswap().current())
-      .map(|value| value.value().get::<byte>())
+  fn current(&self, py: Python<'_>) -> PyResult<Quantity<sakai::Bytes>> {
+    PythonError::read(py, &self.owner, |owner| owner.memory().zswap().current()).map(|value| value.value().into())
   }
 
   /// Read the hard zswap pool limit as `max` or a concrete byte count.
-  #[gen_stub(override_return_type(type_repr = "MaxOr[int]"))]
+  #[gen_stub(override_return_type(type_repr = "MaxOr[pint.Quantity[int]]"))]
   fn max(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, |owner| owner.memory().zswap().max())
       .map(|value| MaxOr::from_bytes(value.value()))
@@ -243,17 +242,17 @@ impl ZswapReader {
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 pub(super) struct MemoryStat {
-  bytes: BTreeMap<&'static str, u64>,
-  pages: BTreeMap<&'static str, u64>,
-  counts: BTreeMap<&'static str, u64>,
+  bytes: BTreeMap<&'static str, Quantity<sakai::Bytes>>,
+  pages: BTreeMap<&'static str, Quantity<sakai::Pages>>,
+  counts: BTreeMap<&'static str, Quantity<sakai::Count>>,
 }
 
 impl From<CoreMemoryStat> for MemoryStat {
   fn from(value: CoreMemoryStat) -> Self {
     Self {
-      bytes: MemoryValues::fields(value.bytes(), |value| value.get::<byte>()),
-      pages: MemoryValues::fields(value.pages(), |value| value.value),
-      counts: MemoryValues::fields(value.counts(), |value| value.value),
+      bytes: MemoryValues::fields(value.bytes(), |value| value.into()),
+      pages: MemoryValues::fields(value.pages(), |value| value.into()),
+      counts: MemoryValues::fields(value.counts(), |value| value.into()),
     }
   }
 }
@@ -264,27 +263,29 @@ impl From<CoreMemoryStat> for MemoryStat {
 impl MemoryStat {
   /// Read-only mapping of memory.stat byte-valued fields.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, int]", imports = ("collections.abc",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, pint.Quantity[int]]", imports = ("collections.abc", "pint",)))]
   fn bytes(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> { Self::mapping(py, &self.bytes) }
 
   /// Read-only mapping of memory.stat page-valued fields.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, int]", imports = ("collections.abc",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, pint.Quantity[int]]", imports = ("collections.abc", "pint",)))]
   fn pages(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> { Self::mapping(py, &self.pages) }
 
   /// Read-only mapping of memory.stat count-valued fields.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, int]", imports = ("collections.abc",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, pint.Quantity[int]]", imports = ("collections.abc", "pint",)))]
   fn counts(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> { Self::mapping(py, &self.counts) }
 }
 
 impl MemoryStat {
-  fn mapping(py: Python<'_>, values: &BTreeMap<&str, u64>) -> PyResult<Py<PyMappingProxy>> {
+  fn mapping<Q>(py: Python<'_>, values: &BTreeMap<&str, Quantity<Q>>) -> PyResult<Py<PyMappingProxy>>
+  where
+    for<'py> &'py Quantity<Q>: IntoPyObject<'py>, {
     Ok(PyMappingProxy::new(py, values.into_py_dict(py)?.as_mapping()).unbind())
   }
 }
 
-type NumaValues = BTreeMap<&'static str, BTreeMap<u32, u64>>;
+type NumaValues<Q> = BTreeMap<&'static str, BTreeMap<u32, Quantity<Q>>>;
 
 /// Converts memory field names and quantities without assuming a page size.
 pub(super) struct MemoryValues;
@@ -297,7 +298,10 @@ impl MemoryValues {
     values.iter().map(|(key, value)| ((*key).into(), convert(value))).collect()
   }
 
-  fn nodes<Value>(values: &BTreeMap<u32, Value>, convert: impl Fn(&Value) -> u64) -> BTreeMap<u32, u64> {
+  fn nodes<Value, Q>(
+    values: &BTreeMap<u32, Value>,
+    convert: impl Fn(&Value) -> Quantity<Q>,
+  ) -> BTreeMap<u32, Quantity<Q>> {
     values.iter().map(|(node, value)| (*node, convert(value))).collect()
   }
 }
@@ -311,17 +315,17 @@ impl MemoryValues {
 #[pyclass(frozen, module = "sakai._sakai")]
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct MemoryNumaStat {
-  bytes: NumaValues,
-  pages: NumaValues,
-  counts: NumaValues,
+  bytes: NumaValues<sakai::Bytes>,
+  pages: NumaValues<sakai::Pages>,
+  counts: NumaValues<sakai::Count>,
 }
 
 impl From<CoreMemoryNumaStat> for MemoryNumaStat {
   fn from(value: CoreMemoryNumaStat) -> Self {
     Self {
-      bytes: MemoryValues::fields(value.bytes(), |nodes| MemoryValues::nodes(nodes, |value| value.get::<byte>())),
-      pages: MemoryValues::fields(value.pages(), |nodes| MemoryValues::nodes(nodes, |value| value.value)),
-      counts: MemoryValues::fields(value.counts(), |nodes| MemoryValues::nodes(nodes, |value| value.value)),
+      bytes: MemoryValues::fields(value.bytes(), |nodes| MemoryValues::nodes(nodes, |value| value.into())),
+      pages: MemoryValues::fields(value.pages(), |nodes| MemoryValues::nodes(nodes, |value| value.into())),
+      counts: MemoryValues::fields(value.counts(), |nodes| MemoryValues::nodes(nodes, |value| value.into())),
     }
   }
 }
@@ -332,22 +336,24 @@ impl From<CoreMemoryNumaStat> for MemoryNumaStat {
 impl MemoryNumaStat {
   /// Read-only byte amounts by memory field and NUMA node ID.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, collections.abc.Mapping[int, int]]", imports = ("collections.abc",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, collections.abc.Mapping[int, pint.Quantity[int]]]", imports = ("collections.abc", "pint",)))]
   fn bytes(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> { Self::mapping(py, &self.bytes) }
 
   /// Read-only page quantities by memory field and NUMA node ID.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, collections.abc.Mapping[int, int]]", imports = ("collections.abc",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, collections.abc.Mapping[int, pint.Quantity[int]]]", imports = ("collections.abc", "pint",)))]
   fn pages(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> { Self::mapping(py, &self.pages) }
 
   /// Read-only event counts by memory field and NUMA node ID.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, collections.abc.Mapping[int, int]]", imports = ("collections.abc",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, collections.abc.Mapping[int, pint.Quantity[int]]]", imports = ("collections.abc", "pint",)))]
   fn counts(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> { Self::mapping(py, &self.counts) }
 }
 
 impl MemoryNumaStat {
-  fn mapping(py: Python<'_>, values: &NumaValues) -> PyResult<Py<PyMappingProxy>> {
+  fn mapping<Q>(py: Python<'_>, values: &NumaValues<Q>) -> PyResult<Py<PyMappingProxy>>
+  where
+    for<'py> &'py Quantity<Q>: IntoPyObject<'py>, {
     let dict = PyDict::new(py);
     for (key, nodes) in values {
       dict.set_item(key, PyMappingProxy::new(py, nodes.into_py_dict(py)?.as_mapping()))?;
@@ -369,37 +375,37 @@ mod tests {
   #[test]
   fn separates_memory_bytes_pages_and_counts() {
     let stat = MemoryStat::from(assert_ok!("anon 4096\nfile 2048\npswpin 3\npgfault 7\n".parse::<CoreMemoryStat>()));
-    assert_eq!(stat.bytes.get("anon"), Some(&4096));
-    assert_eq!(stat.pages.get("pswpin"), Some(&3));
-    assert_eq!(stat.counts.get("pgfault"), Some(&7));
+    assert_eq!(stat.bytes.get("anon"), Some(&4096.into()));
+    assert_eq!(stat.pages.get("pswpin"), Some(&3.into()));
+    assert_eq!(stat.counts.get("pgfault"), Some(&7.into()));
     assert!(!stat.bytes.contains_key("pswpin"));
     assert!(!stat.pages.contains_key("pgfault"));
   }
 
   #[test]
   fn preserves_memory_optional_events_zero_and_unsigned_counts() {
-    Python::initialize();
+    crate::quantity::tests::initialize_python();
     Python::attach(|py| {
       for (input, expected) in [
         ("low 1\nhigh 2\nmax 3\noom 4\noom_kill 5", MemoryEventCounts {
-          low: 1,
-          high: 2,
-          max: 3,
-          oom: 4,
-          oom_kill: 5,
+          low: 1.into(),
+          high: 2.into(),
+          max: 3.into(),
+          oom: 4.into(),
+          oom_kill: 5.into(),
           oom_group_kill: None,
           sock_throttled: None,
         }),
         (
           "low 0\nhigh 0\nmax 0\noom 0\noom_kill 18446744073709551615\noom_group_kill 0\nsock_throttled 0\nfuture nope",
           MemoryEventCounts {
-            low: 0,
-            high: 0,
-            max: 0,
-            oom: 0,
-            oom_kill: u64::MAX,
-            oom_group_kill: Some(0),
-            sock_throttled: Some(0),
+            low: 0.into(),
+            high: 0.into(),
+            max: 0.into(),
+            oom: 0.into(),
+            oom_kill: u64::MAX.into(),
+            oom_group_kill: Some(0.into()),
+            sock_throttled: Some(0.into()),
           },
         ),
       ] {
@@ -410,11 +416,17 @@ mod tests {
           let events = MemoryEventCounts::from(counts);
           assert_eq!(events, expected);
           let object = assert_ok!(Py::new(py, events));
-          assert_eq!(assert_ok!(assert_ok!(object.bind(py).getattr("oom_kill")).extract::<u64>()), expected.oom_kill);
+          assert_eq!(
+            assert_ok!(assert_ok!(object.bind(py).getattr("oom_kill")).extract::<Quantity<sakai::Count>>()),
+            expected.oom_kill
+          );
           for (name, expected) in
             [("oom_group_kill", expected.oom_group_kill), ("sock_throttled", expected.sock_throttled)]
           {
-            assert_eq!(assert_ok!(assert_ok!(object.bind(py).getattr(name)).extract::<Option<u64>>()), expected);
+            assert_eq!(
+              assert_ok!(assert_ok!(object.bind(py).getattr(name)).extract::<Option<Quantity<sakai::Count>>>()),
+              expected
+            );
           }
           check_frozen(object.bind(py).as_any(), &["low"]);
         }
@@ -424,17 +436,21 @@ mod tests {
 
   #[test]
   fn preserves_swap_optional_high_and_unsigned_counts() {
-    Python::initialize();
+    crate::quantity::tests::initialize_python();
     Python::attach(|py| {
       for (input, expected) in [
-        ("max 1\nfail 2\n", SwapEvents { high: None, max: 1, fail: 2 }),
-        ("high 0\nmax 0\nfail 18446744073709551615\n", SwapEvents { high: Some(0), max: 0, fail: u64::MAX }),
+        ("max 1\nfail 2\n", SwapEvents { high: None, max: 1.into(), fail: 2.into() }),
+        ("high 0\nmax 0\nfail 18446744073709551615\n", SwapEvents {
+          high: Some(0.into()),
+          max: 0.into(),
+          fail: u64::MAX.into(),
+        }),
       ] {
         let events = SwapEvents::from(assert_ok!(input.parse::<CoreSwapEvents>()));
         assert_eq!(events, expected);
         let object = assert_ok!(Py::new(py, events));
         let high = assert_ok!(object.bind(py).getattr("high"));
-        assert_eq!(assert_ok!(high.extract::<Option<u64>>()), expected.high);
+        assert_eq!(assert_ok!(high.extract::<Option<Quantity<sakai::Count>>>()), expected.high);
         check_frozen(object.bind(py).as_any(), &["fail"]);
       }
     });
@@ -447,12 +463,15 @@ mod tests {
         .parse::<CoreMemoryNumaStat>()
     ));
     assert_eq!(stat, MemoryNumaStat {
-      bytes: BTreeMap::from([("anon", BTreeMap::from([(0, 4096), (2, 8192)])), ("file", BTreeMap::from([(0, 0)])),]),
-      pages: BTreeMap::from([("pgdemote_direct", BTreeMap::from([(2, 3)]))]),
-      counts: BTreeMap::from([("workingset_refault_file", BTreeMap::from([(2, 7)]))]),
+      bytes: BTreeMap::from([
+        ("anon", BTreeMap::from([(0, 4096.into()), (2, 8192.into())])),
+        ("file", BTreeMap::from([(0, 0.into())])),
+      ]),
+      pages: BTreeMap::from([("pgdemote_direct", BTreeMap::from([(2, 3.into())]))]),
+      counts: BTreeMap::from([("workingset_refault_file", BTreeMap::from([(2, 7.into())]))]),
     });
 
-    Python::initialize();
+    crate::quantity::tests::initialize_python();
     Python::attach(|py| {
       let object = assert_ok!(Py::new(py, stat));
       for (name, field, expected) in [
@@ -463,7 +482,7 @@ mod tests {
         let mapping = readonly(object.bind(py).as_any(), name, "future");
         let nodes = assert_ok!(mapping.get_item(field));
         let values = assert_ok!(py.get_type::<PyDict>().call1((&nodes,)));
-        assert_eq!(assert_ok!(values.extract::<BTreeMap<u32, u64>>()), expected);
+        assert_eq!(assert_ok!(super::super::tests::magnitudes(&values).extract::<BTreeMap<u32, u64>>()), expected);
         assert!(assert_err!(nodes.set_item(0, 0)).is_instance_of::<PyTypeError>(py));
       }
     });

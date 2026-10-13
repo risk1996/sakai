@@ -10,6 +10,7 @@ use sakai::v2::rdma::{
 };
 
 use super::{MaxOr, PythonError, mapping::mapping};
+use crate::quantity::Quantity;
 
 type DeviceKey = (String, Option<u32>);
 
@@ -50,7 +51,7 @@ impl RdmaReader {
     PythonError::read(py, &self.owner, |owner| owner.rdma().current()).map(Into::into)
   }
 
-  /// Read configured per-device HCA limits as MaxOr[int] resource counts.
+  /// Read configured per-device HCA limits as MaxOr[pint.Quantity[int]] resource counts.
   ///
   /// Zero is a valid limit. max means no configured limit here; ancestor
   /// limits still apply. This snapshot can change between reads. Missing
@@ -126,7 +127,7 @@ impl RdmaCurrent {
   /// None means the kernel omitted the index, not zero. This property
   /// returns stored data without opening an interface file.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[RdmaDeviceKey, RdmaDeviceCurrent]", imports = ("collections.abc",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[RdmaDeviceKey, RdmaDeviceCurrent]", imports = ("collections.abc", "pint",)))]
   fn devices(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     mapping(py, &self.devices, |value| Py::new(py, value.clone()))
   }
@@ -137,21 +138,21 @@ impl RdmaCurrent {
 /// HCA handles are userspace adapter contexts; HCA objects include queue
 /// pairs, memory regions, and completion queues. All quantities are counts.
 /// The kernel's max token for current or peak usage represents exactly
-/// 2,147,483,647 and is exposed as that integer, not an unlimited value.
+/// 2,147,483,647 and is exposed as that count quantity, not an unlimited value.
 /// Properties inspect stored values without performing I/O.
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct RdmaDeviceCurrent {
   /// Stored count of HCA handles, or their independent historical peak.
-  hca_handle: u64,
+  hca_handle: Quantity<sakai::Count>,
   /// Stored count of HCA objects, or their independent historical peak.
-  hca_object: u64,
+  hca_object: Quantity<sakai::Count>,
 }
 
 impl From<CoreRdmaDeviceCurrent> for RdmaDeviceCurrent {
   fn from(value: CoreRdmaDeviceCurrent) -> Self {
-    Self { hca_handle: value.hca_handle().value, hca_object: value.hca_object().value }
+    Self { hca_handle: value.hca_handle().into(), hca_object: value.hca_object().into() }
   }
 }
 
@@ -178,13 +179,13 @@ impl RdmaMax {
   ///
   /// None means the kernel omitted the index, not zero. Performs no I/O.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[RdmaDeviceKey, RdmaDeviceMax]", imports = ("collections.abc",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[RdmaDeviceKey, RdmaDeviceMax]", imports = ("collections.abc", "pint",)))]
   fn devices(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     mapping(py, &self.devices, |value| Py::new(py, value.clone()))
   }
 }
 
-/// Immutable limits for one RDMA adapter, each a MaxOr[int] resource count.
+/// Immutable limits for one RDMA adapter, each a MaxOr[pint.Quantity[int]] resource count.
 ///
 /// Zero is a valid limit. max means no limit here; ancestor limits still
 /// apply. Reading a property does not refresh this configuration snapshot.
@@ -230,7 +231,7 @@ impl RdmaEvents {
   ///
   /// None means the kernel omitted the index, not zero. Performs no I/O.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[RdmaDeviceKey, RdmaDeviceEvents]", imports = ("collections.abc",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[RdmaDeviceKey, RdmaDeviceEvents]", imports = ("collections.abc", "pint",)))]
   fn devices(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     mapping(py, &self.devices, |value| Py::new(py, value.clone()))
   }
@@ -267,17 +268,17 @@ pub(super) struct RdmaResourceEvents {
   /// Failures against this cgroup's own limit, including descendant requests.
   ///
   /// Hierarchical snapshots also include descendant cgroups' limit events.
-  max: u64,
+  max: Quantity<sakai::Count>,
   /// Requests rejected by this cgroup's or an ancestor's limit.
   ///
   /// Local snapshots count requests originating here; hierarchical snapshots
   /// also include requests originating in descendants.
-  alloc_fail: u64,
+  alloc_fail: Quantity<sakai::Count>,
 }
 
 impl From<CoreRdmaResourceEvents> for RdmaResourceEvents {
   fn from(value: CoreRdmaResourceEvents) -> Self {
-    Self { max: value.max().value, alloc_fail: value.alloc_fail().value }
+    Self { max: value.max().into(), alloc_fail: value.alloc_fail().into() }
   }
 }
 
@@ -296,20 +297,30 @@ mod tests {
 
   #[test]
   fn converts_resource_snapshots_and_freezes_devices() {
-    Python::initialize();
+    crate::quantity::tests::initialize_python();
     Python::attach(|py| {
       let current = RdmaCurrent::from(assert_ok!("mlx4_0 hca_handle=1 hca_object=max".parse::<CoreRdmaCurrent>()));
       assert_eq!(current, RdmaCurrent {
         devices: BTreeMap::from([(("mlx4_0".into(), None), RdmaDeviceCurrent {
-          hca_handle: 1,
-          hca_object: i32::MAX as u64
+          hca_handle: 1.into(),
+          hca_object: (i32::MAX as u64).into()
         }),])
       });
       let current = assert_ok!(Py::new(py, current));
       let devices = readonly(current.bind(py).as_any(), "devices", ("mlx4_0", None::<u32>));
       let device = assert_ok!(devices.get_item(("mlx4_0", None::<u32>)));
-      assert_eq!(assert_ok!(assert_ok!(device.getattr("hca_handle")).extract::<u64>()), 1);
-      assert_eq!(assert_ok!(assert_ok!(device.getattr("hca_object")).extract::<u64>()), i32::MAX as u64);
+      assert_eq!(
+        assert_ok!(
+          assert_ok!(device.getattr("hca_handle")).getattr("magnitude").and_then(|value| value.extract::<u64>())
+        ),
+        1
+      );
+      assert_eq!(
+        assert_ok!(
+          assert_ok!(device.getattr("hca_object")).getattr("magnitude").and_then(|value| value.extract::<u64>())
+        ),
+        i32::MAX as u64
+      );
       check_frozen(&device, &["hca_handle"]);
 
       let limits = RdmaMax::from(assert_ok!("mlx4_0 hca_handle=0 hca_object=max".parse::<CoreRdmaMax>()));
@@ -326,7 +337,7 @@ mod tests {
 
   #[test]
   fn converts_events_and_freezes_nested_counters() {
-    Python::initialize();
+    crate::quantity::tests::initialize_python();
     Python::attach(|py| {
       let events = RdmaEvents::from(assert_ok!(
         "mlx4_0 hca_handle.max=5 hca_handle.alloc_fail=7 hca_object.max=0 hca_object.alloc_fail=1"
@@ -334,15 +345,20 @@ mod tests {
       ));
       assert_eq!(events, RdmaEvents {
         devices: BTreeMap::from([(("mlx4_0".into(), None), RdmaDeviceEvents {
-          hca_handle: RdmaResourceEvents { max: 5, alloc_fail: 7 },
-          hca_object: RdmaResourceEvents { max: 0, alloc_fail: 1 },
+          hca_handle: RdmaResourceEvents { max: 5.into(), alloc_fail: 7.into() },
+          hca_object: RdmaResourceEvents { max: 0.into(), alloc_fail: 1.into() },
         }),])
       });
       let events = assert_ok!(Py::new(py, events));
       let devices = readonly(events.bind(py).as_any(), "devices", ("mlx4_0", None::<u32>));
       let device = assert_ok!(devices.get_item(("mlx4_0", None::<u32>)));
       let handles = assert_ok!(device.getattr("hca_handle"));
-      assert_eq!(assert_ok!(assert_ok!(handles.getattr("alloc_fail")).extract::<u64>()), 7);
+      assert_eq!(
+        assert_ok!(
+          assert_ok!(handles.getattr("alloc_fail")).getattr("magnitude").and_then(|value| value.extract::<u64>())
+        ),
+        7
+      );
       check_frozen(&handles, &["max"]);
       check_frozen(&device, &["hca_handle"]);
     });
@@ -350,7 +366,7 @@ mod tests {
 
   #[test]
   fn preserves_indexed_and_name_only_keys_in_all_python_snapshots() {
-    Python::initialize();
+    crate::quantity::tests::initialize_python();
     Python::attach(|py| {
       let keys = [("rxe0".to_owned(), Some(0)), ("rxe0".to_owned(), Some(5)), ("mlx4_0".to_owned(), None)];
       for (raw, expected) in [
@@ -366,7 +382,10 @@ mod tests {
           devices: keys
             .iter()
             .cloned()
-            .zip(expected.map(|[hca_handle, hca_object]| RdmaDeviceCurrent { hca_handle, hca_object }))
+            .zip(expected.map(|[hca_handle, hca_object]| RdmaDeviceCurrent {
+              hca_handle: hca_handle.into(),
+              hca_object: hca_object.into()
+            }))
             .collect()
         });
         let object = assert_ok!(Py::new(py, snapshot));
@@ -374,8 +393,9 @@ mod tests {
         assert_eq!(assert_ok!(devices.len()), 3);
         for (key, expected) in keys.iter().zip(expected) {
           let device = assert_ok!(devices.get_item(key));
-          let actual =
-            ["hca_handle", "hca_object"].map(|field| assert_ok!(assert_ok!(device.getattr(field)).extract::<u64>()));
+          let actual = ["hca_handle", "hca_object"].map(|field| {
+            assert_ok!(assert_ok!(device.getattr(field)).getattr("magnitude").and_then(|value| value.extract::<u64>()))
+          });
           assert_eq!(actual, expected);
         }
       }
@@ -410,8 +430,8 @@ mod tests {
             .iter()
             .cloned()
             .zip(expected.map(|[handle_max, handle_fail, object_max, object_fail]| RdmaDeviceEvents {
-              hca_handle: RdmaResourceEvents { max: handle_max, alloc_fail: handle_fail },
-              hca_object: RdmaResourceEvents { max: object_max, alloc_fail: object_fail },
+              hca_handle: RdmaResourceEvents { max: handle_max.into(), alloc_fail: handle_fail.into() },
+              hca_object: RdmaResourceEvents { max: object_max.into(), alloc_fail: object_fail.into() },
             }))
             .collect()
         });
@@ -424,8 +444,11 @@ mod tests {
             [("hca_handle", [handle_max, handle_fail]), ("hca_object", [object_max, object_fail])]
           {
             let events = assert_ok!(device.getattr(resource));
-            let actual =
-              ["max", "alloc_fail"].map(|field| assert_ok!(assert_ok!(events.getattr(field)).extract::<u64>()));
+            let actual = ["max", "alloc_fail"].map(|field| {
+              assert_ok!(
+                assert_ok!(events.getattr(field)).getattr("magnitude").and_then(|value| value.extract::<u64>())
+              )
+            });
             assert_eq!(actual, expected);
           }
         }

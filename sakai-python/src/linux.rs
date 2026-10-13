@@ -50,9 +50,10 @@ pub(crate) mod stubs;
 #[cfg(test)]
 mod tests;
 
-/// Read-only Linux cgroup v2 bindings backed by sakai.
+/// Read-only Linux cgroup v2 bindings backed by sakai, with ordinary Pint quantities.
 #[pymodule(gil_used = true)]
 fn _sakai(module: &Bound<'_, PyModule>) -> PyResult<()> {
+  crate::quantity::initialize(module.py())?;
   module.add("SakaiError", module.py().get_type::<SakaiError>())?;
   module.add("InterfaceMissingError", module.py().get_type::<InterfaceMissingError>())?;
   module.add("NotCgroupV2Error", module.py().get_type::<NotCgroupV2Error>())?;

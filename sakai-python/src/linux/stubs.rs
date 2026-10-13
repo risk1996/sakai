@@ -63,14 +63,14 @@ pub fn generate_stubs() -> pyo3_stub_gen::Result<()> {
   module.class.append(&mut exceptions.class);
   // The generator does not apply type overrides to automatic field getters.
   for (id, names, ty) in [
-    (TypeId::of::<CpuMax>(), "quota_ns", "MaxOr[int]"),
-    (TypeId::of::<CpuMax>(), "cpu_count", "MaxOr[float]"),
+    (TypeId::of::<CpuMax>(), "quota", "MaxOr[pint.Quantity[int]]"),
+    (TypeId::of::<CpuMax>(), "cpu_count", "MaxOr[pint.Quantity[float]]"),
     (TypeId::of::<CpusetPartition>(), "state", "typing.Literal['member', 'root', 'isolated']"),
     (TypeId::of::<IoDeviceCostQos>(), "control", "typing.Literal['auto', 'user']"),
     (TypeId::of::<IoDeviceCostModel>(), "control", "typing.Literal['auto', 'user']"),
     (TypeId::of::<IoDeviceCostModel>(), "model", "typing.Literal['linear']"),
-    (TypeId::of::<IoDeviceMax>(), "read_bps write_bps read_iops write_iops", "MaxOr[int]"),
-    (TypeId::of::<RdmaDeviceMax>(), "hca_handle hca_object", "MaxOr[int]"),
+    (TypeId::of::<IoDeviceMax>(), "read_bandwidth write_bandwidth read_iops write_iops", "MaxOr[pint.Quantity[int]]"),
+    (TypeId::of::<RdmaDeviceMax>(), "hca_handle hca_object", "MaxOr[pint.Quantity[int]]"),
   ] {
     let class = module.class.get_mut(&id).ok_or_else(|| std::io::Error::other("missing field override class"))?;
     for name in names.split_whitespace() {
@@ -100,7 +100,8 @@ pub fn generate_stubs() -> pyo3_stub_gen::Result<()> {
   // pyo3-stub-gen has no generic class metadata yet.
   let stub = module.format_with_config(false).replace(
     "@typing.final\nclass MaxOr:",
-    "_ValueT = typing.TypeVar(\"_ValueT\", int, float)\n\n@typing.final\nclass MaxOr(typing.Generic[_ValueT]):",
+    "_ValueT = typing.TypeVar(\"_ValueT\", bound=pint.Quantity[typing.Any], covariant=True)\n\n@typing.final\nclass \
+     MaxOr(typing.Generic[_ValueT]):",
   );
   let package = Path::new(env!("CARGO_MANIFEST_DIR")).join("python/sakai");
   fs::write(package.join("_sakai.pyi"), stub)?;
