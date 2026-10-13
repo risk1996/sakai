@@ -121,6 +121,8 @@
       # PyO3 requires the shared libpython to resolve at link/runtime.
       env.PYO3_PYTHON = "${config.languages.python.package}/bin/python3";
       env.LD_LIBRARY_PATH = lib.makeLibraryPath [ config.languages.python.package ];
+      # Keep dependency downloads inside writable project state during checks.
+      env.UV_CACHE_DIR = "${config.devenv.state}/uv-cache";
       # Embedded-Python Rust tests need the same locked dependencies as Python.
       env.PYTHONPATH = "${config.env.UV_PROJECT_ENVIRONMENT}/lib/python${config.languages.python.package.pythonVersion}/site-packages";
       tasks."prepare:python".exec = "uv sync --project sakai-python --locked --no-install-project --group test";
