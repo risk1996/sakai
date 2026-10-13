@@ -8,6 +8,9 @@ use std::{
 use anyhow::{Context, Result};
 use fs2::FileExt;
 use reqwest::{Client, StatusCode, header::RETRY_AFTER};
+
+use crate::http;
+
 #[derive(Debug)]
 pub(super) struct Kernel {
   pub(super) name: &'static str,
@@ -86,7 +89,7 @@ impl Kernel {
     for attempt in 1..=Self::MAX_DOWNLOAD_ATTEMPTS {
       match Self::download_once(client, url, partial).await {
         | Ok(()) => return Ok(()),
-        | Err(error) if attempt < Self::MAX_DOWNLOAD_ATTEMPTS && Self::retryable(&error) => {
+        | Err(error) if attempt < Self::MAX_DOWNLOAD_ATTEMPTS && http::retryable(&error) => {
           let backoff = retry_delay.checked_mul(u32::from(attempt)).context("kernel retry delay overflow")?;
           let delay = RetryAfter::delay(&error, backoff);
           eprintln!(
@@ -126,29 +129,14 @@ impl Kernel {
     }
     Ok(())
   }
-
-  fn retryable(error: &anyhow::Error) -> bool {
-    match error.downcast_ref::<reqwest::Error>() {
-      | Some(error) => {
-        error.is_connect()
-          || error.is_request()
-          || error.is_timeout()
-          || error.is_body()
-          || error.is_decode()
-          || error.status().is_some_and(|status| status.is_server_error() || status == StatusCode::TOO_MANY_REQUESTS)
-      },
-      | None => false,
-    }
-  }
 }
 
 #[cfg(test)]
 mod tests {
   use std::{
     fs,
-    io::{BufRead, BufReader, ErrorKind, Write},
+    io::ErrorKind,
     net::TcpListener,
-    thread,
     time::{Duration, Instant, SystemTime},
   };
 
@@ -157,6 +145,10 @@ mod tests {
   use tempfile::tempdir;
 
   use super::{Kernel, RetryAfter};
+  use crate::http::{
+    self,
+    tests::{Response, Server},
+  };
 
   #[test]
   fn parses_retry_after_and_preserves_fallback() {
@@ -207,47 +199,21 @@ mod tests {
         | true => Duration::from_secs(1),
         | false => retry_delay * 3,
       };
-      let listener = TcpListener::bind("127.0.0.1:0")?;
-      listener.set_nonblocking(true)?;
-      let url = format!("http://{}/kernel", listener.local_addr()?);
-      let server = thread::spawn(move || -> Result<usize> {
-        for (status, body) in &responses {
-          let started = Instant::now();
-          let (mut stream, _) = loop {
-            match listener.accept() {
-              | Ok(connection) => break connection,
-              | Err(error) if error.kind() == ErrorKind::WouldBlock && started.elapsed() < Duration::from_secs(5) => {
-                thread::sleep(Duration::from_millis(1))
-              },
-              | Err(error) => return Err(error.into()),
-            }
-          };
-          stream.set_nonblocking(false)?;
-          stream.set_read_timeout(Some(Duration::from_secs(5)))?;
-          let mut request = BufReader::new(&mut stream);
-          loop {
-            let mut line = String::new();
-            ensure!(request.read_line(&mut line)? > 0, "incomplete HTTP request");
-            if line == "\r\n" {
-              break;
-            }
-          }
-          write!(stream, "HTTP/1.1 {status}\r\nContent-Length: 6\r\nConnection: close\r\n\r\n{body}")?;
-        }
-        Ok(responses.len())
-      });
+      let responses =
+        responses.into_iter().map(|(status, body)| Response::Reply { status, body, content_length: 6 }).collect();
+      let server = Server::start("/kernel", responses)?;
       let directory = tempdir()?;
       let partial = directory.path().join("kernel.partial");
       fs::write(&partial, "stale incomplete response")?;
       let client = Client::builder().timeout(Duration::from_secs(5)).build()?;
       let started = Instant::now();
-      let result = Kernel::download(&client, &url, &partial, retry_delay).await;
+      let result = Kernel::download(&client, &server.url, &partial, retry_delay).await;
       ensure!(started.elapsed() >= minimum_delay, "retry backoff or server's Retry-After interval was ignored");
       ensure!(result.is_ok() == expected_body.is_some(), "unexpected download result: {result:?}");
       if let Some(expected) = expected_body {
         ensure!(fs::read_to_string(&partial)? == expected, "retry did not replace partial download");
       }
-      let requests = server.join().map_err(|payload| anyhow::anyhow!("server panicked: {payload:?}"))??;
+      let requests = server.finish()?;
       ensure!(requests == expected_requests, "unexpected request count");
     }
     Ok(())
@@ -263,9 +229,9 @@ mod tests {
     let result = Kernel::download(&client, &url, &directory.path().join("kernel.partial"), Duration::ZERO).await;
     let error = result.err().context("closed port must exhaust the retry budget")?;
     ensure!(error.to_string().contains("attempt 3/3"), "retry budget not exhausted");
-    ensure!(Kernel::retryable(&error), "connection error must be retryable");
+    ensure!(http::retryable(&error), "connection error must be retryable");
     ensure!(
-      !Kernel::retryable(&std::io::Error::from(ErrorKind::PermissionDenied).into()),
+      !http::retryable(&std::io::Error::from(ErrorKind::PermissionDenied).into()),
       "filesystem errors must not be retried"
     );
     Ok(())

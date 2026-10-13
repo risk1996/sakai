@@ -2,17 +2,20 @@ use std::{
   env,
   fs::{self, OpenOptions},
   io::Write,
-  path::{Path, PathBuf},
+  path::Path,
   process::Command,
   time::Duration,
 };
 
 use anyhow::{Context, Result, bail, ensure};
+use cargo_metadata::{Metadata, MetadataCommand};
 use clap::{Args, Subcommand};
 use reqwest::{Client, StatusCode};
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+
+use crate::http;
 
 /// Explicit release operations; package preparation never uploads a crate.
 #[derive(Debug, Args)]
@@ -42,20 +45,6 @@ enum ReleaseCommand {
   VerifyRegistry,
   /// Create GitHub release notes only after the registry upload is verified.
   GithubRelease,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "snake_case")]
-struct Metadata {
-  workspace_root: PathBuf,
-  target_directory: PathBuf,
-  packages: Vec<Package>,
-}
-
-#[derive(Debug, Deserialize)]
-struct Package {
-  name: String,
-  version: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -163,14 +152,13 @@ impl Release {
 
   /// Read locked Cargo metadata without resolving any registry credentials.
   fn metadata() -> Result<Metadata> {
-    serde_json::from_str(&Self::command("cargo", &["metadata", "--no-deps", "--format-version", "1", "--locked"])?)
-      .context("read workspace metadata")
+    MetadataCommand::new().no_deps().other_options(vec!["--locked".into()]).exec().context("read workspace metadata")
   }
 
   /// Check source/version constraints and retain a verified, dry-run archive.
   fn package(tag: Option<&str>) -> Result<Candidate> {
     let metadata = Self::metadata()?;
-    ensure!(env::current_dir()? == metadata.workspace_root, "run release tasks from the workspace root");
+    ensure!(env::current_dir()? == metadata.workspace_root.as_std_path(), "run release tasks from the workspace root");
     ensure!(
       Self::command("git", &["status", "--porcelain"])?.trim().is_empty(),
       "release candidates require a clean Git checkout"
@@ -203,8 +191,8 @@ impl Release {
       "Cargo packaging failed"
     );
     let archive = format!("sakai-{}.crate", package.version);
-    let sha256 = Self::checksum(&metadata.target_directory.join("package").join(&archive))?;
-    Ok(Candidate { version: package.version.clone(), tag: tag_name, commit, archive, sha256 })
+    let sha256 = Self::checksum(metadata.target_directory.join("package").join(&archive).as_std_path())?;
+    Ok(Candidate { version: package.version.to_string(), tag: tag_name, commit, archive, sha256 })
   }
 
   /// Save the candidate archive, source identity, checksum, and versioned notes.
@@ -302,7 +290,7 @@ impl Release {
         | Ok(None) => {
           bail!("published version did not appear in the crates.io API after {attempt}/{attempts} attempts")
         },
-        | Err(error) if attempt < attempts && Self::retryable_registry_error(&error) => {
+        | Err(error) if attempt < attempts && http::retryable(&error) => {
           eprintln!("registry verification attempt {attempt}/{attempts} failed: {error:#}; retrying");
         },
         | Err(error) => {
@@ -312,19 +300,6 @@ impl Release {
       tokio::time::sleep(retry_delay).await;
     }
     bail!("registry verification exhausted its attempt budget")
-  }
-
-  /// Retry transport failures, rate limiting, and server errors, not integrity failures.
-  fn retryable_registry_error(error: &anyhow::Error) -> bool {
-    match error.downcast_ref::<reqwest::Error>() {
-      | Some(error) => match error.status() {
-        | Some(status) => status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error(),
-        | None => {
-          error.is_connect() || error.is_request() || error.is_timeout() || error.is_body() || error.is_decode()
-        },
-      },
-      | None => false,
-    }
   }
 
   /// Require the existing immutable registry archive to be identical and unyanked.
@@ -391,17 +366,26 @@ impl Release {
 
 #[cfg(test)]
 mod tests {
-  use std::{
-    io::{BufRead, BufReader, ErrorKind, Write},
-    net::TcpListener,
-    thread,
-    time::{Duration, Instant},
-  };
+  use std::{io::ErrorKind, net::TcpListener, time::Duration};
 
   use anyhow::{Context, Result, ensure};
   use reqwest::Client;
 
   use super::{Candidate, RegistryVersion, Release};
+  use crate::http::{
+    self,
+    tests::{Response, Server},
+  };
+
+  fn candidate() -> Candidate {
+    Candidate {
+      version: "0.1.0".into(),
+      tag: "v0.1.0".into(),
+      commit: "commit".into(),
+      archive: "sakai-0.1.0.crate".into(),
+      sha256: "digest".into(),
+    }
+  }
 
   /// Canonical stable tags exclude ambiguous versions, branches, and prereleases.
   #[test]
@@ -431,13 +415,7 @@ mod tests {
   /// An existing upload is reusable only when its checksum matches and it is unyanked.
   #[test]
   fn registry_retry_requires_identical_unyanked_archive() {
-    let candidate = Candidate {
-      version: "0.1.0".into(),
-      tag: "v0.1.0".into(),
-      commit: "commit".into(),
-      archive: "sakai-0.1.0.crate".into(),
-      sha256: "digest".into(),
-    };
+    let candidate = candidate();
     for (checksum, yanked, valid) in [("digest", false, true), ("other", false, false), ("digest", true, false)] {
       let published = RegistryVersion { checksum: checksum.into(), yanked };
       assert_eq!(Release::matching_registry_version(&candidate, &published).is_ok(), valid);
@@ -463,47 +441,18 @@ mod tests {
       (vec![("200 OK", YANKED)], Some("yanked"), 1),
       (vec![("200 OK", "invalid JSON")], Some("attempt 1/3"), 1),
     ] {
-      let listener = TcpListener::bind("127.0.0.1:0")?;
-      listener.set_nonblocking(true)?;
-      let url = format!("http://{}/version", listener.local_addr()?);
-      let server = thread::spawn(move || -> Result<usize> {
-        for (status, body) in &responses {
-          let started = Instant::now();
-          let (mut stream, _) = loop {
-            match listener.accept() {
-              | Ok(connection) => break connection,
-              | Err(error) if error.kind() == ErrorKind::WouldBlock && started.elapsed() < Duration::from_secs(5) => {
-                thread::sleep(Duration::from_millis(1));
-              },
-              | Err(error) => return Err(error.into()),
-            }
-          };
-          stream.set_nonblocking(false)?;
-          stream.set_read_timeout(Some(Duration::from_secs(5)))?;
-          let mut request = BufReader::new(&mut stream);
-          loop {
-            let mut line = String::new();
-            ensure!(request.read_line(&mut line)? > 0, "incomplete HTTP request");
-            if line == "\r\n" {
-              break;
-            }
-          }
-          if *status != "disconnect" {
-            write!(stream, "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len())?;
-          }
-        }
-        Ok(responses.len())
-      });
-      let candidate = Candidate {
-        version: "0.1.0".into(),
-        tag: "v0.1.0".into(),
-        commit: "commit".into(),
-        archive: "sakai-0.1.0.crate".into(),
-        sha256: "digest".into(),
-      };
+      let responses = responses
+        .into_iter()
+        .map(|response| match response {
+          | ("disconnect", _) => Response::Disconnect,
+          | response => response.into(),
+        })
+        .collect();
+      let server = Server::start("/version", responses)?;
+      let candidate = candidate();
       let client = Client::builder().no_proxy().timeout(Duration::from_secs(5)).build()?;
-      let result = Release::verify_registry(&client, &url, &candidate, 3, Duration::ZERO).await;
-      let requests = server.join().map_err(|payload| anyhow::anyhow!("server panicked: {payload:?}"))??;
+      let result = Release::verify_registry(&client, &server.url, &candidate, 3, Duration::ZERO).await;
+      let requests = server.finish()?;
       ensure!(requests == expected_requests, "unexpected request count: {requests}");
       match expected_error {
         | Some(message) => ensure!(
@@ -523,21 +472,15 @@ mod tests {
     let url = format!("http://{}/version", listener.local_addr()?);
     drop(listener);
     let client = Client::builder().no_proxy().timeout(Duration::from_secs(1)).build()?;
-    let candidate = Candidate {
-      version: "0.1.0".into(),
-      tag: "v0.1.0".into(),
-      commit: "commit".into(),
-      archive: "sakai-0.1.0.crate".into(),
-      sha256: "digest".into(),
-    };
+    let candidate = candidate();
     let error = Release::verify_registry(&client, &url, &candidate, 3, Duration::ZERO)
       .await
       .err()
       .context("closed port must fail")?;
     ensure!(error.to_string().contains("attempt 3/3"), "retry budget not exhausted");
-    ensure!(Release::retryable_registry_error(&error), "connection errors must be retryable");
+    ensure!(http::retryable(&error), "connection errors must be retryable");
     ensure!(
-      !Release::retryable_registry_error(&std::io::Error::from(ErrorKind::PermissionDenied).into()),
+      !http::retryable(&std::io::Error::from(ErrorKind::PermissionDenied).into()),
       "local errors must not be retried"
     );
     Ok(())
@@ -546,30 +489,13 @@ mod tests {
   /// A timed-out registry request is retryable rather than an integrity failure.
   #[tokio::test]
   async fn classifies_registry_timeout_as_transient() -> Result<()> {
-    let listener = TcpListener::bind("127.0.0.1:0")?;
-    listener.set_nonblocking(true)?;
-    let url = format!("http://{}/version", listener.local_addr()?);
-    let server = thread::spawn(move || -> Result<()> {
-      let started = Instant::now();
-      let (stream, _) = loop {
-        match listener.accept() {
-          | Ok(connection) => break connection,
-          | Err(error) if error.kind() == ErrorKind::WouldBlock && started.elapsed() < Duration::from_secs(5) => {
-            thread::sleep(Duration::from_millis(1));
-          },
-          | Err(error) => return Err(error.into()),
-        }
-      };
-      thread::sleep(Duration::from_millis(200));
-      drop(stream);
-      Ok(())
-    });
+    let server = Server::start("/version", vec![Response::Stall(Duration::from_millis(200))])?;
     let client = Client::builder().no_proxy().timeout(Duration::from_millis(100)).build()?;
-    let result = client.get(url).send().await;
-    server.join().map_err(|payload| anyhow::anyhow!("server panicked: {payload:?}"))??;
+    let result = client.get(&server.url).send().await;
+    ensure!(server.finish()? == 1, "timeout test must accept one request");
     let error = result.err().context("unresponsive server must time out")?;
     ensure!(error.is_timeout(), "request failed for a reason other than timeout");
-    ensure!(Release::retryable_registry_error(&error.into()), "timeouts must be retried");
+    ensure!(http::retryable(&error.into()), "timeouts must be retried");
     Ok(())
   }
 }

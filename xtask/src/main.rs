@@ -3,6 +3,7 @@ use clap::{Parser, Subcommand};
 use release::Release;
 use vmtest::{Profile, Vmtest};
 
+mod http;
 mod release;
 mod vmtest;
 
