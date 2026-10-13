@@ -35,13 +35,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
-      - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
-        with:
-          name: devenv
-          skipPush: true
-      - name: Install the locked devenv
-        run: nix profile add "github:NixOS/nixpkgs/$(jq -r '.nodes.nixpkgs.locked.rev' devenv.lock)#devenv"
+      - uses: ./.github/actions/setup-devenv
       - name: Require a matching stable tag on main and dry-run the upload
         run: devenv shell -- rtk cargo xtask release prepare --tag "$RELEASE_TAG"
       - name: Preserve the checked candidate, checksum, and release notes
@@ -70,13 +64,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
-      - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
-        with:
-          name: devenv
-          skipPush: true
-      - name: Install the locked devenv
-        run: nix profile add "github:NixOS/nixpkgs/$(jq -r '.nodes.nixpkgs.locked.rev' devenv.lock)#devenv"
+      - uses: ./.github/actions/setup-devenv
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           artifact-ids: ${{ needs.prepare.outputs.artifact-id }}
@@ -111,13 +99,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
-      - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
-        with:
-          name: devenv
-          skipPush: true
-      - name: Install the locked devenv
-        run: nix profile add "github:NixOS/nixpkgs/$(jq -r '.nodes.nixpkgs.locked.rev' devenv.lock)#devenv"
+      - uses: ./.github/actions/setup-devenv
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           artifact-ids: ${{ needs.prepare.outputs.artifact-id }}

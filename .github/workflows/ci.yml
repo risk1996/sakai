@@ -34,15 +34,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: cachix/install-nix-action@v31
-      - uses: cachix/cachix-action@v17
-        with:
-          name: devenv
-          skipPush: true
-      - name: Install devenv from the locked nixpkgs revision
-        run: |
-          nixpkgs_rev=$(jq -r '.nodes.nixpkgs.locked.rev' devenv.lock)
-          nix profile add "github:NixOS/nixpkgs/$nixpkgs_rev#devenv"
+      - uses: ./.github/actions/setup-devenv
       - name: Audit the lockfile and check dependency policy
         run: devenv tasks run check:security
 
@@ -54,15 +46,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: cachix/install-nix-action@v31
-      - uses: cachix/cachix-action@v17
-        with:
-          name: devenv
-          skipPush: true
-      - name: Install devenv from the locked nixpkgs revision
-        run: |
-          nixpkgs_rev=$(jq -r '.nodes.nixpkgs.locked.rev' devenv.lock)
-          nix profile add "github:NixOS/nixpkgs/$nixpkgs_rev#devenv"
+      - uses: ./.github/actions/setup-devenv
       - name: Assert Pod resources using the installed Python bindings
         run: devenv tasks run check:kubernetes
 
@@ -84,15 +68,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
           # Prefer stable 3.15, falling back until GitHub publishes its build.
           allow-prereleases: ${{ matrix.python-version == '3.15' }}
-      - uses: cachix/install-nix-action@v31
-      - uses: cachix/cachix-action@v17
-        with:
-          name: devenv
-          skipPush: true
-      - name: Install devenv from the locked nixpkgs revision
-        run: |
-          nixpkgs_rev=$(jq -r '.nodes.nixpkgs.locked.rev' devenv.lock)
-          nix profile add "github:NixOS/nixpkgs/$nixpkgs_rev#devenv"
+      - uses: ./.github/actions/setup-devenv
       - name: Build Linux wheel and source distribution
         run: |
           python_executable="$(command -v python)"
@@ -100,18 +76,14 @@ jobs:
           devenv --profile python shell -- env -u LD_LIBRARY_PATH PYO3_PYTHON="$python_executable" maturin build --manifest-path sakai-python/Cargo.toml --interpreter "$python_executable" --locked --out dist
           devenv --profile python shell -- maturin sdist --manifest-path sakai-python/Cargo.toml --out dist
           compgen -G 'dist/*-cp311-abi3-*.whl'
-      - name: Test installed wheel outside checkout
+      - name: Test installed wheel and rebuilt source distribution outside checkout
         run: |
-          python -m venv "$RUNNER_TEMP/sakai-wheel"
-          "$RUNNER_TEMP/sakai-wheel/bin/python" -m pip install dist/*.whl
-          cd "$RUNNER_TEMP"
-          "$RUNNER_TEMP/sakai-wheel/bin/python" -m unittest discover -s "$GITHUB_WORKSPACE/sakai-python/tests"
-      - name: Rebuild and test installed source distribution
-        run: |
-          python -m venv "$RUNNER_TEMP/sakai-sdist"
-          "$RUNNER_TEMP/sakai-sdist/bin/python" -m pip install --no-cache-dir dist/*.tar.gz
-          cd "$RUNNER_TEMP"
-          "$RUNNER_TEMP/sakai-sdist/bin/python" -m unittest discover -s "$GITHUB_WORKSPACE/sakai-python/tests"
+          for extension in whl tar.gz; do
+            venv="$RUNNER_TEMP/sakai-$extension"
+            python -m venv "$venv"
+            "$venv/bin/python" -m pip install --no-cache-dir dist/*."$extension"
+            (cd "$RUNNER_TEMP" && "$venv/bin/python" -m unittest discover -s "$GITHUB_WORKSPACE/sakai-python/tests")
+          done
 
   checks:
     name: Tests and lints
@@ -123,43 +95,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # https://devenv.sh/integrations/github-actions/
-      - uses: cachix/install-nix-action@v31
+      - uses: ./.github/actions/setup-devenv
         with:
-          extra_nix_config: |
-            keep-env-derivations = true
-            keep-outputs = true
-
-      - name: Cache Nix store and fetch metadata
-        uses: nix-community/cache-nix-action@v7
-        with:
-          primary-key: nix-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('devenv.lock', 'devenv.yaml', '**/*.nix', '.github/workflows/ci.yml') }}
-          restore-prefixes-first-match: nix-v1-${{ runner.os }}-${{ runner.arch }}-
-          paths: ~/.cache/nix
-
-      - uses: cachix/cachix-action@v17
-        with:
-          name: devenv
-          skipPush: true
-
-      - name: Install devenv from the locked nixpkgs revision
-        run: |
-          nixpkgs_rev=$(jq -r '.nodes.nixpkgs.locked.rev' devenv.lock)
-          nix profile add "github:NixOS/nixpkgs/$nixpkgs_rev#devenv"
-
-      # Keep workspace artifacts as well as dependencies. New commits save a
-      # fresh snapshot, reusing the closest dependency/toolchain match first.
-      - name: Cache Cargo downloads and compiled targets
-        uses: actions/cache@v6
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: cargo-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('devenv.lock', 'devenv.yaml', '**/*.nix', '.github/workflows/ci.yml') }}-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}-${{ github.sha }}
-          restore-keys: |
-            cargo-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('devenv.lock', 'devenv.yaml', '**/*.nix', '.github/workflows/ci.yml') }}-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}-
-            cargo-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('devenv.lock', 'devenv.yaml', '**/*.nix', '.github/workflows/ci.yml') }}-
+          cache-nix: 'true'
+          cache-cargo: 'true'
 
       - name: Run Rust and Python checks
         run: devenv --profile python test
@@ -176,10 +115,6 @@ jobs:
           rustup toolchain install "$RUST_VERSION" --profile minimal
           echo "RUSTC=$(rustup which --toolchain "$RUST_VERSION" rustc)" >> "$GITHUB_ENV"
           echo "RUSTDOC=$(rustup which --toolchain "$RUST_VERSION" rustdoc)" >> "$GITHUB_ENV"
-      - name: Check all crate targets and features on MSRV
-        env:
-          RUST_VERSION: ${{ steps.msrv.outputs.version }}
-        run: rustup run "$RUST_VERSION" cargo check -p sakai --all-targets --all-features --locked
       - name: Test all crate targets and features on MSRV
         env:
           RUST_VERSION: ${{ steps.msrv.outputs.version }}
@@ -197,26 +132,9 @@ jobs:
       kernels: ${{ steps.matrix.outputs.kernels }}
     steps:
       - uses: actions/checkout@v7
-      - uses: cachix/install-nix-action@v31
-      - uses: cachix/cachix-action@v17
+      - uses: ./.github/actions/setup-devenv
         with:
-          name: devenv
-          skipPush: true
-      - name: Install devenv from the locked nixpkgs revision
-        run: |
-          nixpkgs_rev=$(jq -r '.nodes.nixpkgs.locked.rev' devenv.lock)
-          nix profile add "github:NixOS/nixpkgs/$nixpkgs_rev#devenv"
-      - name: Cache Cargo downloads and compiled targets
-        uses: actions/cache@v6
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: cargo-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('devenv.lock', 'devenv.yaml', '**/*.nix', '.github/workflows/ci.yml') }}-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}-${{ github.sha }}
-          restore-keys: |
-            cargo-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('devenv.lock', 'devenv.yaml', '**/*.nix', '.github/workflows/ci.yml') }}-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}-
-            cargo-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('devenv.lock', 'devenv.yaml', '**/*.nix', '.github/workflows/ci.yml') }}-
+          cache-cargo: 'true'
       - name: Build and stage host test and wrapper
         run: |
           devenv shell -- cargo build --locked --package xtask
@@ -250,12 +168,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: cachix/install-nix-action@v31
-
-      - name: Install devenv from the locked nixpkgs revision
-        run: |
-          nixpkgs_rev=$(jq -r '.nodes.nixpkgs.locked.rev' devenv.lock)
-          nix profile add "github:NixOS/nixpkgs/$nixpkgs_rev#devenv"
+      - uses: ./.github/actions/setup-devenv
+        with:
+          binary-cache: 'false'
 
       - name: Download host binaries
         uses: actions/download-artifact@v8

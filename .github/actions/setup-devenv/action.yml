@@ -1,0 +1,48 @@
+name: Set up the locked devenv
+description: Install Nix and devenv, optionally restoring the existing CI caches.
+inputs:
+  cache-nix:
+    description: Retain and cache the Nix store and fetch metadata.
+    default: 'false'
+  cache-cargo:
+    description: Cache Cargo downloads and workspace targets.
+    default: 'false'
+  binary-cache:
+    description: Configure the public devenv binary cache.
+    default: 'true'
+runs:
+  using: composite
+  steps:
+    - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
+      with:
+        extra_nix_config: |
+          keep-env-derivations = ${{ inputs.cache-nix }}
+          keep-outputs = ${{ inputs.cache-nix }}
+    - name: Cache Nix store and fetch metadata
+      if: inputs.cache-nix == 'true'
+      uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7
+      with:
+        primary-key: nix-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('devenv.lock', 'devenv.yaml', '**/*.nix', '.github/workflows/ci.yml', '.github/actions/**/*.yml') }}
+        restore-prefixes-first-match: nix-v1-${{ runner.os }}-${{ runner.arch }}-
+        paths: ~/.cache/nix
+    - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
+      if: inputs.binary-cache == 'true'
+      with:
+        name: devenv
+        skipPush: true
+    - name: Install devenv from the locked nixpkgs revision
+      shell: bash
+      run: nix profile add "github:NixOS/nixpkgs/$(jq -r '.nodes.nixpkgs.locked.rev' devenv.lock)#devenv"
+    # New commits save workspace artifacts, restoring dependencies/toolchains first.
+    - name: Cache Cargo downloads and compiled targets
+      if: inputs.cache-cargo == 'true'
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: cargo-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('devenv.lock', 'devenv.yaml', '**/*.nix', '.github/workflows/ci.yml', '.github/actions/**/*.yml') }}-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}-${{ github.sha }}
+        restore-keys: |
+          cargo-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('devenv.lock', 'devenv.yaml', '**/*.nix', '.github/workflows/ci.yml', '.github/actions/**/*.yml') }}-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}-
+          cargo-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('devenv.lock', 'devenv.yaml', '**/*.nix', '.github/workflows/ci.yml', '.github/actions/**/*.yml') }}-
