@@ -2,6 +2,8 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
+#[cfg(test)]
+use pyo3::types::PyDict;
 use pyo3::{
   prelude::*,
   types::{IntoPyDict, PyMappingProxy},
@@ -438,7 +440,7 @@ mod tests {
   use assertables::{assert_err, assert_in_delta, assert_ok};
   use pyo3::{
     exceptions::{PyAttributeError, PyTypeError, PyValueError},
-    types::{PyDict, PyInt},
+    types::PyInt,
   };
 
   use super::*;

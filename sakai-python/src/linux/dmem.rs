@@ -2,6 +2,8 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
+#[cfg(test)]
+use pyo3::types::PyDict;
 use pyo3::{
   prelude::*,
   types::{IntoPyDict, PyMappingProxy},
@@ -216,10 +218,7 @@ impl DmemLimits {
 #[cfg(test)]
 mod tests {
   use assertables::{assert_err, assert_ok};
-  use pyo3::{
-    exceptions::{PyAttributeError, PyTypeError, PyValueError},
-    types::PyDict,
-  };
+  use pyo3::exceptions::{PyAttributeError, PyTypeError, PyValueError};
 
   use super::*;
 
