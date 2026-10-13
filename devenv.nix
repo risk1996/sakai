@@ -121,6 +121,11 @@
       # PyO3 requires the shared libpython to resolve at link/runtime.
       env.PYO3_PYTHON = "${config.languages.python.package}/bin/python3";
       env.LD_LIBRARY_PATH = lib.makeLibraryPath [ config.languages.python.package ];
+      # Embedded-Python Rust tests need the same locked dependencies as Python.
+      env.PYTHONPATH = "${config.env.UV_PROJECT_ENVIRONMENT}/lib/python${config.languages.python.package.pythonVersion}/site-packages";
+      tasks."prepare:python".exec = "uv sync --project sakai-python --locked --no-install-project --group test";
+      tasks."check:test".after = [ "prepare:python" ];
+      tasks."check:ty".after = [ "prepare:python" ];
 
       tasks."devenv:enterTest".after = lib.optionals config.devenv.isTesting [
         "check:ruff"
@@ -129,7 +134,7 @@
       ];
       tasks."check:ruff".exec = "ruff check .";
       tasks."check:ruff-format".exec = "ruff format --check .";
-      tasks."check:ty".exec = "ty check --project sakai-python .";
+      tasks."check:ty".exec = "ty check --project sakai-python --python ${config.env.UV_PROJECT_ENVIRONMENT}/bin/python .";
       tasks."generate:stubs".exec = ''
         set -e
         cargo run --package sakai-python --features stubs --bin stub_gen --locked

@@ -13,9 +13,9 @@ use sakai::v2::io::{
   IoDeviceCostQos as CoreIoDeviceCostQos, IoDeviceMax as CoreIoDeviceMax, IoDeviceStat as CoreIoDeviceStat,
   IoLatency as CoreIoLatency, IoMax as CoreIoMax, IoStat as CoreIoStat, IoWeight as CoreIoWeight,
 };
-use uom::si::{frequency::hertz, information::byte, information_rate::byte_per_second, ratio::ratio, time::nanosecond};
 
 use super::{MaxOr, Pressure, PythonError, limit::PythonLimitValue, mapping::mapping};
+use crate::quantity::Quantity;
 
 type DeviceKey = (u32, u32);
 
@@ -49,7 +49,7 @@ impl IoReader {
     PythonError::read(py, &self.owner, |owner| owner.io().weight()).map(Into::into)
   }
 
-  /// Read per-device bandwidth and IOPS limits as MaxOr[int] values.
+  /// Read per-device bandwidth and IOPS limits as MaxOr[pint.Quantity[int]] values.
   fn max(&self, py: Python<'_>) -> PyResult<IoMax> {
     PythonError::read(py, &self.owner, |owner| owner.io().max()).map(Into::into)
   }
@@ -101,7 +101,7 @@ impl From<CoreIoStat> for IoStat {
 impl IoStat {
   /// Read-only mapping of (major, minor) keys to immutable device counters.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[tuple[int, int], IoDeviceStat]", imports = ("collections.abc",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[tuple[int, int], IoDeviceStat]", imports = ("collections.abc", "pint",)))]
   fn devices(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     mapping(py, &self.devices, |value| Py::new(py, value.clone()))
   }
@@ -114,80 +114,80 @@ impl IoStat {
 pub(super) struct IoDeviceStat {
   /// Cumulative bytes read, or None when omitted.
   #[pyo3(get)]
-  read_bytes: Option<u64>,
+  read_bytes: Option<Quantity<sakai::Bytes>>,
   /// Cumulative bytes written, or None when omitted.
   #[pyo3(get)]
-  write_bytes: Option<u64>,
+  write_bytes: Option<Quantity<sakai::Bytes>>,
   /// Cumulative bytes discarded, or None when omitted by older kernels.
   #[pyo3(get)]
-  discard_bytes: Option<u64>,
+  discard_bytes: Option<Quantity<sakai::Bytes>>,
   /// Cumulative read operation count, or None when omitted.
   #[pyo3(get)]
-  read_operations: Option<u64>,
+  read_operations: Option<Quantity<sakai::Count>>,
   /// Cumulative write operation count, or None when omitted.
   #[pyo3(get)]
-  write_operations: Option<u64>,
+  write_operations: Option<Quantity<sakai::Count>>,
   /// Cumulative discard operation count, or None when omitted by older kernels.
   #[pyo3(get)]
-  discard_operations: Option<u64>,
+  discard_operations: Option<Quantity<sakai::Count>>,
   /// Delay-control indicator; -1 means fixed delay, nonnegative values count scaled-delay users.
   #[pyo3(get)]
   use_delay: Option<i32>,
   /// Current artificial delay in nanoseconds, not cumulative stall time.
   #[pyo3(get)]
-  delay_ns: Option<u64>,
+  delay: Option<Quantity<sakai::Time>>,
   /// Queue-depth limit, or max when unrestricted; None means the field was omitted.
   depth: Option<sakai::MaxOr<sakai::Count>>,
   /// Rotational-device exponential moving average latency in nanoseconds.
   #[pyo3(get)]
-  average_latency_ns: Option<u64>,
+  average_latency: Option<Quantity<sakai::Time>>,
   /// Rotational-device sampling window in nanoseconds, converted from milliseconds.
   #[pyo3(get)]
-  latency_window_ns: Option<u64>,
+  latency_window: Option<Quantity<sakai::Time>>,
   /// Non-rotational I/Os exceeding their target in the current window; can reset.
   #[pyo3(get)]
-  missed: Option<u64>,
+  missed: Option<Quantity<sakai::Count>>,
   /// Non-rotational I/Os accounted in the current window; can reset.
   #[pyo3(get)]
-  total: Option<u64>,
+  total: Option<Quantity<sakai::Count>>,
   /// Cumulative hierarchical modeled I/O usage in nanoseconds, distinct from actual service time.
   #[pyo3(get)]
-  cost_usage_ns: Option<u64>,
+  cost_usage: Option<Quantity<sakai::Time>>,
   /// Cumulative hierarchical I/O cost wait time in nanoseconds, when debug statistics are enabled.
   #[pyo3(get)]
-  cost_wait_ns: Option<u64>,
+  cost_wait: Option<Quantity<sakai::Time>>,
   /// Cumulative hierarchical time in I/O cost debt in nanoseconds, when debug statistics are enabled.
   #[pyo3(get)]
-  cost_indebt_ns: Option<u64>,
+  cost_indebt: Option<Quantity<sakai::Time>>,
   /// Cumulative hierarchical I/O cost delay time in nanoseconds, when debug statistics are enabled.
   #[pyo3(get)]
-  cost_indelay_ns: Option<u64>,
+  cost_indelay: Option<Quantity<sakai::Time>>,
   /// Root-only device virtual-time rate as a ratio; kernel 150% becomes 1.5.
   #[pyo3(get)]
-  cost_vrate: Option<f64>,
+  cost_vrate: Option<Quantity<sakai::Ratio>>,
 }
 
 impl From<CoreIoDeviceStat> for IoDeviceStat {
   fn from(value: CoreIoDeviceStat) -> Self {
     Self {
-      read_bytes: value.read_bytes().map(|value| value.get::<byte>()),
-      write_bytes: value.write_bytes().map(|value| value.get::<byte>()),
-      discard_bytes: value.discard_bytes().map(|value| value.get::<byte>()),
-      read_operations: value.read_operations().map(|value| value.value),
-      write_operations: value.write_operations().map(|value| value.value),
-      discard_operations: value.discard_operations().map(|value| value.value),
+      read_bytes: value.read_bytes().map(|value| value.into()),
+      write_bytes: value.write_bytes().map(|value| value.into()),
+      discard_bytes: value.discard_bytes().map(|value| value.into()),
+      read_operations: value.read_operations().map(|value| value.into()),
+      write_operations: value.write_operations().map(|value| value.into()),
+      discard_operations: value.discard_operations().map(|value| value.into()),
       use_delay: value.delay_usage().map(|value| value.into_inner()),
-      delay_ns: value.delay().map(|value| value.get::<nanosecond>()),
+      delay: value.delay().map(|value| value.into()),
       depth: value.depth(),
-      average_latency_ns: value.average_latency().map(|value| value.get::<nanosecond>()),
-      latency_window_ns: value.latency_window().map(|value| value.get::<nanosecond>()),
-      missed: value.missed().map(|value| value.value),
-      total: value.total().map(|value| value.value),
-      cost_usage_ns: value.cost_usage().map(|value| value.get::<nanosecond>()),
-      cost_wait_ns: value.cost_wait().map(|value| value.get::<nanosecond>()),
-      cost_indebt_ns: value.cost_indebt().map(|value| value.get::<nanosecond>()),
-      cost_indelay_ns: value.cost_indelay().map(|value| value.get::<nanosecond>()),
-      cost_vrate: value.cost_vrate().map(|value| value.get::<ratio>()),
+      average_latency: value.average_latency().map(|value| value.into()),
+      latency_window: value.latency_window().map(|value| value.into()),
+      missed: value.missed().map(|value| value.into()),
+      total: value.total().map(|value| value.into()),
+      cost_usage: value.cost_usage().map(|value| value.into()),
+      cost_wait: value.cost_wait().map(|value| value.into()),
+      cost_indebt: value.cost_indebt().map(|value| value.into()),
+      cost_indelay: value.cost_indelay().map(|value| value.into()),
+      cost_vrate: value.cost_vrate().map(|value| value.into()),
     }
   }
 }
@@ -198,10 +198,8 @@ impl From<CoreIoDeviceStat> for IoDeviceStat {
 impl IoDeviceStat {
   /// Queue-depth limit, or max when unrestricted; None means the field was omitted.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "MaxOr[int] | None"))]
-  fn depth(&self) -> Option<MaxOr> {
-    self.depth.map(|value| MaxOr::from_value(value, |value| PythonLimitValue::Integer(value.value)))
-  }
+  #[gen_stub(override_return_type(type_repr = "MaxOr[pint.Quantity[int]] | None"))]
+  fn depth(&self) -> Option<MaxOr> { self.depth.map(MaxOr::from_count) }
 }
 
 /// Immutable snapshot of relative I/O weights, each from 1 through 10,000.
@@ -233,7 +231,7 @@ impl From<CoreIoWeight> for IoWeight {
 impl IoWeight {
   /// Read-only mapping of (major, minor) device keys to numeric weight overrides.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[tuple[int, int], int]", imports = ("collections.abc",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[tuple[int, int], int]", imports = ("collections.abc", "pint",)))]
   fn devices(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     Ok(PyMappingProxy::new(py, (&self.devices).into_py_dict(py)?.as_mapping()).unbind())
   }
@@ -259,7 +257,7 @@ impl From<CoreIoMax> for IoMax {
 impl IoMax {
   /// Read-only mapping of (major, minor) keys to immutable per-device limits.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[tuple[int, int], IoDeviceMax]", imports = ("collections.abc",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[tuple[int, int], IoDeviceMax]", imports = ("collections.abc", "pint",)))]
   fn devices(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     mapping(py, &self.devices, |value| Py::new(py, value.clone()))
   }
@@ -271,9 +269,9 @@ impl IoMax {
 #[derive(Clone)]
 pub(super) struct IoDeviceMax {
   /// Read bandwidth limit in bytes per second, or max.
-  read_bps: MaxOr,
+  read_bandwidth: MaxOr,
   /// Write bandwidth limit in bytes per second, or max.
-  write_bps: MaxOr,
+  write_bandwidth: MaxOr,
   /// Read operation limit in operations per second, or max.
   read_iops: MaxOr,
   /// Write operation limit in operations per second, or max.
@@ -283,14 +281,10 @@ pub(super) struct IoDeviceMax {
 impl From<CoreIoDeviceMax> for IoDeviceMax {
   fn from(value: CoreIoDeviceMax) -> Self {
     Self {
-      read_bps: MaxOr::from_value(value.read_bandwidth(), |value| {
-        PythonLimitValue::Integer(value.get::<byte_per_second>())
-      }),
-      write_bps: MaxOr::from_value(value.write_bandwidth(), |value| {
-        PythonLimitValue::Integer(value.get::<byte_per_second>())
-      }),
-      read_iops: MaxOr::from_value(value.read_iops(), |value| PythonLimitValue::Integer(value.get::<hertz>())),
-      write_iops: MaxOr::from_value(value.write_iops(), |value| PythonLimitValue::Integer(value.get::<hertz>())),
+      read_bandwidth: MaxOr::from_value(value.read_bandwidth(), |value| PythonLimitValue::Bandwidth(value.into())),
+      write_bandwidth: MaxOr::from_value(value.write_bandwidth(), |value| PythonLimitValue::Bandwidth(value.into())),
+      read_iops: MaxOr::from_value(value.read_iops(), |value| PythonLimitValue::Operations(value.into())),
+      write_iops: MaxOr::from_value(value.write_iops(), |value| PythonLimitValue::Operations(value.into())),
     }
   }
 }
@@ -304,12 +298,12 @@ impl From<CoreIoDeviceMax> for IoDeviceMax {
 #[pyclass(frozen, module = "sakai._sakai")]
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct IoLatency {
-  targets_ns: BTreeMap<DeviceKey, u64>,
+  targets: BTreeMap<DeviceKey, Quantity<sakai::Time>>,
 }
 
 impl From<CoreIoLatency> for IoLatency {
   fn from(value: CoreIoLatency) -> Self {
-    Self { targets_ns: IoValues::devices(value.devices(), |value| value.as_ref().get::<nanosecond>()) }
+    Self { targets: IoValues::devices(value.devices(), |value| value.as_ref().into()) }
   }
 }
 
@@ -319,9 +313,9 @@ impl From<CoreIoLatency> for IoLatency {
 impl IoLatency {
   /// Read-only mapping of (major, minor) device keys to latency targets in nanoseconds.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[tuple[int, int], int]", imports = ("collections.abc",)))]
-  fn targets_ns(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
-    Ok(PyMappingProxy::new(py, self.targets_ns.clone().into_py_dict(py)?.as_mapping()).unbind())
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[tuple[int, int], pint.Quantity[int]]", imports = ("collections.abc", "pint",)))]
+  fn targets(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
+    Ok(PyMappingProxy::new(py, self.targets.clone().into_py_dict(py)?.as_mapping()).unbind())
   }
 }
 
@@ -347,7 +341,7 @@ impl From<CoreIoCostQos> for IoCostQos {
 impl IoCostQos {
   /// Read-only mapping of (major, minor) device keys to QoS parameters.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[tuple[int, int], IoDeviceCostQos]", imports = ("collections.abc",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[tuple[int, int], IoDeviceCostQos]", imports = ("collections.abc", "pint",)))]
   fn devices(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     mapping(py, &self.devices, |value| Py::new(py, value.clone()))
   }
@@ -366,17 +360,17 @@ pub(super) struct IoDeviceCostQos {
   /// Parameter selection mode: auto or user.
   control: String,
   /// Read completion latency percentile, from zero to one; zero disables its use.
-  read_percentile: f64,
+  read_percentile: Quantity<sakai::Ratio>,
   /// Read latency threshold in nanoseconds.
-  read_latency_ns: u64,
+  read_latency: Quantity<sakai::Time>,
   /// Write completion latency percentile, from zero to one; zero disables its use.
-  write_percentile: f64,
+  write_percentile: Quantity<sakai::Ratio>,
   /// Write latency threshold in nanoseconds.
-  write_latency_ns: u64,
+  write_latency: Quantity<sakai::Time>,
   /// Minimum I/O issue-rate scaling, from 0.01 through 100.
-  min_scaling: f64,
+  min_scaling: Quantity<sakai::Ratio>,
   /// Maximum I/O issue-rate scaling, from 0.01 through 100.
-  max_scaling: f64,
+  max_scaling: Quantity<sakai::Ratio>,
 }
 
 impl From<CoreIoDeviceCostQos> for IoDeviceCostQos {
@@ -384,12 +378,12 @@ impl From<CoreIoDeviceCostQos> for IoDeviceCostQos {
     Self {
       enabled: value.enabled(),
       control: value.control().to_string(),
-      read_percentile: value.read_percentile().get::<ratio>(),
-      read_latency_ns: value.read_latency().get::<nanosecond>(),
-      write_percentile: value.write_percentile().get::<ratio>(),
-      write_latency_ns: value.write_latency().get::<nanosecond>(),
-      min_scaling: value.min_scaling().get::<ratio>(),
-      max_scaling: value.max_scaling().get::<ratio>(),
+      read_percentile: value.read_percentile().into(),
+      read_latency: value.read_latency().into(),
+      write_percentile: value.write_percentile().into(),
+      write_latency: value.write_latency().into(),
+      min_scaling: value.min_scaling().into(),
+      max_scaling: value.max_scaling().into(),
     }
   }
 }
@@ -416,7 +410,7 @@ impl From<CoreIoCostModel> for IoCostModel {
 impl IoCostModel {
   /// Read-only mapping of (major, minor) device keys to cost model parameters.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[tuple[int, int], IoDeviceCostModel]", imports = ("collections.abc",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[tuple[int, int], IoDeviceCostModel]", imports = ("collections.abc", "pint",)))]
   fn devices(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     mapping(py, &self.devices, |value| Py::new(py, value.clone()))
   }
@@ -434,17 +428,17 @@ pub(super) struct IoDeviceCostModel {
   /// Model name: linear.
   model: String,
   /// Model's maximum sequential read throughput in bytes per second.
-  read_bps: u64,
+  read_bandwidth: Quantity<sakai::BytesPerSecond>,
   /// Model's maximum sequential 4 KiB read operations per second.
-  read_sequential_iops: u64,
+  read_sequential_iops: Quantity<sakai::OperationsPerSecond>,
   /// Model's maximum random 4 KiB read operations per second.
-  read_random_iops: u64,
+  read_random_iops: Quantity<sakai::OperationsPerSecond>,
   /// Model's maximum sequential write throughput in bytes per second.
-  write_bps: u64,
+  write_bandwidth: Quantity<sakai::BytesPerSecond>,
   /// Model's maximum sequential 4 KiB write operations per second.
-  write_sequential_iops: u64,
+  write_sequential_iops: Quantity<sakai::OperationsPerSecond>,
   /// Model's maximum random 4 KiB write operations per second.
-  write_random_iops: u64,
+  write_random_iops: Quantity<sakai::OperationsPerSecond>,
 }
 
 impl From<CoreIoDeviceCostModel> for IoDeviceCostModel {
@@ -452,12 +446,12 @@ impl From<CoreIoDeviceCostModel> for IoDeviceCostModel {
     Self {
       control: value.control().to_string(),
       model: value.model().to_string(),
-      read_bps: value.read_bandwidth().get::<byte_per_second>(),
-      read_sequential_iops: value.read_sequential_iops().get::<hertz>(),
-      read_random_iops: value.read_random_iops().get::<hertz>(),
-      write_bps: value.write_bandwidth().get::<byte_per_second>(),
-      write_sequential_iops: value.write_sequential_iops().get::<hertz>(),
-      write_random_iops: value.write_random_iops().get::<hertz>(),
+      read_bandwidth: value.read_bandwidth().into(),
+      read_sequential_iops: value.read_sequential_iops().into(),
+      read_random_iops: value.read_random_iops().into(),
+      write_bandwidth: value.write_bandwidth().into(),
+      write_sequential_iops: value.write_sequential_iops().into(),
+      write_random_iops: value.write_random_iops().into(),
     }
   }
 }
@@ -481,15 +475,15 @@ mod tests {
 
   impl IoDeviceStat {
     fn expected(bytes: [u64; 2], operations: [u64; 2], discard: Option<(u64, u64)>) -> Self {
-      let [read_bytes, write_bytes] = bytes.map(Some);
-      let [read_operations, write_operations] = operations.map(Some);
+      let [read_bytes, write_bytes] = bytes.map(|value| Some(value.into()));
+      let [read_operations, write_operations] = operations.map(|value| Some(value.into()));
       Self {
         read_bytes,
         write_bytes,
         read_operations,
         write_operations,
-        discard_bytes: discard.map(|(bytes, _)| bytes),
-        discard_operations: discard.map(|(_, operations)| operations),
+        discard_bytes: discard.map(|(bytes, _)| bytes.into()),
+        discard_operations: discard.map(|(_, operations)| operations.into()),
         ..Self::default()
       }
     }
@@ -497,7 +491,7 @@ mod tests {
 
   #[test]
   fn converts_io_counters_and_freezes_snapshots_and_device_maps() {
-    Python::initialize();
+    crate::quantity::tests::initialize_python();
     Python::attach(|py| {
       for (input, expected) in [
         (include_str!("../../../sakai/src/cgroup/v2/fixtures/p3/io.stat"), IoStat {
@@ -511,10 +505,10 @@ mod tests {
             ((8, 0), IoDeviceStat::expected([0, u64::MAX], [0, u64::MAX], None)),
             ((8, 16), IoDeviceStat {
               use_delay: Some(1),
-              delay_ns: Some(12_345),
+              delay: Some(12_345.into()),
               depth: Some(sakai::MaxOr::Value(sakai::Count { value: 1, ..Default::default() })),
-              average_latency_ns: Some(100_000),
-              latency_window_ns: Some(100_000_000),
+              average_latency: Some(100_000.into()),
+              latency_window: Some(100_000_000.into()),
               ..IoDeviceStat::default()
             }),
           ]),
@@ -528,14 +522,17 @@ mod tests {
         for (key, expected) in expected.devices {
           let device = assert_ok!(devices.get_item(key));
           for (name, expected) in [
-            ("read_bytes", expected.read_bytes),
-            ("write_bytes", expected.write_bytes),
-            ("discard_bytes", expected.discard_bytes),
-            ("read_operations", expected.read_operations),
-            ("write_operations", expected.write_operations),
-            ("discard_operations", expected.discard_operations),
+            ("read_bytes", expected.read_bytes.map(|value| value.0.value)),
+            ("write_bytes", expected.write_bytes.map(|value| value.0.value)),
+            ("discard_bytes", expected.discard_bytes.map(|value| value.0.value)),
+            ("read_operations", expected.read_operations.map(|value| value.0.value)),
+            ("write_operations", expected.write_operations.map(|value| value.0.value)),
+            ("discard_operations", expected.discard_operations.map(|value| value.0.value)),
           ] {
-            assert_eq!(assert_ok!(assert_ok!(device.getattr(name)).extract::<Option<u64>>()), expected);
+            assert_eq!(
+              assert_ok!(super::super::tests::magnitudes(&assert_ok!(device.getattr(name))).extract::<Option<u64>>()),
+              expected
+            );
             check_frozen(&device, &[name]);
           }
         }
@@ -545,7 +542,7 @@ mod tests {
 
   #[test]
   fn converts_default_and_device_weights_to_immutable_integer_maps() {
-    Python::initialize();
+    crate::quantity::tests::initialize_python();
     Python::attach(|py| {
       for (input, expected) in [
         (include_str!("../../../sakai/src/cgroup/v2/fixtures/p3/io.weight"), IoWeight {
@@ -575,7 +572,7 @@ mod tests {
 
   #[test]
   fn converts_io_limits_without_losing_small_rates_or_unsigned_values() {
-    Python::initialize();
+    crate::quantity::tests::initialize_python();
     Python::attach(|py| {
       for (input, expected) in [
         (
@@ -598,7 +595,9 @@ mod tests {
         assert_eq!(assert_ok!(devices.len()), expected.len());
         for (key, expected) in expected {
           let device = assert_ok!(devices.get_item(key));
-          for (name, expected) in ["read_bps", "write_bps", "read_iops", "write_iops"].into_iter().zip(expected) {
+          for (name, expected) in
+            ["read_bandwidth", "write_bandwidth", "read_iops", "write_iops"].into_iter().zip(expected)
+          {
             let limit = assert_ok!(device.getattr(name));
             check_limit(&limit, expected);
             check_frozen(&limit, &["value"]);
@@ -611,20 +610,20 @@ mod tests {
 
   #[test]
   fn converts_latency_targets_to_immutable_nanosecond_maps() {
-    Python::initialize();
+    crate::quantity::tests::initialize_python();
     Python::attach(|py| {
       for (input, expected) in [
         (include_str!("../../../sakai/src/cgroup/v2/fixtures/p3/io.latency"), IoLatency {
-          targets_ns: BTreeMap::from([((8, 16), 25_000_000), ((8, 0), 1000)]),
+          targets: BTreeMap::from([((8, 16), 25_000_000.into()), ((8, 0), 1000.into())]),
         }),
-        ("", IoLatency { targets_ns: BTreeMap::new() }),
+        ("", IoLatency { targets: BTreeMap::new() }),
       ] {
         let latency = IoLatency::from(assert_ok!(input.parse::<CoreIoLatency>()));
         assert_eq!(latency, expected);
         let object = assert_ok!(Py::new(py, latency));
-        let targets = readonly(object.bind(py).as_any(), "targets_ns", (8, 0));
+        let targets = readonly(object.bind(py).as_any(), "targets", (8, 0));
         let values = assert_ok!(py.get_type::<PyDict>().call1((&targets,)));
-        assert_eq!(assert_ok!(values.extract::<BTreeMap<DeviceKey, u64>>()), expected.targets_ns);
+        assert_eq!(assert_ok!(values.extract::<BTreeMap<DeviceKey, Quantity<sakai::Time>>>()), expected.targets);
       }
     });
   }
@@ -636,17 +635,17 @@ mod tests {
     let stat = IoStat::from(assert_ok!(input.parse::<CoreIoStat>()));
     let expected = IoDeviceStat {
       use_delay: Some(-1),
-      delay_ns: Some(9),
+      delay: Some(9.into()),
       depth: Some(sakai::MaxOr::Max),
-      average_latency_ns: Some(2_000),
-      latency_window_ns: Some(3_000_000),
-      missed: Some(4),
-      total: Some(5),
-      cost_usage_ns: Some(6_000),
-      cost_wait_ns: Some(7_000),
-      cost_indebt_ns: Some(8_000),
-      cost_indelay_ns: Some(9_000),
-      cost_vrate: Some(1.5),
+      average_latency: Some(2_000.into()),
+      latency_window: Some(3_000_000.into()),
+      missed: Some(4.into()),
+      total: Some(5.into()),
+      cost_usage: Some(6_000.into()),
+      cost_wait: Some(7_000.into()),
+      cost_indebt: Some(8_000.into()),
+      cost_indelay: Some(9_000.into()),
+      cost_vrate: Some(1.5.into()),
       ..IoDeviceStat::default()
     };
     assert_eq!(stat, IoStat { devices: BTreeMap::from([((8, 0), expected)]) });
@@ -654,7 +653,7 @@ mod tests {
 
   #[test]
   fn converts_cost_configuration_into_immutable_typed_device_maps() {
-    Python::initialize();
+    crate::quantity::tests::initialize_python();
     Python::attach(|py| {
       let qos = IoCostQos::from(assert_ok!(
         "8:0 enable=1 ctrl=user rpct=95 rlat=2 wpct=0 wlat=0 min=50 max=10000".parse::<CoreIoCostQos>()
@@ -664,10 +663,13 @@ mod tests {
       let device = assert_ok!(devices.get_item((8, 0)));
       assert!(assert_ok!(assert_ok!(device.getattr("enabled")).extract::<bool>()));
       assert_eq!(assert_ok!(assert_ok!(device.getattr("control")).extract::<String>()), "user");
-      assert_eq!(assert_ok!(assert_ok!(device.getattr("read_latency_ns")).extract::<u64>()), 2_000);
+      assert_eq!(
+        assert_ok!(assert_ok!(device.getattr("read_latency")).extract::<Quantity<sakai::Time>>()),
+        2_000.into()
+      );
       for (name, expected) in [("read_percentile", 0.95_f64), ("min_scaling", 0.5), ("max_scaling", 100.0)] {
         assert_in_delta!(
-          assert_ok!(assert_ok!(device.getattr(name)).extract::<f64>()),
+          assert_ok!(assert_ok!(assert_ok!(device.getattr(name)).getattr("magnitude")).extract::<f64>()),
           expected,
           f64::EPSILON * expected.max(1.0)
         );
@@ -684,14 +686,17 @@ mod tests {
       assert_eq!(assert_ok!(assert_ok!(device.getattr("control")).extract::<String>()), "auto");
       assert_eq!(assert_ok!(assert_ok!(device.getattr("model")).extract::<String>()), "linear");
       for (name, expected) in [
-        ("read_bps", 1),
+        ("read_bandwidth", 1),
         ("read_sequential_iops", 2),
         ("read_random_iops", 3),
-        ("write_bps", u64::MAX),
+        ("write_bandwidth", u64::MAX),
         ("write_sequential_iops", 5),
         ("write_random_iops", 6),
       ] {
-        assert_eq!(assert_ok!(assert_ok!(device.getattr(name)).extract::<u64>()), expected);
+        assert_eq!(
+          assert_ok!(assert_ok!(assert_ok!(device.getattr(name)).getattr("magnitude")).extract::<u64>()),
+          expected
+        );
         check_frozen(&device, &[name]);
       }
     });

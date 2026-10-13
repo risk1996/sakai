@@ -6,6 +6,7 @@ use pyo3::prelude::*;
 use sakai::v2::pids::PidsEvents as CorePidsEvents;
 
 use super::{MaxOr, PythonError};
+use crate::quantity::Quantity;
 
 /// Fresh process-number reads for one pinned cgroup. Counts include threads.
 ///
@@ -25,8 +26,8 @@ pub(super) struct PidsReader {
 #[pymethods]
 impl PidsReader {
   /// Read the volatile hierarchical task count, which can exceed pids.max.
-  fn current(&self, py: Python<'_>) -> PyResult<u64> {
-    PythonError::read(py, &self.owner, |owner| owner.pids().current()).map(|value| value.value().value)
+  fn current(&self, py: Python<'_>) -> PyResult<Quantity<sakai::Count>> {
+    PythonError::read(py, &self.owner, |owner| owner.pids().current()).map(|value| value.value().into())
   }
 
   /// Read the historical hierarchical task-count peak, including threads.
@@ -35,12 +36,12 @@ impl PidsReader {
   /// canceled by an ancestor-limit failure. Reading never resets the peak.
   /// See https://github.com/torvalds/linux/blob/v6.1/kernel/cgroup/pids.c and
   /// PidsReader for read errors.
-  fn peak(&self, py: Python<'_>) -> PyResult<u64> {
-    PythonError::read(py, &self.owner, |owner| owner.pids().peak()).map(|value| value.value().value)
+  fn peak(&self, py: Python<'_>) -> PyResult<Quantity<sakai::Count>> {
+    PythonError::read(py, &self.owner, |owner| owner.pids().peak()).map(|value| value.value().into())
   }
 
-  /// Read the configured task limit as MaxOr[int]; zero is a valid limit.
-  #[gen_stub(override_return_type(type_repr = "MaxOr[int]"))]
+  /// Read the configured task limit as MaxOr[pint.Quantity[int]]; zero is a valid limit.
+  #[gen_stub(override_return_type(type_repr = "MaxOr[pint.Quantity[int]]"))]
   fn max(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, |owner| owner.pids().max()).map(|value| MaxOr::from_count(value.value()))
   }
@@ -71,9 +72,9 @@ impl PidsReader {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct PidsEvents {
   /// Number of occurrences of the process limit being hit.
-  pub(super) max: u64,
+  pub(super) max: Quantity<sakai::Count>,
 }
 
 impl From<CorePidsEvents> for PidsEvents {
-  fn from(value: CorePidsEvents) -> Self { Self { max: value.max().value } }
+  fn from(value: CorePidsEvents) -> Self { Self { max: value.max().into() } }
 }

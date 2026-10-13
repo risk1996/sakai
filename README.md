@@ -79,7 +79,8 @@ time. `Cgroup::irq_pressure()` reads the separate full-only IRQ PSI format.
 Newer kernel counters and configuration remain optional.
 
 Memory protections (`memory.min`, `memory.low`) accept `max` as well as byte
-amounts, so their Rust snapshots use `MaxOr<Bytes>` and Python uses `MaxOr[int]`.
+amounts, so their Rust snapshots use `MaxOr<Bytes>` and Python uses
+`MaxOr[pint.Quantity[int]]`.
 This preserves valid kernel output instead of rejecting unlimited protection.
 
 The remaining cgroup v2 controllers are available through `Cgroup::hugetlb()`,
