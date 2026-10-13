@@ -64,8 +64,8 @@ are not execution tests on glibc 2.17 itself.
   cpuset, HugeTLB, RDMA, device memory, and miscellaneous resources. The
   recorded P0–P3 artifact checks below are historical and must be repeated
   for the expanded release surface.
-  The existing installed contract suite compares stub classes with `__all__`,
-  checks each declared member exists and has native documentation, and exercises
+  CI regenerates the stub from Rust and runs `mypy.stubtest` against installed
+  distributions. The contract suite checks exports and native documentation and exercises
   CPU, memory, swap/zswap, NUMA, process/core, and I/O readers. It now also
   checks the installed `py.typed` marker and extension placement. Snapshot
   immutability, guarded `MaxOr.value`, units, missing-file paths, and reader

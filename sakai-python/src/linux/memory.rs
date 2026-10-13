@@ -15,11 +15,14 @@ use uom::si::information::byte;
 use super::{MaxOr, Pressure, PythonError};
 
 /// Fresh reads of memory controller files for one pinned cgroup.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 pub(super) struct MemoryReader {
   pub(super) owner: Arc<sakai::Cgroup>,
 }
 
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[cfg_attr(not(feature = "stubs"), pyo3_stub_gen_derive::remove_gen_stub)]
 #[pymethods]
 impl MemoryReader {
   /// Return a swap reader that retains this pinned cgroup handle.
@@ -40,23 +43,27 @@ impl MemoryReader {
   }
 
   /// Read the hard memory limit as `max` or a concrete byte count.
+  #[gen_stub(override_return_type(type_repr = "MaxOr[int]"))]
   fn max(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, |owner| owner.memory().max()).map(|value| MaxOr::from_bytes(value.value()))
   }
 
   /// Read the throttling threshold as `max` or a concrete byte count.
+  #[gen_stub(override_return_type(type_repr = "MaxOr[int]"))]
   fn high(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, |owner| owner.memory().high()).map(|value| MaxOr::from_bytes(value.value()))
   }
 
   /// Read best-effort memory protection as `max` or a concrete byte count.
   /// Ancestor boundaries and sibling competition affect effective protection.
+  #[gen_stub(override_return_type(type_repr = "MaxOr[int]"))]
   fn low(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, |owner| owner.memory().low()).map(|value| MaxOr::from_bytes(value.value()))
   }
 
   /// Read hard memory protection as `max` or a concrete byte count.
   /// Ancestor boundaries and sibling competition affect effective protection.
+  #[gen_stub(override_return_type(type_repr = "MaxOr[int]"))]
   fn min(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, |owner| owner.memory().min()).map(|value| MaxOr::from_bytes(value.value()))
   }
@@ -97,6 +104,7 @@ impl MemoryReader {
 ///
 /// Missing optional counters are None, distinct from zero. Unknown kernel
 /// fields are ignored. The reader method determines whether counts include descendants.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct MemoryEventCounts {
@@ -131,11 +139,14 @@ impl From<CoreMemoryEventCounts> for MemoryEventCounts {
 }
 
 /// Fresh reads of swap usage, limits, and events for one pinned cgroup.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 pub(super) struct SwapReader {
   pub(super) owner: Arc<sakai::Cgroup>,
 }
 
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[cfg_attr(not(feature = "stubs"), pyo3_stub_gen_derive::remove_gen_stub)]
 #[pymethods]
 impl SwapReader {
   /// Read current hierarchical swap usage in bytes.
@@ -149,12 +160,14 @@ impl SwapReader {
   }
 
   /// Read the hard swap limit as `max` or a concrete byte count.
+  #[gen_stub(override_return_type(type_repr = "MaxOr[int]"))]
   fn max(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, |owner| owner.memory().swap().max())
       .map(|value| MaxOr::from_bytes(value.value()))
   }
 
   /// Read the swap throttling threshold as `max` or a concrete byte count.
+  #[gen_stub(override_return_type(type_repr = "MaxOr[int]"))]
   fn high(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, |owner| owner.memory().swap().high())
       .map(|value| MaxOr::from_bytes(value.value()))
@@ -173,6 +186,7 @@ impl SwapReader {
 ///
 /// With the cgroup2 memory_localevents mount option, events do not propagate to
 /// ancestors and these counters describe only the cgroup that was read.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct SwapEvents {
@@ -191,11 +205,14 @@ impl From<CoreSwapEvents> for SwapEvents {
 }
 
 /// Fresh reads of compressed swap usage and settings for one pinned cgroup.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 pub(super) struct ZswapReader {
   pub(super) owner: Arc<sakai::Cgroup>,
 }
 
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[cfg_attr(not(feature = "stubs"), pyo3_stub_gen_derive::remove_gen_stub)]
 #[pymethods]
 impl ZswapReader {
   /// Read zswap compression-backend memory for this cgroup and descendants, in bytes.
@@ -205,6 +222,7 @@ impl ZswapReader {
   }
 
   /// Read the hard zswap pool limit as `max` or a concrete byte count.
+  #[gen_stub(override_return_type(type_repr = "MaxOr[int]"))]
   fn max(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, |owner| owner.memory().zswap().max())
       .map(|value| MaxOr::from_bytes(value.value()))
@@ -222,6 +240,7 @@ impl ZswapReader {
 ///
 /// Keys retain the kernel's snake_case names. Unknown kernel fields are
 /// ignored; each exposed mapping is read-only. Missing fields differ from zero.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 pub(super) struct MemoryStat {
   bytes: BTreeMap<&'static str, u64>,
@@ -239,18 +258,23 @@ impl From<CoreMemoryStat> for MemoryStat {
   }
 }
 
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[cfg_attr(not(feature = "stubs"), pyo3_stub_gen_derive::remove_gen_stub)]
 #[pymethods]
 impl MemoryStat {
   /// Read-only mapping of memory.stat byte-valued fields.
   #[getter]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, int]", imports = ("collections.abc",)))]
   fn bytes(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> { Self::mapping(py, &self.bytes) }
 
   /// Read-only mapping of memory.stat page-valued fields.
   #[getter]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, int]", imports = ("collections.abc",)))]
   fn pages(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> { Self::mapping(py, &self.pages) }
 
   /// Read-only mapping of memory.stat count-valued fields.
   #[getter]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, int]", imports = ("collections.abc",)))]
   fn counts(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> { Self::mapping(py, &self.counts) }
 }
 
@@ -283,6 +307,7 @@ impl MemoryValues {
 /// Outer keys retain kernel field names; inner keys are integer NUMA node IDs.
 /// Both levels of every mapping are read-only. Unknown fields are ignored.
 /// Only fields with per-node accounting are reported; missing values differ from zero.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct MemoryNumaStat {
@@ -301,18 +326,23 @@ impl From<CoreMemoryNumaStat> for MemoryNumaStat {
   }
 }
 
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[cfg_attr(not(feature = "stubs"), pyo3_stub_gen_derive::remove_gen_stub)]
 #[pymethods]
 impl MemoryNumaStat {
   /// Read-only byte amounts by memory field and NUMA node ID.
   #[getter]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, collections.abc.Mapping[int, int]]", imports = ("collections.abc",)))]
   fn bytes(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> { Self::mapping(py, &self.bytes) }
 
   /// Read-only page quantities by memory field and NUMA node ID.
   #[getter]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, collections.abc.Mapping[int, int]]", imports = ("collections.abc",)))]
   fn pages(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> { Self::mapping(py, &self.pages) }
 
   /// Read-only event counts by memory field and NUMA node ID.
   #[getter]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, collections.abc.Mapping[int, int]]", imports = ("collections.abc",)))]
   fn counts(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> { Self::mapping(py, &self.counts) }
 }
 

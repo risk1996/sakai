@@ -45,6 +45,8 @@ mod notification;
 mod pids;
 mod pressure;
 mod rdma;
+#[cfg(feature = "stubs")]
+pub(crate) mod stubs;
 #[cfg(test)]
 mod tests;
 

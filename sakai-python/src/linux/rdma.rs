@@ -31,11 +31,13 @@ type DeviceKey = (String, Option<u32>);
 /// Reads never change resource limits, reset peaks, or acknowledge events.
 ///
 /// See https://docs.kernel.org/admin-guide/cgroup-v2.html#rdma-interface-files.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 pub(super) struct RdmaReader {
   pub(super) owner: Arc<sakai::Cgroup>,
 }
 
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
 #[pymethods]
 impl RdmaReader {
   /// Read a fresh snapshot of hierarchical HCA handle and object counts.
@@ -104,6 +106,7 @@ impl RdmaReader {
 /// water marks since cgroup creation, available since Linux 7.2. Device
 /// removal removes its history. Properties inspect this stored snapshot and
 /// perform no I/O. Unknown future resource keys are ignored.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct RdmaCurrent {
@@ -114,6 +117,8 @@ impl From<CoreRdmaCurrent> for RdmaCurrent {
   fn from(value: CoreRdmaCurrent) -> Self { Self { devices: devices(value.devices()) } }
 }
 
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[cfg_attr(not(feature = "stubs"), pyo3_stub_gen_derive::remove_gen_stub)]
 #[pymethods]
 impl RdmaCurrent {
   /// Read-only mapping of (name, optional index) tuples to immutable resource counts.
@@ -121,6 +126,7 @@ impl RdmaCurrent {
   /// None means the kernel omitted the index, not zero. This property
   /// returns stored data without opening an interface file.
   #[getter]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[RdmaDeviceKey, RdmaDeviceCurrent]", imports = ("collections.abc",)))]
   fn devices(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     mapping(py, &self.devices, |value| Py::new(py, value.clone()))
   }
@@ -133,6 +139,7 @@ impl RdmaCurrent {
 /// The kernel's max token for current or peak usage represents exactly
 /// 2,147,483,647 and is exposed as that integer, not an unlimited value.
 /// Properties inspect stored values without performing I/O.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct RdmaDeviceCurrent {
@@ -153,6 +160,7 @@ impl From<CoreRdmaDeviceCurrent> for RdmaDeviceCurrent {
 /// Configuration can change between reads. max means no configured limit at
 /// this cgroup; ancestors may still constrain allocation. An empty map means
 /// no devices were reported. Properties return stored data without I/O.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 pub(super) struct RdmaMax {
   devices: BTreeMap<DeviceKey, RdmaDeviceMax>,
@@ -162,12 +170,15 @@ impl From<CoreRdmaMax> for RdmaMax {
   fn from(value: CoreRdmaMax) -> Self { Self { devices: devices(value.devices()) } }
 }
 
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[cfg_attr(not(feature = "stubs"), pyo3_stub_gen_derive::remove_gen_stub)]
 #[pymethods]
 impl RdmaMax {
   /// Read-only mapping of (name, optional index) tuples to immutable resource limits.
   ///
   /// None means the kernel omitted the index, not zero. Performs no I/O.
   #[getter]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[RdmaDeviceKey, RdmaDeviceMax]", imports = ("collections.abc",)))]
   fn devices(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     mapping(py, &self.devices, |value| Py::new(py, value.clone()))
   }
@@ -177,6 +188,7 @@ impl RdmaMax {
 ///
 /// Zero is a valid limit. max means no limit here; ancestor limits still
 /// apply. Reading a property does not refresh this configuration snapshot.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
 #[derive(Clone)]
 pub(super) struct RdmaDeviceMax {
@@ -199,6 +211,7 @@ impl From<CoreRdmaDeviceMax> for RdmaDeviceMax {
 /// Unknown future event keys are ignored. Properties inspect stored values
 /// and perform no I/O.
 /// See https://github.com/torvalds/linux/blob/v7.2/kernel/cgroup/rdma.c.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct RdmaEvents {
@@ -209,12 +222,15 @@ impl From<CoreRdmaEvents> for RdmaEvents {
   fn from(value: CoreRdmaEvents) -> Self { Self { devices: devices(value.devices()) } }
 }
 
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[cfg_attr(not(feature = "stubs"), pyo3_stub_gen_derive::remove_gen_stub)]
 #[pymethods]
 impl RdmaEvents {
   /// Read-only mapping of (name, optional index) tuples to immutable per-resource events.
   ///
   /// None means the kernel omitted the index, not zero. Performs no I/O.
   #[getter]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[RdmaDeviceKey, RdmaDeviceEvents]", imports = ("collections.abc",)))]
   fn devices(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     mapping(py, &self.devices, |value| Py::new(py, value.clone()))
   }
@@ -223,6 +239,7 @@ impl RdmaEvents {
 /// Immutable allocation-event counters for one RDMA adapter, since Linux 7.2.
 ///
 /// Properties return stored events without refreshing the snapshot.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct RdmaDeviceEvents {
@@ -243,6 +260,7 @@ impl From<CoreRdmaDeviceEvents> for RdmaDeviceEvents {
 /// Whether counters include descendants is determined by the reader used:
 /// events() is hierarchical; events_local() is local. Properties inspect the
 /// stored snapshot without I/O. Counts may increase on the next fresh read.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct RdmaResourceEvents {

@@ -22,11 +22,13 @@ use super::{MaxOr, PythonError, mapping::mapping};
 /// invalid contents raise CgroupParseError, unsupported operations raise
 /// NotSupportedError and other OS failures raise OSError. Resource values count
 /// hardware-specific units, never bytes. See https://docs.kernel.org/admin-guide/cgroup-v2.html#misc.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 pub(super) struct MiscReader {
   pub(super) owner: Arc<sakai::Cgroup>,
 }
 
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
 #[pymethods]
 impl MiscReader {
   /// Read machine-wide resource capacities; exists only at the hierarchy root.
@@ -77,6 +79,7 @@ impl MiscReader {
 /// Immutable snapshot keyed by kernel resource names; values can change on the
 /// next read. Empty maps are valid. Omitted resources remain absent, distinct
 /// from zero; inspecting resources performs no I/O.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 pub(super) struct MiscCapacity {
   resources: BTreeMap<String, u64>,
@@ -88,10 +91,13 @@ impl From<CoreCapacity> for MiscCapacity {
   }
 }
 
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[cfg_attr(not(feature = "stubs"), pyo3_stub_gen_derive::remove_gen_stub)]
 #[pymethods]
 impl MiscCapacity {
   /// Read-only resource-name mapping to integer resource counts in this stored snapshot.
   #[getter]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, int]", imports = ("collections.abc",)))]
   fn resources(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     Ok(PyMappingProxy::new(py, (&self.resources).into_py_dict(py)?.as_mapping()).unbind())
   }
@@ -102,6 +108,7 @@ impl MiscCapacity {
 /// Immutable snapshot keyed by kernel resource names; values can change on the
 /// next read. Empty maps are valid. Omitted resources remain absent, distinct
 /// from zero; inspecting resources performs no I/O.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 pub(super) struct MiscCurrent {
   resources: BTreeMap<String, u64>,
@@ -113,10 +120,13 @@ impl From<CoreCurrent> for MiscCurrent {
   }
 }
 
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[cfg_attr(not(feature = "stubs"), pyo3_stub_gen_derive::remove_gen_stub)]
 #[pymethods]
 impl MiscCurrent {
   /// Read-only resource-name mapping to integer resource counts in this stored snapshot.
   #[getter]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, int]", imports = ("collections.abc",)))]
   fn resources(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     Ok(PyMappingProxy::new(py, (&self.resources).into_py_dict(py)?.as_mapping()).unbind())
   }
@@ -127,6 +137,7 @@ impl MiscCurrent {
 /// Immutable snapshot keyed by kernel resource names; values can change on the
 /// next read. Empty maps are valid. Omitted resources remain absent, distinct
 /// from zero; inspecting resources performs no I/O.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 pub(super) struct MiscPeak {
   resources: BTreeMap<String, u64>,
@@ -138,10 +149,13 @@ impl From<CorePeak> for MiscPeak {
   }
 }
 
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[cfg_attr(not(feature = "stubs"), pyo3_stub_gen_derive::remove_gen_stub)]
 #[pymethods]
 impl MiscPeak {
   /// Read-only resource-name mapping to integer resource counts in this stored snapshot.
   #[getter]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, int]", imports = ("collections.abc",)))]
   fn resources(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     Ok(PyMappingProxy::new(py, (&self.resources).into_py_dict(py)?.as_mapping()).unbind())
   }
@@ -158,6 +172,7 @@ impl MiscPeak {
 /// Immutable snapshot keyed by kernel resource names; values can change on the
 /// next read. Empty maps are valid. Omitted resources remain absent, distinct
 /// from zero; inspecting resources performs no I/O.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 pub(super) struct MiscEvents {
   resources: BTreeMap<String, u64>,
@@ -169,10 +184,13 @@ impl From<CoreEvents> for MiscEvents {
   }
 }
 
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[cfg_attr(not(feature = "stubs"), pyo3_stub_gen_derive::remove_gen_stub)]
 #[pymethods]
 impl MiscEvents {
   /// Read-only resource-name mapping to integer event counts in this stored snapshot.
   #[getter]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, int]", imports = ("collections.abc",)))]
   fn resources(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     Ok(PyMappingProxy::new(py, (&self.resources).into_py_dict(py)?.as_mapping()).unbind())
   }
@@ -183,6 +201,7 @@ impl MiscEvents {
 /// Ancestor limits and machine capacity still apply; configured limits may exceed
 /// capacity. Zero is valid. Hardware-dependent resource names are preserved,
 /// empty maps are valid, and this configuration can change between reads.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 pub(super) struct MiscMax {
   resources: BTreeMap<String, MaxOr>,
@@ -196,12 +215,15 @@ impl From<CoreMax> for MiscMax {
   }
 }
 
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[cfg_attr(not(feature = "stubs"), pyo3_stub_gen_derive::remove_gen_stub)]
 #[pymethods]
 impl MiscMax {
   /// Read-only resource-name mapping to immutable MaxOr[int] resource limits.
   ///
   /// Check is_max before value; value raises ValueError for an unlimited limit.
   #[getter]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, MaxOr[int]]", imports = ("collections.abc",)))]
   fn resources(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     mapping(py, &self.resources, |value| Py::new(py, *value))
   }

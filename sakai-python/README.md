@@ -318,6 +318,18 @@ devenv --profile python shell -- rtk maturin build --manifest-path sakai-python/
 devenv --profile python shell -- rtk maturin sdist --manifest-path sakai-python/Cargo.toml
 ```
 
+The extension stub and package re-exports are generated from the Rust bindings
+using `pyo3-stub-gen`.
+After changing the bindings, regenerate it on Linux and commit the result:
+
+```text
+devenv --profile python tasks run generate:stubs
+```
+
+Explicit `gen_stub` annotations retain generic limits, literals, path arguments,
+and read-only mapping types where the Rust boundary erases Python type details.
+Native docstrings stay in Rust. CI checks that regeneration leaves the stub unchanged.
+
 Install the wheel into a clean environment and run
 `python -m unittest discover -s sakai-python/tests` from outside the checkout.
 Also rebuild and install the sdist in a separate clean environment: its path
@@ -325,6 +337,10 @@ dependency on `../sakai` needs the included Rust crate, workspace manifests,
 and lockfile. CI performs both installed-package checks and verifies the
 `cp311-abi3` wheel tag. `devenv --profile python test` runs Rust, lint, and type
 checks; the Linux package contract suite runs in the separate CI packaging job.
+That job also installs the `test` dependency group and runs `mypy.stubtest sakai`
+against each installed distribution. Its small allowlist covers dynamic exports,
+stub-only aliases, and PyO3's generic subscription method. Runtime tests check
+exports, exception attributes, and documentation separately.
 
 Publication decisions and artifact verification remain in the
 [PyPI pre-publication checklist](../design/pypi-prepublish-checklist.md).

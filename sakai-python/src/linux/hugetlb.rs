@@ -26,6 +26,7 @@ use super::{MaxOr, PythonError};
 ///
 /// HugeTLB is distinct from transparent huge pages. See Linux documentation:
 /// https://docs.kernel.org/admin-guide/cgroup-v2.html#hugetlb
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 pub(super) struct HugetlbReader {
   pub(super) owner: Arc<sakai::Cgroup>,
@@ -37,6 +38,8 @@ impl HugetlbReader {
   }
 }
 
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[cfg_attr(not(feature = "stubs"), pyo3_stub_gen_derive::remove_gen_stub)]
 #[pymethods]
 impl HugetlbReader {
   /// Read volatile faulted HugeTLB usage for page_size in bytes, including descendants.
@@ -53,6 +56,7 @@ impl HugetlbReader {
   ///
   /// This reads hugetlb.<page_size>.max. max means no limit at this cgroup;
   /// ancestors still constrain usage. Configuration may change between reads.
+  #[gen_stub(override_return_type(type_repr = "MaxOr[int]"))]
   fn max(&self, py: Python<'_>, page_size: &str) -> PyResult<MaxOr> {
     let size = Self::size(page_size)?;
     PythonError::read(py, &self.owner, move |owner| owner.hugetlb().max(&size))
@@ -74,6 +78,7 @@ impl HugetlbReader {
   ///
   /// hugetlb.<page_size>.rsvd.max limits reservations and faults without prior
   /// reservations. max means no limit here; ancestor limits still apply.
+  #[gen_stub(override_return_type(type_repr = "MaxOr[int]"))]
   fn reserved_max(&self, py: Python<'_>, page_size: &str) -> PyResult<MaxOr> {
     let size = Self::size(page_size)?;
     PythonError::read(py, &self.owner, move |owner| owner.hugetlb().reserved_max(&size))
@@ -113,6 +118,7 @@ impl HugetlbReader {
 /// events() includes descendants; events_local() excludes them. Both fault
 /// and reservation limit failures contribute. Counts are volatile and stored
 /// getters never perform I/O. Unknown future keys are ignored.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct HugetlbEvents {
@@ -129,6 +135,7 @@ impl From<CoreHugetlbEvents> for HugetlbEvents {
 /// Since Linux 5.17. Unused reservations are excluded. Kernel reads of total
 /// and individual node counters are not atomic, so their sum need not agree.
 /// Properties inspect this stored snapshot; they never perform I/O.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct HugetlbNumaStat {
@@ -147,10 +154,13 @@ impl From<CoreHugetlbNumaStat> for HugetlbNumaStat {
   }
 }
 
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[cfg_attr(not(feature = "stubs"), pyo3_stub_gen_derive::remove_gen_stub)]
 #[pymethods]
 impl HugetlbNumaStat {
   /// Read-only mapping from integer NUMA node IDs to stored in-use bytes.
   #[getter]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[int, int]", imports = ("collections.abc",)))]
   fn nodes(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     Ok(PyMappingProxy::new(py, (&self.nodes).into_py_dict(py)?.as_mapping()).unbind())
   }

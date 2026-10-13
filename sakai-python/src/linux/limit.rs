@@ -15,6 +15,7 @@ pub(super) enum PythonLimitValue {
 /// This class is generic in Python: integer limits use `MaxOr[int]` and
 /// dimensionless ratios use `MaxOr[float]`. Check `is_max` before reading
 /// `value`; accessing `value` for `max` raises ValueError.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(generic, frozen, skip_from_py_object, module = "sakai._sakai")]
 #[derive(Clone, Copy)]
 pub(super) struct MaxOr {
@@ -48,6 +49,8 @@ impl MaxOr {
   }
 }
 
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[cfg_attr(not(feature = "stubs"), pyo3_stub_gen_derive::remove_gen_stub)]
 #[pymethods]
 impl MaxOr {
   /// Whether the kernel reported `max`.
@@ -56,6 +59,7 @@ impl MaxOr {
 
   /// Concrete value; raises ValueError when the kernel reported `max`.
   #[getter]
+  #[gen_stub(override_return_type(type_repr = "_ValueT"))]
   pub(super) fn value(&self) -> PyResult<PythonLimitValue> {
     self.inner.ok_or_else(|| PyValueError::new_err("max has no numeric value"))
   }

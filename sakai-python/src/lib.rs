@@ -3,6 +3,8 @@
 #[cfg(target_os = "linux")]
 mod linux;
 
+#[cfg(all(target_os = "linux", feature = "stubs"))]
+pub use linux::stubs::generate_stubs;
 #[cfg(not(target_os = "linux"))]
 use pyo3::{exceptions::PyImportError, prelude::*};
 

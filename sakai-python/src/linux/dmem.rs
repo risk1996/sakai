@@ -28,11 +28,13 @@ use super::{MaxOr, PythonError, mapping::mapping};
 /// malformed contents raise CgroupParseError; other I/O failures raise OSError
 /// with errno and filename. Exceptions retain the diagnostic interface path.
 /// See https://www.kernel.org/doc/html/v6.14/admin-guide/cgroup-v2.html#dmem.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 pub(super) struct DmemReader {
   pub(super) owner: Arc<sakai::Cgroup>,
 }
 
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
 #[pymethods]
 impl DmemReader {
   /// Read registered device-memory region capacities in bytes.
@@ -109,6 +111,7 @@ impl DmemReader {
 /// memory. Empty means no regions were reported; arbitrary driver names are
 /// retained. Region membership may change between reads. Properties inspect
 /// stored values without I/O. Since Linux 6.14; see DmemReader for the reference.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct DmemCapacity {
@@ -121,10 +124,13 @@ impl From<CoreDmemCapacity> for DmemCapacity {
   }
 }
 
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[cfg_attr(not(feature = "stubs"), pyo3_stub_gen_derive::remove_gen_stub)]
 #[pymethods]
 impl DmemCapacity {
   /// Read-only mapping from opaque region names to integer byte capacities.
   #[getter]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, int]", imports = ("collections.abc",)))]
   fn regions(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     Ok(PyMappingProxy::new(py, (&self.regions).into_py_dict(py)?.as_mapping()).unbind())
   }
@@ -139,6 +145,7 @@ impl DmemCapacity {
 /// max preserves the kernel's PAGE_COUNTER_MAX sentinel, not an unlimited
 /// configured limit; its numeric boundary depends on kernel architecture and
 /// system page size. Finite quantities are byte amounts wrapped in MaxOr[int].
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 pub(super) struct DmemCurrent {
   regions: BTreeMap<String, MaxOr>,
@@ -150,10 +157,13 @@ impl From<CoreDmemCurrent> for DmemCurrent {
   }
 }
 
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[cfg_attr(not(feature = "stubs"), pyo3_stub_gen_derive::remove_gen_stub)]
 #[pymethods]
 impl DmemCurrent {
   /// Read-only mapping from opaque region names to MaxOr[int] hierarchical bytes.
   #[getter]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, MaxOr[int]]", imports = ("collections.abc",)))]
   fn regions(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     mapping(py, &self.regions, |value| Py::new(py, *value))
   }
@@ -166,6 +176,7 @@ impl DmemCurrent {
 /// are independent and lifetime-scoped; device removal removes their history.
 /// Properties inspect stored snapshots without I/O; reads never reset peaks.
 /// See https://github.com/torvalds/linux/blob/v7.3-rc1/kernel/cgroup/dmem.c.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 pub(super) struct DmemPeak {
   regions: BTreeMap<String, MaxOr>,
@@ -177,10 +188,13 @@ impl From<CoreDmemPeak> for DmemPeak {
   }
 }
 
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[cfg_attr(not(feature = "stubs"), pyo3_stub_gen_derive::remove_gen_stub)]
 #[pymethods]
 impl DmemPeak {
   /// Read-only mapping from opaque region names to MaxOr[int] historical byte peaks.
   #[getter]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, MaxOr[int]]", imports = ("collections.abc",)))]
   fn regions(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     mapping(py, &self.regions, |value| Py::new(py, *value))
   }
@@ -195,6 +209,7 @@ impl DmemPeak {
 /// Empty means no regions were reported. Configuration and region membership
 /// can change between reads; properties inspect stored values without I/O.
 /// Since Linux 6.14; see DmemReader for the Linux interface reference.
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 pub(super) struct DmemLimits {
   regions: BTreeMap<String, MaxOr>,
@@ -206,10 +221,13 @@ impl From<CoreDmemLimits> for DmemLimits {
   }
 }
 
+#[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[cfg_attr(not(feature = "stubs"), pyo3_stub_gen_derive::remove_gen_stub)]
 #[pymethods]
 impl DmemLimits {
   /// Read-only mapping from opaque region names to immutable MaxOr[int] bytes.
   #[getter]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, MaxOr[int]]", imports = ("collections.abc",)))]
   fn regions(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     mapping(py, &self.regions, |value| Py::new(py, *value))
   }
