@@ -429,46 +429,34 @@ mod tests {
   use std::{
     fs,
     os::unix::{fs::symlink, net::UnixStream},
-    sync::atomic::{AtomicU64, Ordering},
   };
 
   use assertables::{assert_err, assert_ok};
   use strum::IntoEnumIterator;
+  use tempfile::TempDir;
 
   use super::*;
 
   struct Fixture {
-    root: PathBuf,
+    root: TempDir,
   }
 
   impl Fixture {
     fn new() -> Self {
-      static NEXT_ID: AtomicU64 = AtomicU64::new(0);
-      let root = std::env::temp_dir().join(format!(
-        "sakai-notification-{}-{}",
-        std::process::id(),
-        NEXT_ID.fetch_add(1, Ordering::Relaxed),
-      ));
-      assert_ok!(fs::create_dir(&root));
-      assert_ok!(fs::create_dir(root.join("group")));
+      let root = assert_ok!(tempfile::tempdir());
+      assert_ok!(fs::create_dir(root.path().join("group")));
       Self { root }
     }
 
     fn directory(&self) -> OwnedFd {
       assert_ok!(rustix::fs::open(
-        self.root.join("group"),
+        self.root.path().join("group"),
         OFlags::RDONLY | OFlags::CLOEXEC | OFlags::DIRECTORY,
         Mode::empty()
       ))
     }
 
-    fn file(&self, name: &str) -> PathBuf { self.root.join("group").join(name) }
-  }
-
-  impl Drop for Fixture {
-    fn drop(&mut self) {
-      assert_ok!(fs::remove_dir_all(&self.root));
-    }
+    fn file(&self, name: &str) -> PathBuf { self.root.path().join("group").join(name) }
   }
 
   #[test]
@@ -531,8 +519,8 @@ mod tests {
     let original = fixture.file(interface.filename());
     assert_ok!(fs::write(&original, "max 100000\n"));
     let directory = fixture.directory();
-    let renamed = fixture.root.join("renamed");
-    assert_ok!(fs::rename(fixture.root.join("group"), &renamed));
+    let renamed = fixture.root.path().join("renamed");
+    assert_ok!(fs::rename(fixture.root.path().join("group"), &renamed));
     let actual = renamed.join(interface.filename());
     let mut watcher = assert_ok!(ConfigurationWatcher::open(directory, original, interface));
     assert_eq!(watcher.interface(), interface);

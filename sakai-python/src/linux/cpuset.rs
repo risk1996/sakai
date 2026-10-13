@@ -160,9 +160,9 @@ impl From<CorePartition> for CpusetPartition {
 #[cfg(test)]
 mod tests {
   use assertables::{assert_err, assert_ok};
-  use pyo3::exceptions::{PyAttributeError, PyOverflowError, PyTypeError};
+  use pyo3::exceptions::{PyOverflowError, PyTypeError};
 
-  use super::*;
+  use super::{super::tests::check_frozen, *};
 
   #[test]
   fn converts_lists_to_compact_immutable_ranges() {
@@ -179,7 +179,7 @@ mod tests {
           assert!(ranges.is_instance_of::<PyTuple>());
           assert_eq!(assert_ok!(ranges.extract::<Vec<(u32, u32)>>()), expected);
           assert!(assert_err!(ranges.set_item(0, (1, 2))).is_instance_of::<PyTypeError>(py));
-          assert!(assert_err!(object.setattr("ranges", 0)).is_instance_of::<PyAttributeError>(py));
+          check_frozen(object, &["ranges"]);
           for id in [0, 4, 5, u32::MAX] {
             assert_eq!(
               assert_ok!(assert_ok!(object.call_method1("contains", (id,))).extract::<bool>()),
@@ -218,9 +218,7 @@ mod tests {
           assert_ok!(assert_ok!(object.bind(py).getattr("reason")).extract::<Option<String>>()),
           reason.map(str::to_owned)
         );
-        for name in ["state", "is_invalid", "reason"] {
-          assert!(assert_err!(object.bind(py).setattr(name, 0)).is_instance_of::<PyAttributeError>(py));
-        }
+        check_frozen(object.bind(py).as_any(), &["state", "is_invalid", "reason"]);
       }
     });
   }

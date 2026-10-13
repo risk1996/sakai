@@ -447,13 +447,12 @@ impl IoValues {
 
 #[cfg(test)]
 mod tests {
-  use assertables::{assert_err, assert_in_delta, assert_ok};
-  use pyo3::{
-    exceptions::{PyAttributeError, PyTypeError, PyValueError},
-    types::PyInt,
-  };
+  use assertables::{assert_in_delta, assert_ok};
 
-  use super::*;
+  use super::{
+    super::tests::{check_frozen, check_limit, readonly},
+    *,
+  };
 
   impl IoDeviceStat {
     fn expected(bytes: [u64; 2], operations: [u64; 2], discard: Option<(u64, u64)>) -> Self {
@@ -486,19 +485,11 @@ mod tests {
           devices: BTreeMap::from([
             ((8, 0), IoDeviceStat::expected([0, u64::MAX], [0, u64::MAX], None)),
             ((8, 16), IoDeviceStat {
-              read_bytes: None,
-              write_bytes: None,
-              discard_bytes: None,
-              read_operations: None,
-              write_operations: None,
-              discard_operations: None,
               use_delay: Some(1),
               delay_ns: Some(12_345),
               depth: Some(sakai::MaxOr::Value(sakai::Count { value: 1, ..Default::default() })),
               average_latency_ns: Some(100_000),
               latency_window_ns: Some(100_000_000),
-              missed: None,
-              total: None,
               ..IoDeviceStat::default()
             }),
           ]),
@@ -508,7 +499,7 @@ mod tests {
         let stat = IoStat::from(assert_ok!(input.parse::<CoreIoStat>()));
         assert_eq!(stat, expected);
         let object = assert_ok!(Py::new(py, stat));
-        let devices = assert_ok!(object.bind(py).getattr("devices"));
+        let devices = readonly(object.bind(py).as_any(), "devices", (8, 0));
         for (key, expected) in expected.devices {
           let device = assert_ok!(devices.get_item(key));
           for (name, expected) in [
@@ -520,11 +511,9 @@ mod tests {
             ("discard_operations", expected.discard_operations),
           ] {
             assert_eq!(assert_ok!(assert_ok!(device.getattr(name)).extract::<Option<u64>>()), expected);
-            assert!(assert_err!(device.setattr(name, 0)).is_instance_of::<PyAttributeError>(py));
+            check_frozen(&device, &[name]);
           }
         }
-        assert!(assert_err!(devices.set_item((8, 0), 0)).is_instance_of::<PyTypeError>(py));
-        assert!(assert_err!(object.bind(py).setattr("devices", 0)).is_instance_of::<PyAttributeError>(py));
       }
     });
   }
@@ -551,13 +540,10 @@ mod tests {
           assert_ok!(assert_ok!(object.bind(py).getattr("default_weight")).extract::<u16>()),
           expected.default_weight
         );
-        let devices = assert_ok!(object.bind(py).getattr("devices"));
+        let devices = readonly(object.bind(py).as_any(), "devices", (8, 0));
         let values = assert_ok!(py.get_type::<PyDict>().call1((&devices,)));
         assert_eq!(assert_ok!(values.extract::<BTreeMap<DeviceKey, u16>>()), expected.devices);
-        assert!(assert_err!(devices.set_item((8, 0), 0)).is_instance_of::<PyTypeError>(py));
-        for name in ["default_weight", "devices"] {
-          assert!(assert_err!(object.bind(py).setattr(name, 0)).is_instance_of::<PyAttributeError>(py));
-        }
+        check_frozen(object.bind(py).as_any(), &["default_weight"]);
       }
     });
   }
@@ -583,27 +569,17 @@ mod tests {
       ] {
         let snapshot = IoMax::from(assert_ok!(input.parse::<CoreIoMax>()));
         let object = assert_ok!(Py::new(py, snapshot));
-        let devices = assert_ok!(object.bind(py).getattr("devices"));
+        let devices = readonly(object.bind(py).as_any(), "devices", (8, 0));
         assert_eq!(assert_ok!(devices.len()), expected.len());
         for (key, expected) in expected {
           let device = assert_ok!(devices.get_item(key));
           for (name, expected) in ["read_bps", "write_bps", "read_iops", "write_iops"].into_iter().zip(expected) {
             let limit = assert_ok!(device.getattr(name));
-            assert_eq!(assert_ok!(assert_ok!(limit.getattr("is_max")).extract::<bool>()), expected.is_none());
-            match expected {
-              | Some(expected) => {
-                let value = assert_ok!(limit.getattr("value"));
-                assert!(value.is_instance_of::<PyInt>());
-                assert_eq!(assert_ok!(value.extract::<u64>()), expected);
-              },
-              | None => assert!(assert_err!(limit.getattr("value")).is_instance_of::<PyValueError>(py)),
-            }
-            assert!(assert_err!(limit.setattr("value", 0)).is_instance_of::<PyAttributeError>(py));
-            assert!(assert_err!(device.setattr(name, 0)).is_instance_of::<PyAttributeError>(py));
+            check_limit(&limit, expected);
+            check_frozen(&limit, &["value"]);
+            check_frozen(&device, &[name]);
           }
         }
-        assert!(assert_err!(devices.set_item((8, 0), 0)).is_instance_of::<PyTypeError>(py));
-        assert!(assert_err!(object.bind(py).setattr("devices", 0)).is_instance_of::<PyAttributeError>(py));
       }
     });
   }
@@ -621,11 +597,9 @@ mod tests {
         let latency = IoLatency::from(assert_ok!(input.parse::<CoreIoLatency>()));
         assert_eq!(latency, expected);
         let object = assert_ok!(Py::new(py, latency));
-        let targets = assert_ok!(object.bind(py).getattr("targets_ns"));
+        let targets = readonly(object.bind(py).as_any(), "targets_ns", (8, 0));
         let values = assert_ok!(py.get_type::<PyDict>().call1((&targets,)));
         assert_eq!(assert_ok!(values.extract::<BTreeMap<DeviceKey, u64>>()), expected.targets_ns);
-        assert!(assert_err!(targets.set_item((8, 0), 0)).is_instance_of::<PyTypeError>(py));
-        assert!(assert_err!(object.bind(py).setattr("targets_ns", 0)).is_instance_of::<PyAttributeError>(py));
       }
     });
   }
@@ -661,7 +635,7 @@ mod tests {
         "8:0 enable=1 ctrl=user rpct=95 rlat=2 wpct=0 wlat=0 min=50 max=10000".parse::<CoreIoCostQos>()
       ));
       let qos = assert_ok!(Py::new(py, qos));
-      let devices = assert_ok!(qos.bind(py).getattr("devices"));
+      let devices = readonly(qos.bind(py).as_any(), "devices", (8, 0));
       let device = assert_ok!(devices.get_item((8, 0)));
       assert!(assert_ok!(assert_ok!(device.getattr("enabled")).extract::<bool>()));
       assert_eq!(assert_ok!(assert_ok!(device.getattr("control")).extract::<String>()), "user");
@@ -672,16 +646,15 @@ mod tests {
           expected,
           f64::EPSILON * expected.max(1.0)
         );
-        assert!(assert_err!(device.setattr(name, 0)).is_instance_of::<PyAttributeError>(py));
+        check_frozen(&device, &[name]);
       }
-      assert!(assert_err!(devices.set_item((8, 0), 0)).is_instance_of::<PyTypeError>(py));
 
       let model = IoCostModel::from(assert_ok!(
         "8:0 ctrl=auto model=linear rbps=1 rseqiops=2 rrandiops=3 wbps=18446744073709551615 wseqiops=5 wrandiops=6"
           .parse::<CoreIoCostModel>()
       ));
       let model = assert_ok!(Py::new(py, model));
-      let devices = assert_ok!(model.bind(py).getattr("devices"));
+      let devices = readonly(model.bind(py).as_any(), "devices", (8, 0));
       let device = assert_ok!(devices.get_item((8, 0)));
       assert_eq!(assert_ok!(assert_ok!(device.getattr("control")).extract::<String>()), "auto");
       assert_eq!(assert_ok!(assert_ok!(device.getattr("model")).extract::<String>()), "linear");
@@ -694,9 +667,8 @@ mod tests {
         ("write_random_iops", 6),
       ] {
         assert_eq!(assert_ok!(assert_ok!(device.getattr(name)).extract::<u64>()), expected);
-        assert!(assert_err!(device.setattr(name, 0)).is_instance_of::<PyAttributeError>(py));
+        check_frozen(&device, &[name]);
       }
-      assert!(assert_err!(devices.set_item((8, 0), 0)).is_instance_of::<PyTypeError>(py));
     });
   }
 }

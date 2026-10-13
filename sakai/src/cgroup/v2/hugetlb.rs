@@ -480,12 +480,7 @@ mod tests {
         max: Count { value: local_events, ..Default::default() }
       });
       match fixture {
-        | "p6_hugetlb" => {
-          assert_eq!(
-            assert_ok!(reader.numa_stat(&size)),
-            assert_ok!(include_str!("fixtures/p6_hugetlb/hugetlb.2MB.numa_stat").parse())
-          );
-        },
+        | "p6_hugetlb" => cgroup.check_fixture(&size.file_name("numa_stat"), false, || reader.numa_stat(&size)),
         | _ => assert!(
           matches!(reader.numa_stat(&size), Err(Error::FileMissing { path }) if path == cgroup.path().join(size.file_name("numa_stat")))
         ),

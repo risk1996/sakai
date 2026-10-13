@@ -44,6 +44,8 @@ mod notification;
 mod pids;
 mod pressure;
 mod rdma;
+#[cfg(test)]
+mod tests;
 
 /// Read-only Linux cgroup v2 bindings backed by sakai.
 #[pymodule(gil_used = true)]

@@ -236,9 +236,6 @@ where
 
 #[cfg(test)]
 mod tests {
-  #[cfg(target_os = "linux")]
-  use std::{fmt::Debug, io};
-
   use assertables::{assert_err, assert_ok};
   use uom::si::information::byte;
 
@@ -253,35 +250,17 @@ mod tests {
   }
 
   #[cfg(target_os = "linux")]
-  fn check_read<T>(cgroup: &Cgroup, filename: &str, read: impl FnOnce() -> Result<T, Error>)
-  where
-    T: FromStr + Debug + PartialEq,
-    T::Err: Debug, {
-    let path = cgroup.path().join(filename);
-    match std::fs::read_to_string(&path) {
-      | Ok(raw) => {
-        assert_eq!(assert_ok!(read()), assert_ok!(raw.parse::<T>()));
-        assert_eq!(assert_ok!(std::fs::read_to_string(&path)), raw);
-      },
-      | Err(error) if error.kind() == io::ErrorKind::NotFound => {
-        assert!(matches!(read(), Err(Error::FileMissing { path: missing }) if missing == path));
-      },
-      | Err(error) => panic!("fixture read failed at {path:?}: {error}"),
-    }
-  }
-
-  #[cfg(target_os = "linux")]
   #[test]
   fn reads_region_fixtures_without_writes_and_preserves_missing_paths() {
     for fixture in ["p6_dmem", "p6_dmem_root", "p6_dmem_older"] {
       let cgroup = Cgroup::fixture(&format!("fixtures/{fixture}"));
       let reader = Dmem { cgroup: &cgroup };
-      check_read(&cgroup, DmemCapacity::FILE_NAME, || reader.capacity());
-      check_read(&cgroup, DmemCurrent::FILE_NAME, || reader.current());
-      check_read(&cgroup, DmemPeak::FILE_NAME, || reader.peak());
-      check_read(&cgroup, DmemLimits::MIN_FILE_NAME, || reader.min());
-      check_read(&cgroup, DmemLimits::LOW_FILE_NAME, || reader.low());
-      check_read(&cgroup, DmemLimits::MAX_FILE_NAME, || reader.max());
+      cgroup.check_fixture(DmemCapacity::FILE_NAME, true, || reader.capacity());
+      cgroup.check_fixture(DmemCurrent::FILE_NAME, true, || reader.current());
+      cgroup.check_fixture(DmemPeak::FILE_NAME, true, || reader.peak());
+      cgroup.check_fixture(DmemLimits::MIN_FILE_NAME, true, || reader.min());
+      cgroup.check_fixture(DmemLimits::LOW_FILE_NAME, true, || reader.low());
+      cgroup.check_fixture(DmemLimits::MAX_FILE_NAME, true, || reader.max());
     }
   }
 

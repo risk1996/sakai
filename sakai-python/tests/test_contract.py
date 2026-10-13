@@ -109,23 +109,32 @@ class ContractTest(unittest.TestCase):
       if maximum is not None:
         self.assertLessEqual(limit.value, maximum)
 
+  def check_counters(
+    self,
+    value: object,
+    value_type: type[_Result],
+    names: str,
+    optional: str = "",
+  ) -> None:
+    self.assertIsInstance(value, value_type)
+    required, maybe = names.split(), optional.split()
+    for name in required + maybe:
+      count = getattr(value, name)
+      if name in required or count is not None:
+        self.check_unsigned(count)
+    self.check_frozen(value, *required)
+
   def test_misc_and_device_memory(self) -> None:
-    def check_counts(snapshot: Any, attribute: str) -> None:  # noqa: ANN401
+    def check_values(
+      snapshot: object, attribute: str, check: Callable[[Any], None]
+    ) -> None:
       values = getattr(snapshot, attribute)
       self.assertIsInstance(values, Mapping)
       self.check_frozen(snapshot, attribute)
       self.check_readonly(values, "unused")
       for name, value in values.items():
         self.assertIsInstance(name, str)
-        self.check_unsigned(value)
-
-    def check_limits(snapshot: Any, attribute: str) -> None:  # noqa: ANN401
-      values = getattr(snapshot, attribute)
-      self.check_frozen(snapshot, attribute)
-      self.check_readonly(values, "unused")
-      for name, limit in values.items():
-        self.assertIsInstance(name, str)
-        self.check_limit(limit)
+        check(value)
 
     misc = self.pinned_reader(Cgroup.misc)
     self.assertIsInstance(misc, sakai.MiscReader)
@@ -139,13 +148,13 @@ class ContractTest(unittest.TestCase):
       self.check_optional(
         "misc." + method.replace("_", "."),
         getattr(misc, method),
-        lambda value: check_counts(value, "resources"),
+        lambda value: check_values(value, "resources", self.check_unsigned),
         result_type,
       )
     self.check_optional(
       "misc.max",
       misc.max,
-      lambda value: check_limits(value, "resources"),
+      lambda value: check_values(value, "resources", self.check_limit),
       sakai.MiscMax,
     )
     dmem = self.pinned_reader(Cgroup.dmem)
@@ -153,14 +162,14 @@ class ContractTest(unittest.TestCase):
     self.check_optional(
       "dmem.capacity",
       dmem.capacity,
-      lambda value: check_counts(value, "regions"),
+      lambda value: check_values(value, "regions", self.check_unsigned),
       sakai.DmemCapacity,
     )
     for method in ["current", "peak", "min", "low", "max"]:
       self.check_optional(
         "dmem." + method,
         getattr(dmem, method),
-        lambda value: check_limits(value, "regions"),
+        lambda value: check_values(value, "regions", self.check_limit),
         {"current": sakai.DmemCurrent, "peak": sakai.DmemPeak}.get(
           method, sakai.DmemLimits
         ),
@@ -186,9 +195,7 @@ class ContractTest(unittest.TestCase):
           if kind == "max":
             self.check_limit(value)
           elif kind == "events":
-            self.check_frozen(value, "max", "alloc_fail")
-            self.check_unsigned(value.max)
-            self.check_unsigned(value.alloc_fail)
+            self.check_counters(value, sakai.RdmaResourceEvents, "max alloc_fail")
           else:
             self.check_unsigned(value)
 
@@ -218,13 +225,13 @@ class ContractTest(unittest.TestCase):
         (
           "events",
           huge.events,
-          lambda value: self.check_unsigned(value.max),
+          lambda value: self.check_counters(value, sakai.HugetlbEvents, "max"),
           sakai.HugetlbEvents,
         ),
         (
           "events.local",
           huge.events_local,
-          lambda value: self.check_unsigned(value.max),
+          lambda value: self.check_counters(value, sakai.HugetlbEvents, "max"),
           sakai.HugetlbEvents,
         ),
         (
@@ -774,21 +781,20 @@ class ContractTest(unittest.TestCase):
   def test_memory_events_and_oom_policy(self) -> None:
     memory = self.group.memory()
 
-    def check_events(events: MemoryEventCounts) -> None:
-      self.assertIsInstance(events, MemoryEventCounts)
-      for name in ("low", "high", "max", "oom", "oom_kill"):
-        self.check_unsigned(getattr(events, name))
-      for name in ("oom_group_kill", "sock_throttled"):
-        value = getattr(events, name)
-        if value is not None:
-          self.check_unsigned(value)
-      self.check_frozen(events, "low")
-
     for name, read in (
       ("memory.events", memory.events),
       ("memory.events.local", memory.events_local),
     ):
-      self.check_optional(name, read, check_events)
+      self.check_optional(
+        name,
+        read,
+        lambda value: self.check_counters(
+          value,
+          MemoryEventCounts,
+          "low high max oom oom_kill",
+          "oom_group_kill sock_throttled",
+        ),
+      )
     self.check_optional(
       "memory.oom.group",
       memory.oom_group,
@@ -803,14 +809,11 @@ class ContractTest(unittest.TestCase):
     for name, read in (("max", swap.max), ("high", swap.high)):
       self.check_optional(f"memory.swap.{name}", read, self.check_limit)
 
-    def check_events(events: SwapEvents) -> None:
-      self.assertIsInstance(events, SwapEvents)
-      self.assertTrue(events.high is None or events.high >= 0)
-      self.check_unsigned(events.max)
-      self.check_unsigned(events.fail)
-      self.check_frozen(events, "fail")
-
-    self.check_optional("memory.swap.events", swap.events, check_events)
+    self.check_optional(
+      "memory.swap.events",
+      swap.events,
+      lambda value: self.check_counters(value, SwapEvents, "max fail", "high"),
+    )
 
   def test_zswap_contract(self) -> None:
     zswap = self.group.memory().zswap()
@@ -830,13 +833,12 @@ class ContractTest(unittest.TestCase):
     self.check_optional("pids.peak", pids.peak, self.check_unsigned)
     self.check_optional("pids.max", pids.max, self.check_limit)
 
-    def check_events(events: PidsEvents) -> None:
-      self.assertIsInstance(events, PidsEvents)
-      self.check_unsigned(events.max)
-      self.check_frozen(events, "max")
-
-    self.check_optional("pids.events", pids.events, check_events)
-    self.check_optional("pids.events.local", pids.events_local, check_events)
+    for name, read in (("events", pids.events), ("events.local", pids.events_local)):
+      self.check_optional(
+        f"pids.{name}",
+        read,
+        lambda value: self.check_counters(value, PidsEvents, "max"),
+      )
 
   def test_cgroup_state_contract(self) -> None:
     def check_events(events: CgroupEvents) -> None:
@@ -848,15 +850,12 @@ class ContractTest(unittest.TestCase):
 
     self.check_optional("cgroup.events", self.group.core().events, check_events)
     stat = self.group.core().stat()
-    self.assertIsInstance(stat, CgroupStat)
-    self.check_unsigned(stat.descendants)
-    self.check_unsigned(stat.dying_descendants)
+    self.check_counters(stat, CgroupStat, "descendants dying_descendants")
     for mapping in (stat.subsystems, stat.dying_subsystems):
       self.assertTrue(all(isinstance(key, str) for key in mapping))
       for value in mapping.values():
         self.check_unsigned(value)
       self.check_readonly(mapping, "memory")
-    self.check_frozen(stat, "descendants", "dying_descendants")
 
   def test_process_and_core_readers_retain_handle(self) -> None:
     parent = Cgroup.from_path(self.group.path)

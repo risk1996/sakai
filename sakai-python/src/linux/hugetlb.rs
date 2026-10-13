@@ -159,12 +159,12 @@ impl HugetlbNumaStat {
 #[cfg(test)]
 mod tests {
   use assertables::{assert_err, assert_ok};
-  use pyo3::{
-    exceptions::{PyAttributeError, PyTypeError},
-    types::PyDict,
-  };
+  use pyo3::types::PyDict;
 
-  use super::*;
+  use super::{
+    super::tests::{check_frozen, readonly},
+    *,
+  };
 
   #[test]
   fn converts_snapshots_to_immutable_unsigned_python_values() {
@@ -174,7 +174,7 @@ mod tests {
       assert_eq!(events, HugetlbEvents { max: u64::MAX });
       let object = assert_ok!(Py::new(py, events));
       assert_eq!(assert_ok!(assert_ok!(object.bind(py).getattr("max")).extract::<u64>()), u64::MAX);
-      assert!(assert_err!(object.bind(py).setattr("max", 0)).is_instance_of::<PyAttributeError>(py));
+      check_frozen(object.bind(py).as_any(), &["max"]);
 
       let expected = HugetlbNumaStat { total: u64::MAX, nodes: BTreeMap::from([(0, 0), (7, u64::MAX)]) };
       let snapshot = HugetlbNumaStat::from(assert_ok!(
@@ -183,13 +183,10 @@ mod tests {
       assert_eq!(snapshot, expected);
       let object = assert_ok!(Py::new(py, snapshot));
       assert_eq!(assert_ok!(assert_ok!(object.bind(py).getattr("total")).extract::<u64>()), expected.total);
-      let nodes = assert_ok!(object.bind(py).getattr("nodes"));
+      let nodes = readonly(object.bind(py).as_any(), "nodes", 0);
       let values = assert_ok!(py.get_type::<PyDict>().call1((&nodes,)));
       assert_eq!(assert_ok!(values.extract::<BTreeMap<u32, u64>>()), expected.nodes);
-      assert!(assert_err!(nodes.set_item(0, 1)).is_instance_of::<PyTypeError>(py));
-      for name in ["nodes", "total"] {
-        assert!(assert_err!(object.bind(py).setattr(name, 0)).is_instance_of::<PyAttributeError>(py));
-      }
+      check_frozen(object.bind(py).as_any(), &["total"]);
       for label in ["../2MB", "0MB", "2mb", "3MB", "2048KB"] {
         assert!(assert_err!(HugetlbReader::size(label)).is_instance_of::<PyValueError>(py));
       }

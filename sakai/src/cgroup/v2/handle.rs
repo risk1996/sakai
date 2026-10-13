@@ -384,7 +384,7 @@ mod tests {
       Self { directory: assert_ok!(fs::open(&path, DIRECTORY_FLAGS, Mode::empty())), path }
     }
 
-    fn check_fixture<T>(&self, name: &str, optional: bool, read: impl FnOnce() -> Result<T, Error>)
+    pub(crate) fn check_fixture<T>(&self, name: &str, optional: bool, read: impl FnOnce() -> Result<T, Error>)
     where
       T: FromStr + Debug + PartialEq,
       T::Err: Debug, {

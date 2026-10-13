@@ -329,9 +329,12 @@ impl MemoryNumaStat {
 #[cfg(test)]
 mod tests {
   use assertables::{assert_err, assert_ok};
-  use pyo3::exceptions::{PyAttributeError, PyTypeError};
+  use pyo3::exceptions::PyTypeError;
 
-  use super::*;
+  use super::{
+    super::tests::{check_frozen, readonly},
+    *,
+  };
 
   #[test]
   fn separates_memory_bytes_pages_and_counts() {
@@ -383,7 +386,7 @@ mod tests {
           {
             assert_eq!(assert_ok!(assert_ok!(object.bind(py).getattr(name)).extract::<Option<u64>>()), expected);
           }
-          assert!(assert_err!(object.bind(py).setattr("low", 0)).is_instance_of::<PyAttributeError>(py));
+          check_frozen(object.bind(py).as_any(), &["low"]);
         }
       }
     });
@@ -402,8 +405,7 @@ mod tests {
         let object = assert_ok!(Py::new(py, events));
         let high = assert_ok!(object.bind(py).getattr("high"));
         assert_eq!(assert_ok!(high.extract::<Option<u64>>()), expected.high);
-        let error = assert_err!(object.bind(py).setattr("fail", 0));
-        assert!(error.is_instance_of::<PyAttributeError>(py));
+        check_frozen(object.bind(py).as_any(), &["fail"]);
       }
     });
   }
@@ -428,14 +430,12 @@ mod tests {
         ("pages", "pgdemote_direct", BTreeMap::from([(2, 3)])),
         ("counts", "workingset_refault_file", BTreeMap::from([(2, 7)])),
       ] {
-        let mapping = assert_ok!(object.bind(py).getattr(name));
+        let mapping = readonly(object.bind(py).as_any(), name, "future");
         let nodes = assert_ok!(mapping.get_item(field));
         let values = assert_ok!(py.get_type::<PyDict>().call1((&nodes,)));
         assert_eq!(assert_ok!(values.extract::<BTreeMap<u32, u64>>()), expected);
-        assert!(assert_err!(mapping.set_item("future", 0)).is_instance_of::<PyTypeError>(py));
         assert!(assert_err!(nodes.set_item(0, 0)).is_instance_of::<PyTypeError>(py));
       }
-      assert!(assert_err!(object.bind(py).setattr("bytes", 0)).is_instance_of::<PyAttributeError>(py));
     });
   }
 }

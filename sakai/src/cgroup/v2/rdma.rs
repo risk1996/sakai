@@ -375,9 +375,6 @@ fn parse_devices<T>(
 
 #[cfg(test)]
 mod tests {
-  #[cfg(target_os = "linux")]
-  use assertables::{assert_ok, assert_some};
-
   use super::*;
   use crate::parse::tests::{
     Cases,
@@ -600,36 +597,37 @@ mod tests {
       let cgroup = Cgroup::fixture(&format!("fixtures/{fixture}"));
       let rdma = cgroup.rdma();
       let path = cgroup.path();
-      let before: BTreeMap<_, _> = [
-        RdmaCurrent::FILE_NAME,
-        RdmaMax::FILE_NAME,
-        RdmaCurrent::PEAK_FILE_NAME,
-        RdmaEvents::FILE_NAME,
-        RdmaEvents::LOCAL_FILE_NAME,
-      ]
-      .into_iter()
-      .filter_map(|name| std::fs::read_to_string(path.join(name)).ok().map(|raw| (name, raw)))
-      .collect();
-      assert_eq!(
-        assert_ok!(rdma.current()),
-        assert_ok!(assert_some!(before.get(RdmaCurrent::FILE_NAME)).parse::<RdmaCurrent>())
-      );
-      assert_eq!(assert_ok!(rdma.max()), assert_ok!(assert_some!(before.get(RdmaMax::FILE_NAME)).parse::<RdmaMax>()));
-      for (name, read) in [
-        (RdmaCurrent::PEAK_FILE_NAME, rdma.peak().map(|_| ())),
-        (RdmaEvents::FILE_NAME, rdma.events().map(|_| ())),
-        (RdmaEvents::LOCAL_FILE_NAME, rdma.events_local().map(|_| ())),
-      ] {
-        match fixture {
-          | "p6" | "p6_rdma_index" => {
-            assert_ok!(read);
-          },
-          | _ => assert!(matches!(read, Err(Error::FileMissing { path: missing }) if missing == path.join(name))),
-        }
+      // Also catch accidental writes to a different interface in this cgroup.
+      let snapshot = || {
+        [
+          RdmaCurrent::FILE_NAME,
+          RdmaMax::FILE_NAME,
+          RdmaCurrent::PEAK_FILE_NAME,
+          RdmaEvents::FILE_NAME,
+          RdmaEvents::LOCAL_FILE_NAME,
+        ]
+        .map(|name| std::fs::read_to_string(path.join(name)).ok())
+      };
+      let before = snapshot();
+      cgroup.check_fixture(RdmaCurrent::FILE_NAME, false, || rdma.current());
+      cgroup.check_fixture(RdmaMax::FILE_NAME, false, || rdma.max());
+      match fixture {
+        | "p6_older" => {
+          for (name, read) in [
+            (RdmaCurrent::PEAK_FILE_NAME, rdma.peak().map(|_| ())),
+            (RdmaEvents::FILE_NAME, rdma.events().map(|_| ())),
+            (RdmaEvents::LOCAL_FILE_NAME, rdma.events_local().map(|_| ())),
+          ] {
+            assert!(matches!(read, Err(Error::FileMissing { path: missing }) if missing == path.join(name)));
+          }
+        },
+        | _ => {
+          cgroup.check_fixture(RdmaCurrent::PEAK_FILE_NAME, false, || rdma.peak());
+          cgroup.check_fixture(RdmaEvents::FILE_NAME, false, || rdma.events());
+          cgroup.check_fixture(RdmaEvents::LOCAL_FILE_NAME, false, || rdma.events_local());
+        },
       }
-      for (name, raw) in before {
-        assert_eq!(assert_ok!(std::fs::read_to_string(path.join(name))), raw);
-      }
+      assert_eq!(snapshot(), before);
     }
     let cgroup = Cgroup::fixture("");
     for (name, read) in [
