@@ -21,7 +21,7 @@ pub(super) enum PythonLimitValue {
 /// Check `is_max` before reading
 /// `value`; accessing `value` for `max` raises ValueError.
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
-#[pyclass(generic, frozen, skip_from_py_object, module = "sakai._sakai")]
+#[pyclass(generic, frozen, module = "sakai._sakai")]
 #[derive(Clone, Copy)]
 pub(super) struct MaxOr {
   inner: Option<PythonLimitValue>,

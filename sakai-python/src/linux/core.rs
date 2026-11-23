@@ -15,7 +15,7 @@ use crate::quantity::Quantity;
 
 /// Immutable lifecycle snapshot; states can change immediately after a read.
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
-#[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
+#[pyclass(frozen, get_all, module = "sakai._sakai")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct CgroupEvents {
   /// Whether this cgroup or any descendant contains live processes.
@@ -95,7 +95,7 @@ impl CgroupStat {
 /// Properties inspect stored snapshots without I/O.
 /// See https://github.com/torvalds/linux/blob/v6.18/kernel/cgroup/cgroup.c.
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
-#[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
+#[pyclass(frozen, get_all, module = "sakai._sakai")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct CgroupStatLocal {
   /// Stored cumulative local freezing duration in integer nanoseconds.

@@ -141,7 +141,7 @@ impl RdmaCurrent {
 /// 2,147,483,647 and is exposed as that count quantity, not an unlimited value.
 /// Properties inspect stored values without performing I/O.
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
-#[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
+#[pyclass(frozen, get_all, module = "sakai._sakai")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct RdmaDeviceCurrent {
   /// Stored count of HCA handles, or their independent historical peak.
@@ -190,7 +190,7 @@ impl RdmaMax {
 /// Zero is a valid limit. max means no limit here; ancestor limits still
 /// apply. Reading a property does not refresh this configuration snapshot.
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
-#[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
+#[pyclass(frozen, get_all, module = "sakai._sakai")]
 #[derive(Clone)]
 pub(super) struct RdmaDeviceMax {
   /// Stored HCA handle limit in counts, or max.
@@ -241,7 +241,7 @@ impl RdmaEvents {
 ///
 /// Properties return stored events without refreshing the snapshot.
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
-#[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
+#[pyclass(frozen, get_all, module = "sakai._sakai")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct RdmaDeviceEvents {
   /// Stored allocation-event counts for HCA handles.
@@ -262,7 +262,7 @@ impl From<CoreRdmaDeviceEvents> for RdmaDeviceEvents {
 /// events() is hierarchical; events_local() is local. Properties inspect the
 /// stored snapshot without I/O. Counts may increase on the next fresh read.
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
-#[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
+#[pyclass(frozen, get_all, module = "sakai._sakai")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct RdmaResourceEvents {
   /// Failures against this cgroup's own limit, including descendant requests.

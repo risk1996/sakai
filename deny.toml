@@ -9,9 +9,7 @@ unmaintained = "all"
 unsound = "all"
 yanked = "deny"
 unused-ignored-advisory = "deny"
-# RustPython's Unicode tables are used by the stub derive macro and the opt-in
-# generator, not linked into the normal extension. These notices concern
-# maintenance, with no available upgrade; retain all other advisory checks.
+# These maintenance notices affect the stub tools. No fixed releases are available.
 ignore = [
   "RUSTSEC-2025-0075", # unic-char-range
   "RUSTSEC-2025-0080", # unic-common
@@ -19,6 +17,7 @@ ignore = [
   "RUSTSEC-2025-0090", # unic-emoji-char
   "RUSTSEC-2025-0098", # unic-ucd-version
   "RUSTSEC-2025-0100", # unic-ucd-ident
+  "RUSTSEC-2026-0543", # chrono, required only by the opt-in stub generator
 ]
 
 [licenses]

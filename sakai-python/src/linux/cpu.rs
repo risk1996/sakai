@@ -76,7 +76,7 @@ impl CpuReader {
 
 /// Hierarchical CPU usage and optional bandwidth statistics.
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
-#[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
+#[pyclass(frozen, get_all, module = "sakai._sakai")]
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct CpuStat {
   /// CPU usage split into total, user, and system nanoseconds.
@@ -93,7 +93,7 @@ impl From<CoreCpuStat> for CpuStat {
 
 /// Local CPU statistics, distinct from hierarchical cpu.stat.
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
-#[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
+#[pyclass(frozen, get_all, module = "sakai._sakai")]
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct CpuStatLocal {
   /// Locally throttled time in nanoseconds, if reported by the kernel.
@@ -106,7 +106,7 @@ impl From<CoreCpuStatLocal> for CpuStatLocal {
 
 /// CPU usage times in nanoseconds.
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
-#[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
+#[pyclass(frozen, get_all, module = "sakai._sakai")]
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct CpuTimeStat {
   /// Total CPU usage in nanoseconds.
@@ -140,7 +140,7 @@ impl From<CoreCpuTimeStat> for CpuTimeStat {
 /// The kernel's signed 32-bit event counters are exposed as unsigned counts;
 /// they wrap after 2^32 events, so snapshots need not stay monotonic forever.
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
-#[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
+#[pyclass(frozen, get_all, module = "sakai._sakai")]
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct CpuBandwidthStat {
   /// Number of elapsed bandwidth periods.
@@ -166,7 +166,7 @@ impl From<CoreCpuBandwidthStat> for CpuBandwidthStat {
 
 /// CPU bandwidth burst counters.
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
-#[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
+#[pyclass(frozen, get_all, module = "sakai._sakai")]
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct CpuBurstStat {
   /// Number of bursts.
@@ -181,7 +181,7 @@ impl From<CoreCpuBurstStat> for CpuBurstStat {
 
 /// This cgroup's CPU quota and period, independent of ancestor limits.
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
-#[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
+#[pyclass(frozen, get_all, module = "sakai._sakai")]
 #[derive(Clone)]
 pub(super) struct CpuMax {
   /// Quota in nanoseconds or the kernel's `max`.
@@ -204,7 +204,7 @@ impl From<CoreCpuMax> for CpuMax {
 
 /// CPU scheduling weight or the special idle state.
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
-#[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
+#[pyclass(frozen, get_all, module = "sakai._sakai")]
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct CpuWeight {
   /// Whether this cgroup uses the special idle scheduling weight.
