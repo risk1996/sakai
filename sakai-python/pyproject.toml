@@ -2,13 +2,21 @@
 name = "sakai"
 dynamic = ["version"]
 description = "Read-only Linux cgroup v2 metrics"
+readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]
 classifiers = [
   "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: Implementation :: CPython",
   "Operating System :: POSIX :: Linux",
 ]
+
+[project.urls]
+Source = "https://github.com/risk1996/sakai"
+Documentation = "https://github.com/risk1996/sakai/tree/main/sakai-python"
+Issues = "https://github.com/risk1996/sakai/issues"
+Changelog = "https://github.com/risk1996/sakai/blob/main/sakai/CHANGELOG.md"
 
 [build-system]
 requires = ["maturin>=1.15,<2"]

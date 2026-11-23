@@ -7,13 +7,14 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 edition = "2024"
 rust-version = "1.88.0"
 license = "MIT"
 
 [workspace.dependencies]
 assertables = "10.1.0"
+indoc = "2.0.8"
 tempfile = "3"
 uom = { version = "0.38.0", default-features = false, features = ["f64", "u64", "si"] }
 
