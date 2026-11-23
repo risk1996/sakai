@@ -17,7 +17,7 @@ pub(super) enum PythonLimitValue {
 
 /// A kernel `max` or a concrete value in the surrounding field's units.
 ///
-/// This class is generic in Python: limits contain ordinary Pint quantities.
+/// This class is generic in Python: limits contain native quantities.
 /// Check `is_max` before reading
 /// `value`; accessing `value` for `max` raises ValueError.
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
@@ -86,7 +86,7 @@ mod tests {
 
   #[test]
   fn max_or_exposes_typed_python_values_and_guards_max() {
-    crate::quantity::tests::initialize_python();
+    Python::initialize();
     Python::attach(|py| {
       let integer = assert_ok!(Py::new(py, MaxOr::from_bytes(CoreMaxOr::Value(Bytes::new::<byte>(0)))));
       let integer_value = assert_ok!(integer.bind(py).getattr("value"));

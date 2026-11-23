@@ -5,30 +5,28 @@ use pyo3::{
   types::PyDict,
 };
 
-pub(super) fn check_limit(limit: &Bound<'_, PyAny>, expected: Option<u64>) {
+pub(super) fn check_limit(limit: &Bound<'_, PyAny>, expected: Option<u64>, unit: &str) {
   assert_eq!(assert_ok!(assert_ok!(limit.getattr("is_max")).extract::<bool>()), expected.is_none());
   match expected {
     | Some(expected) => {
       let value = assert_ok!(limit.getattr("value"));
-      assert_eq!(assert_ok!(assert_ok!(value.getattr("magnitude")).extract::<u64>()), expected);
+      assert_eq!(assert_ok!(assert_ok!(value.getattr(unit)).extract::<u64>()), expected);
     },
     | None => assert!(assert_err!(limit.getattr("value")).is_instance_of::<PyValueError>(limit.py())),
   }
 }
 
-pub(super) fn magnitudes<'py>(object: &Bound<'py, PyAny>) -> Bound<'py, PyAny> {
-  if assert_ok!(object.hasattr("magnitude")) {
-    assert_ok!(object.getattr("magnitude"))
-  } else if object.is_none() {
+pub(super) fn magnitudes<'py>(object: &Bound<'py, PyAny>, unit: &str) -> Bound<'py, PyAny> {
+  if object.is_none() {
     object.clone()
   } else if let Ok(mapping) = object.cast::<PyDict>() {
     let values = PyDict::new(object.py());
     for (key, value) in mapping.iter() {
-      assert_ok!(values.set_item(key, magnitudes(&value)));
+      assert_ok!(values.set_item(key, magnitudes(&value, unit)));
     }
     values.into_any()
   } else {
-    object.clone()
+    assert_ok!(object.getattr(unit))
   }
 }
 

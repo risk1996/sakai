@@ -74,14 +74,14 @@ impl CgroupStat {
 
   /// Read-only live subsystem counts at and beneath this cgroup.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, pint.Quantity[int]]", imports = ("collections.abc", "pint",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, Count]", imports = ("collections.abc",)))]
   fn subsystems(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     Ok(PyMappingProxy::new(py, self.subsystems.clone().into_py_dict(py)?.as_mapping()).unbind())
   }
 
   /// Read-only dying subsystem counts at and beneath this cgroup.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, pint.Quantity[int]]", imports = ("collections.abc", "pint",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, Count]", imports = ("collections.abc",)))]
   fn dying_subsystems(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     Ok(PyMappingProxy::new(py, self.dying_subsystems.clone().into_py_dict(py)?.as_mapping()).unbind())
   }
@@ -172,21 +172,21 @@ impl CoreReader {
     PythonError::read(py, &self.owner, |owner| owner.core().freeze()).map(|value| value.value())
   }
 
-  /// Read the configured maximum descendant depth as MaxOr[pint.Quantity[int]] cgroup levels.
+  /// Read the configured maximum descendant depth as MaxOr[Count] cgroup levels.
   ///
   /// Zero prevents children; max removes this cgroup's restriction. Ancestor
   /// restrictions still apply. Available at the root. See CoreReader for errors.
-  #[gen_stub(override_return_type(type_repr = "MaxOr[pint.Quantity[int]]"))]
+  #[gen_stub(override_return_type(type_repr = "MaxOr[Count]"))]
   fn max_depth(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, |owner| owner.core().max_depth()).map(|value| MaxOr::from_count(value.value()))
   }
 
-  /// Read the maximum descendant cgroup count, excluding this cgroup, as MaxOr[pint.Quantity[int]].
+  /// Read the maximum descendant cgroup count, excluding this cgroup, as MaxOr[Count].
   ///
   /// Zero prevents children; max removes this cgroup's restriction. Ancestors
   /// still restrict creation, and existing descendants may exceed a lowered
   /// limit. Available at the root. See CoreReader for read errors.
-  #[gen_stub(override_return_type(type_repr = "MaxOr[pint.Quantity[int]]"))]
+  #[gen_stub(override_return_type(type_repr = "MaxOr[Count]"))]
   fn max_descendants(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, |owner| owner.core().max_descendants())
       .map(|value| MaxOr::from_count(value.value()))
@@ -236,7 +236,7 @@ mod tests {
 
   #[test]
   fn preserves_process_limits_states_and_immutable_subsystem_counts() {
-    crate::quantity::tests::initialize_python();
+    Python::initialize();
     Python::attach(|py| {
       let local = CgroupStatLocal::from(assert_ok!("frozen_usec 123456".parse::<CoreCgroupStatLocal>()));
       assert_eq!(local, CgroupStatLocal { frozen_time: 123_456_000.into() });
@@ -249,7 +249,7 @@ mod tests {
       for (input, expected) in [("0", Some(0)), ("18446744073709551615", Some(u64::MAX)), ("max", None)] {
         let limit = MaxOr::from_count(assert_ok!(input.parse::<sakai::v2::pids::PidsMax>()).value());
         let object = assert_ok!(Py::new(py, limit));
-        check_limit(object.bind(py).as_any(), expected);
+        check_limit(object.bind(py).as_any(), expected, "count");
       }
       for (input, expected) in [
         ("populated 1", CgroupEvents { populated: true, frozen: None }),

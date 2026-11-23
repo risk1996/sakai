@@ -1,10 +1,15 @@
-//! Conversion of typed Rust quantities into ordinary Pint quantities.
+//! Native Python quantities backed by Sakai's Rust units.
 
 use pyo3::{prelude::*, types::PyModule};
-use sakai::{Bytes, BytesPerSecond, Count, OperationsPerSecond, Pages, Ratio, Time};
-use uom::si::{frequency::hertz, information::byte, information_rate::byte_per_second, ratio::ratio, time::nanosecond};
+use uom::si::{
+  frequency::hertz,
+  information::byte,
+  information_rate::byte_per_second,
+  ratio::{percent, ratio},
+  time::nanosecond,
+};
 
-/// Retains a Rust quantity until Python requests a fresh Pint object.
+/// Retains a Rust quantity until it is exposed as its concrete Python class.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Quantity<Q>(pub(crate) Q);
 
@@ -16,165 +21,201 @@ impl<Q: Copy> From<&Q> for Quantity<Q> {
   fn from(value: &Q) -> Self { Self(*value) }
 }
 
-fn registry(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
-  PyModule::import(py, "pint")?.call_method0("get_application_registry")
-}
-
-/// Finish Pint's lazy registry initialization while Python serializes imports.
-pub(crate) fn initialize(py: Python<'_>) -> PyResult<()> {
-  registry(py)?.getattr("Quantity")?;
-  Ok(())
-}
-
-macro_rules! pint_quantity {
-  ($quantity:ty, $magnitude:ty, $unit:literal, $value:ident => $extract:expr) => {
-    impl<'py> IntoPyObject<'py> for Quantity<$quantity> {
-      type Error = PyErr;
-      type Output = Bound<'py, PyAny>;
-      type Target = PyAny;
-
-      fn into_pyobject(self, py: Python<'py>) -> PyResult<Self::Output> {
-        let $value = self.0;
-        registry(py)?.call_method1("Quantity", ($extract, $unit))
-      }
+macro_rules! quantities {
+  ($(
+    $(#[$class_doc:meta])*
+    $name:ident($value:ident) in $unit:literal {
+      $(#[$base_doc:meta])*
+      $base:ident -> $scalar:ty = $extract:expr;
+      $($(#[$doc:meta])* $getter:ident -> $result:ty = $convert:expr;)*
+    }
+  )*) => {
+    pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
+      $(module.add_class::<$name>()?;)*
+      Ok(())
     }
 
-    impl<'py> IntoPyObject<'py> for &Quantity<$quantity> {
-      type Error = PyErr;
-      type Output = Bound<'py, PyAny>;
-      type Target = PyAny;
+    $(
+      $(#[$class_doc])*
+      #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
+      #[pyclass(frozen, module = "sakai._sakai")]
+      pub(crate) struct $name(sakai::$name);
 
-      fn into_pyobject(self, py: Python<'py>) -> PyResult<Self::Output> { (*self).into_pyobject(py) }
-    }
+      #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
+      #[pymethods]
+      impl $name {
+        $(#[$base_doc])*
+        #[getter]
+        fn $base(&$value) -> $scalar { $extract }
 
-    #[cfg(feature = "stubs")]
-    impl pyo3_stub_gen::PyStubType for Quantity<$quantity> {
-      fn type_output() -> pyo3_stub_gen::TypeInfo {
-        pyo3_stub_gen::TypeInfo::with_module(concat!("pint.Quantity[", stringify!($magnitude), "]"), "pint".into())
-      }
-    }
-  };
-}
+        $(
+          $(#[$doc])*
+          #[getter]
+          fn $getter(&$value) -> $result { $convert }
+        )*
 
-pint_quantity!(Time, int, "nanosecond", value => value.get::<nanosecond>());
-pint_quantity!(Bytes, int, "byte", value => value.get::<byte>());
-pint_quantity!(Count, int, "count", value => value.value);
-pint_quantity!(BytesPerSecond, int, "byte / second", value => value.get::<byte_per_second>());
-pint_quantity!(OperationsPerSecond, int, "count / second", value => value.get::<hertz>());
-pint_quantity!(Ratio, float, "dimensionless", value => value.get::<ratio>());
-
-impl<'py> IntoPyObject<'py> for Quantity<Pages> {
-  type Error = PyErr;
-  type Output = Bound<'py, PyAny>;
-  type Target = PyAny;
-
-  fn into_pyobject(self, py: Python<'py>) -> PyResult<Self::Output> {
-    let registry = registry(py)?;
-    // Pages have no universal byte size. Add only our namespaced unit; never
-    // redefine the application's standard information or count units.
-    if !registry.contains("sakai_page")? {
-      registry.call_method1("define", ("sakai_page = [sakai_page]",))?;
-    }
-    let unit = registry.call_method1("Quantity", (1, "sakai_page"))?;
-    if !unit.call_method1("check", ("[sakai_page]",))?.extract::<bool>()?
-      || !unit.call_method0("to_base_units")?.getattr("magnitude")?.eq(1)?
-    {
-      return Err(pyo3::exceptions::PyValueError::new_err("sakai_page must be an unscaled [sakai_page] unit"));
-    }
-    registry.call_method1("Quantity", (self.0.value, "sakai_page"))
-  }
-}
-
-impl<'py> IntoPyObject<'py> for &Quantity<Pages> {
-  type Error = PyErr;
-  type Output = Bound<'py, PyAny>;
-  type Target = PyAny;
-
-  fn into_pyobject(self, py: Python<'py>) -> PyResult<Self::Output> { (*self).into_pyobject(py) }
-}
-
-#[cfg(feature = "stubs")]
-impl pyo3_stub_gen::PyStubType for Quantity<Pages> {
-  fn type_output() -> pyo3_stub_gen::TypeInfo {
-    pyo3_stub_gen::TypeInfo::with_module("pint.Quantity[int]", "pint".into())
-  }
-}
-
-#[cfg(test)]
-pub(crate) mod tests {
-  use std::sync::Once;
-
-  use assertables::{assert_err, assert_in_delta, assert_ok};
-
-  use super::*;
-
-  pub(crate) fn initialize_python() {
-    static INITIALIZE: Once = Once::new();
-    INITIALIZE.call_once(|| {
-      Python::initialize();
-      Python::attach(|py| assert_ok!(initialize(py)));
-    });
-  }
-
-  macro_rules! test_quantity {
-    ($quantity:ty, $magnitude:ty, $unit:literal, $value:ident => $construct:expr) => {
-      impl From<$magnitude> for Quantity<$quantity> {
-        fn from($value: $magnitude) -> Self { Self($construct) }
+        fn __repr__(&self) -> String {
+          format!("{}({} {})", stringify!($name), self.$base(), $unit)
+        }
       }
 
-      impl<'a, 'py> FromPyObject<'a, 'py> for Quantity<$quantity> {
+      impl<'py> IntoPyObject<'py> for Quantity<sakai::$name> {
+        type Error = PyErr;
+        type Output = Bound<'py, $name>;
+        type Target = $name;
+
+        fn into_pyobject(self, py: Python<'py>) -> PyResult<Self::Output> {
+          Bound::new(py, $name(self.0))
+        }
+      }
+
+      impl<'py> IntoPyObject<'py> for &Quantity<sakai::$name> {
+        type Error = PyErr;
+        type Output = Bound<'py, $name>;
+        type Target = $name;
+
+        fn into_pyobject(self, py: Python<'py>) -> PyResult<Self::Output> { (*self).into_pyobject(py) }
+      }
+
+      #[cfg(feature = "stubs")]
+      impl pyo3_stub_gen::PyStubType for Quantity<sakai::$name> {
+        fn type_output() -> pyo3_stub_gen::TypeInfo {
+          <$name as pyo3_stub_gen::PyStubType>::type_output()
+        }
+      }
+
+      #[cfg(all(test, target_os = "linux"))]
+      impl<'a, 'py> FromPyObject<'a, 'py> for Quantity<sakai::$name> {
         type Error = PyErr;
 
         fn extract(object: Borrowed<'a, 'py, PyAny>) -> PyResult<Self> {
-          Ok(object.call_method1("to", ($unit,))?.getattr("magnitude")?.extract::<$magnitude>()?.into())
+          Ok(Self(object.extract::<PyRef<'_, $name>>()?.0))
         }
+      }
+    )*
+  };
+}
+
+#[expect(
+  clippy::cast_precision_loss,
+  reason = "fractional accessors round large values; canonical accessors are exact"
+)]
+fn fractional(value: u64, units: f64) -> f64 { value as f64 / units }
+
+quantities! {
+  /// A duration stored in integer nanoseconds.
+  Time(self) in "ns" {
+    /// Exact duration in nanoseconds.
+    nanoseconds -> u64 = self.0.get::<nanosecond>();
+    /// Duration in microseconds, including fractions.
+    microseconds -> f64 = fractional(self.nanoseconds(), 1_000.0);
+    /// Duration in milliseconds, including fractions.
+    milliseconds -> f64 = fractional(self.nanoseconds(), 1_000_000.0);
+    /// Duration in seconds, including fractions.
+    seconds -> f64 = fractional(self.nanoseconds(), 1_000_000_000.0);
+  }
+  /// An amount of information stored in integer bytes.
+  Bytes(self) in "B" {
+    /// Exact amount in bytes.
+    bytes -> u64 = self.0.get::<byte>();
+    /// Exact amount in bits.
+    bits -> u128 = u128::from(self.bytes()) * 8;
+    /// Amount in kibibytes, including fractions.
+    kibibytes -> f64 = fractional(self.bytes(), 1024.0);
+    /// Amount in mebibytes, including fractions.
+    mebibytes -> f64 = fractional(self.bytes(), 1024.0_f64.powi(2));
+    /// Amount in gibibytes, including fractions.
+    gibibytes -> f64 = fractional(self.bytes(), 1024.0_f64.powi(3));
+  }
+  /// A number of tasks, events, or other counted objects.
+  Count(self) in "count" {
+    /// Exact number of counted objects.
+    count -> u64 = self.0.value;
+  }
+  /// A number of memory pages, independent of page size.
+  Pages(self) in "pages" {
+    /// Exact number of pages.
+    pages -> u64 = self.0.value;
+  }
+  /// An information rate stored in integer bytes per second.
+  BytesPerSecond(self) in "B/s" {
+    /// Exact rate in bytes per second.
+    bytes_per_second -> u64 = self.0.get::<byte_per_second>();
+    /// Rate in kibibytes per second, including fractions.
+    kibibytes_per_second -> f64 = fractional(self.bytes_per_second(), 1024.0);
+    /// Rate in mebibytes per second, including fractions.
+    mebibytes_per_second -> f64 = fractional(self.bytes_per_second(), 1024.0_f64.powi(2));
+    /// Rate in gibibytes per second, including fractions.
+    gibibytes_per_second -> f64 = fractional(self.bytes_per_second(), 1024.0_f64.powi(3));
+  }
+  /// An I/O operation rate stored in integer operations per second.
+  OperationsPerSecond(self) in "ops/s" {
+    /// Exact rate in operations per second.
+    operations_per_second -> u64 = self.0.get::<hertz>();
+  }
+  /// A dimensionless ratio, such as CPU utilization or a pressure average.
+  Ratio(self) in "ratio" {
+    /// The dimensionless value as a fraction, such as 0.5 for 50%.
+    fraction -> f64 = self.0.get::<ratio>();
+    /// The value as a percentage, such as 50.0 for 50%.
+    percent -> f64 = self.0.get::<percent>();
+  }
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod fixtures {
+  use super::*;
+
+  macro_rules! from_magnitude {
+    ($type:ident, $scalar:ty, $value:ident => $construct:expr) => {
+      impl From<$scalar> for Quantity<sakai::$type> {
+        fn from($value: $scalar) -> Self { Self($construct) }
       }
     };
   }
 
-  test_quantity!(Time, u64, "nanosecond", value => Time::new::<nanosecond>(value));
-  test_quantity!(Bytes, u64, "byte", value => Bytes::new::<byte>(value));
-  test_quantity!(Count, u64, "count", value => Count { value, ..Default::default() });
-  test_quantity!(Pages, u64, "sakai_page", value => Pages { value, ..Default::default() });
-  test_quantity!(BytesPerSecond, u64, "byte / second", value => BytesPerSecond::new::<byte_per_second>(value));
-  test_quantity!(OperationsPerSecond, u64, "count / second", value => OperationsPerSecond::new::<hertz>(value));
-  test_quantity!(Ratio, f64, "dimensionless", value => Ratio::new::<ratio>(value));
+  from_magnitude!(Time, u64, value => sakai::Time::new::<nanosecond>(value));
+  from_magnitude!(Bytes, u64, value => sakai::Bytes::new::<byte>(value));
+  from_magnitude!(Count, u64, value => sakai::Count { value, ..Default::default() });
+  from_magnitude!(Pages, u64, value => sakai::Pages { value, ..Default::default() });
+  from_magnitude!(BytesPerSecond, u64, value => sakai::BytesPerSecond::new::<byte_per_second>(value));
+  from_magnitude!(OperationsPerSecond, u64, value => sakai::OperationsPerSecond::new::<hertz>(value));
+  from_magnitude!(Ratio, f64, value => sakai::Ratio::new::<ratio>(value));
+}
+
+#[cfg(test)]
+mod tests {
+  use assertables::{assert_in_delta, assert_ok};
+
+  use super::*;
 
   #[test]
-  fn preserves_integer_magnitudes_and_units() {
-    initialize_python();
-    Python::attach(|py| {
-      for magnitude in [0, 1, (1_u64 << 53) + 1, u64::MAX] {
-        let values = [
-          assert_ok!(Quantity(Time::new::<nanosecond>(magnitude)).into_pyobject(py)),
-          assert_ok!(Quantity(Bytes::new::<byte>(magnitude)).into_pyobject(py)),
-          assert_ok!(Quantity(Count { value: magnitude, ..Default::default() }).into_pyobject(py)),
-          assert_ok!(Quantity(Pages { value: magnitude, ..Default::default() }).into_pyobject(py)),
-          assert_ok!(Quantity(BytesPerSecond::new::<byte_per_second>(magnitude)).into_pyobject(py)),
-          assert_ok!(Quantity(OperationsPerSecond::new::<hertz>(magnitude)).into_pyobject(py)),
-        ];
-        for (value, unit) in
-          values.into_iter().zip(["nanosecond", "byte", "count", "sakai_page", "byte / second", "count / second"])
-        {
-          assert_eq!(assert_ok!(assert_ok!(value.getattr("magnitude")).extract::<u64>()), magnitude);
-          let expected = assert_ok!(assert_ok!(registry(py)).call_method1("Unit", (unit,)));
-          assert!(assert_ok!(assert_ok!(value.getattr("units")).eq(expected)));
-          assert_err!(value.call_method1("to", ("meter",)));
-        }
-      }
-    });
+  fn preserves_integer_boundaries() {
+    for value in [0, 1, (1_u64 << 53) + 1, u64::MAX] {
+      assert_eq!(Time(sakai::Time::new::<nanosecond>(value)).nanoseconds(), value);
+      let information = Bytes(sakai::Bytes::new::<byte>(value));
+      assert_eq!(information.bytes(), value);
+      assert_eq!(information.bits(), u128::from(value) * 8);
+      assert_eq!(Count(sakai::Count { value, ..Default::default() }).count(), value);
+      assert_eq!(Pages(sakai::Pages { value, ..Default::default() }).pages(), value);
+      assert_eq!(BytesPerSecond(sakai::BytesPerSecond::new::<byte_per_second>(value)).bytes_per_second(), value);
+      assert_eq!(OperationsPerSecond(sakai::OperationsPerSecond::new::<hertz>(value)).operations_per_second(), value);
+    }
   }
 
   #[test]
-  fn retains_fractional_ratios_and_detaches_python_mutation() {
-    initialize_python();
+  fn exposes_fractional_conversions_to_python() {
+    Python::initialize();
     Python::attach(|py| {
-      let stored = Quantity(Ratio::new::<ratio>(0.125));
-      let value = assert_ok!(stored.into_pyobject(py));
-      assert_ok!(value.call_method1("ito", ("percent",)));
-      assert_in_delta!(assert_ok!(assert_ok!(value.getattr("magnitude")).extract::<f64>()), 12.5, f64::EPSILON);
-      let fresh = assert_ok!(stored.into_pyobject(py));
-      assert_in_delta!(assert_ok!(assert_ok!(fresh.getattr("magnitude")).extract::<f64>()), 0.125, f64::EPSILON);
+      let time = assert_ok!(Quantity(sakai::Time::new::<nanosecond>(1500)).into_pyobject(py));
+      assert_in_delta!(assert_ok!(assert_ok!(time.getattr("microseconds")).extract::<f64>()), 1.5, f64::EPSILON);
+      let bytes = assert_ok!(Quantity(sakai::Bytes::new::<byte>(1536)).into_pyobject(py));
+      assert_in_delta!(assert_ok!(assert_ok!(bytes.getattr("kibibytes")).extract::<f64>()), 1.5, f64::EPSILON);
+      let utilization = assert_ok!(Quantity(sakai::Ratio::new::<ratio>(0.125)).into_pyobject(py));
+      assert_in_delta!(assert_ok!(assert_ok!(utilization.getattr("percent")).extract::<f64>()), 12.5, f64::EPSILON);
+      let module = assert_ok!(PyModule::new(py, "sakai._sakai"));
+      assert_ok!(register(&module));
+      assert!(time.get_type().is(&assert_ok!(module.getattr("Time"))));
     });
   }
 }

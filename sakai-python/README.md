@@ -15,69 +15,47 @@ print(cpu_time, "max" if quota.cpu_count.is_max else quota.cpu_count.value)
 
 try:
   memory = group.memory().current()
-  print(memory.to("MiB"))
+  print(f"{memory.mebibytes:.2f} MiB")
 except InterfaceMissingError as error:
   print(f"Unavailable interface: {error.path}")
 ```
 
 Every reader method opens a fresh read-only kernel interface. Readings from separate
-methods are not atomic together. Limits use `MaxOr[pint.Quantity[int]]` or `MaxOr[pint.Quantity[float]]`:
-check `.is_max` before reading `.value`, which raises `ValueError` for `max`.
+methods are not atomic together. Limits use `MaxOr[T]`, where `T` is the quantity type for that field.
+Check `.is_max` before reading `.value`, which raises `ValueError` for `max`.
 These limits do not account for ancestor limits, affinity, or other policy. The `path`
 property is for display and may become stale; live reads continue through the
 original open directory handle.
 
-`memory.min()` and `memory.low()` also return `MaxOr[pint.Quantity[int]]` protections: Linux
+`memory.min()` and `memory.low()` also return `MaxOr[Bytes]` protections: Linux
 accepts and prints `max` for these interfaces. Use `.value` only when `.is_max`
 is false.
 
-Rust `uom` quantities become ordinary [`pint.Quantity`](https://pint.readthedocs.io/en/stable/getting/tutorial.html)
-objects, including quantities inside limits and read-only mappings. The binding
-keeps integer magnitudes exact through the full unsigned 64-bit range; ratios
-retain floating-point fractions. Optional values remain `None` when the kernel
-omits them, preserving the distinction from measured zero.
+Rust `uom` values are exposed as immutable native Python classes, including
+values inside limits and read-only mappings. Each class has read-only properties
+that return numbers in specific units. A type checker can distinguish
+`BytesPerSecond` from `OperationsPerSecond` and flag access to a property
+that the quantity does not support.
 
-| Rust quantity | Python units | Magnitude |
+| Class | Exact integer properties | Floating-point properties |
 | --- | --- | --- |
-| Time | `nanosecond` | `int` |
-| Bytes | `byte` | `int` |
-| Count | `count` | `int` |
-| Pages | `sakai_page` | `int` |
-| BytesPerSecond | `byte / second` | `int` |
-| OperationsPerSecond | `count / second` | `int` |
-| Ratio | `dimensionless` | `float` |
+| `Time` | `nanoseconds` | `microseconds`, `milliseconds`, `seconds` |
+| `Bytes` | `bytes`, `bits` | `kibibytes`, `mebibytes`, `gibibytes` |
+| `Count` | `count` | |
+| `Pages` | `pages` | |
+| `BytesPerSecond` | `bytes_per_second` | `kibibytes_per_second`, `mebibytes_per_second`, `gibibytes_per_second` |
+| `OperationsPerSecond` | `operations_per_second` | |
+| `Ratio` | | `fraction`, `percent` |
 
-Use `.to("seconds")`, `.to("MiB")`, or `.to("percent")` to convert quantities;
-use `.magnitude` after choosing units when passing numbers to other libraries.
-Conversions and arithmetic follow Pint's numeric rules and may produce floats;
-the original magnitude stays exact. IDs, file descriptors, scheduling weights,
-nice values, and notification timeout arguments remain ordinary Python numbers.
+Integer properties preserve the full unsigned 64-bit input range. Floating-point
+conversions can round large values. For arithmetic and serialization, read the
+numeric property in the unit you need. For example, compute a byte difference
+from two `.bytes` values. To compute bytes from `.pages`, multiply by the
+applicable page size in bytes.
 
-Quantities use [Pint's application registry](https://pint.readthedocs.io/en/stable/getting/projects.html).
-Applications can call `pint.set_application_registry(ureg)` before reading
-quantities to share a registry with NumPy, pandas, xarray, and pickle. Sakai
-does not replace the application registry or redefine its standard units.
-Pint's default definitions treat bytes and counts as dimensionless; their unit
-labels are preserved, but Pint does not enforce Rust's distinct information and
-count kinds. An application's custom registry determines dimensional checking.
-Avoid mixing quantities from different registries or changing the registry
-while using existing quantities.
-
-Memory pages have no universal byte size. On first access, Sakai adds
-`sakai_page = [sakai_page]` to the application registry if absent. An existing
-unit with that name must be an unscaled `[sakai_page]` unit; incompatible
-definitions raise `ValueError`. Conversion to bytes requires an explicitly
-supplied page size or Pint context. No system page size is guessed.
-
-Compound readings are immutable native snapshots. Pint quantities are mutable,
-so each property access returns a fresh quantity. Calling `.ito()` or changing
-`.magnitude` affects only that Python object, including quantities obtained
-from limits or mappings; it never changes the stored Rust snapshot.
-
-This changes the previous numeric API: time properties drop `_ns` (for example,
-`.time.usage`, `.quota`, `.period`, and `.total`), I/O bandwidth uses
-`.read_bandwidth` and `.write_bandwidth`, and `.latency().targets` contains time
-quantities. Replace raw numeric consumption with an explicit unit conversion.
+Optional fields use `None` when the kernel omits them, preserving the
+distinction from measured zero. IDs, file descriptors, scheduling weights,
+nice values, and notification timeout arguments are ordinary Python numbers.
 
 `Cgroup.from_path()` and `.child()` accept `str`, `bytes`, and `os.PathLike`,
 including non-UTF-8 names. Child names must be one direct filesystem component;
@@ -99,7 +77,7 @@ immutable `MemoryEventCounts`, including optional `.oom_group_kill` and
 `group.memory().swap()` reads swap usage, peak usage, limits, and event counters.
 `group.memory().zswap()` reads compressed pool usage, its limit, and the configured
 disk writeback policy. Both readers retain the pinned handle independently.
-Byte limits use `MaxOr[pint.Quantity[int]]`; swap events are count quantities, with `.high`
+Byte limits use `MaxOr[Bytes]`; swap events are count quantities, with `.high`
 set to `None` when an older kernel omits that counter. Missing files raise
 `InterfaceMissingError` with the interface path.
 
@@ -109,7 +87,7 @@ to NUMA node IDs and values, for example `numa.bytes["anon"][0]`. Both mapping
 levels are read-only, and unknown fields are ignored.
 
 `group.pids()` reads `.current()` as a task count quantity, `.max()` as
-`MaxOr[pint.Quantity[int]]`, and `.events().max` as a limit-event count quantity. Task counts
+`MaxOr[Count]`, and `.events().max` as a limit-event count quantity. Task counts
 include threads and can exceed the configured limit. Event counts normally
 include descendants; older kernels and `pids_localevents` report local events.
 `group.core().events()` returns immutable `.populated` and `.frozen` states;
@@ -121,7 +99,7 @@ missing files, including root exemptions, raise `InterfaceMissingError`.
 
 `group.pids().peak()` reads peak task usage, and `.events_local()` reads local
 limit events. `group.core()` also reads `.freeze()` (requested state),
-`.max_depth()` and `.max_descendants()` (`MaxOr[pint.Quantity[int]]` subtree limits),
+`.max_depth()` and `.max_descendants()` (`MaxOr[Count]` subtree limits),
 `.pressure_enabled()` (configured PSI accounting), and `.stat_local()`
 (`.frozen_time`, accounting requested freezing time). Requested freeze state
 and completed `.events().frozen` are separate observations.
@@ -133,9 +111,9 @@ can raise `NotSupportedError` instead of producing a measured zero.
 `.latency()`. I/O snapshots use read-only device mappings keyed by `(major, minor)`
 integer tuples. `.stat().devices` contains immutable byte and operation counters;
 missing counters remain `None`. `.weight()` exposes `.default_weight` and numeric
-`.devices` overrides. `.max().devices` contains `MaxOr[pint.Quantity[int]]` limits named
-`.read_bandwidth`, `.write_bandwidth` (bytes per second), `.read_iops`, and `.write_iops`
-(operations per second). `.latency().targets` maps configured devices to
+`.devices` overrides. `.max().devices` contains `MaxOr[BytesPerSecond]` bandwidth limits
+(`.read_bandwidth` and `.write_bandwidth`) and `MaxOr[OperationsPerSecond]` operation
+rate limits (`.read_iops` and `.write_iops`). `.latency().targets` maps configured devices to
 nonzero nanosecond targets; disabled targets are omitted. Device maps can be
 empty, and every read is a separate snapshot. Optional files and root exemptions
 raise `InterfaceMissingError` with their interface path. Pressure uses the same
@@ -151,7 +129,7 @@ Model parameters expose bytes per second and sequential/random 4 KiB IOPS.
 generic interface surface.
 
 I/O device statistics also preserve optional latency and cost fields: queue
-depth uses `MaxOr[pint.Quantity[int]]`; latency windows and all time quantities use nanoseconds.
+depth uses `MaxOr[Count]`; latency windows and all time quantities use nanoseconds.
 `.use_delay` preserves the kernel's signed `-1` fixed-delay indicator.
 `.missed` and `.total` are window counters that can reset, while `.cost_usage`,
 `.cost_wait`, `.cost_indebt`, and `.cost_indelay` are cumulative modeled
@@ -182,7 +160,7 @@ root-only isolated CPU list since Linux 6.8. They return the same compact
 `group.hugetlb()` reads huge-page interfaces for a canonical binary page-size
 label such as `"2MB"` or `"1GB"`. These are HugeTLB pages, separate from
 transparent huge pages. `.current(size)` and `.reserved_current(size)` return
-bytes; `.max(size)` and `.reserved_max(size)` return `MaxOr[pint.Quantity[int]]` byte limits.
+bytes; `.max(size)` and `.reserved_max(size)` return `MaxOr[Bytes]` byte limits.
 Reservation accounting includes reserved pages and faults without prior
 reservations, so it does not measure unused reservations alone. `.events(size)`
 and `.events_local(size)` return immutable `.max` failure counts with hierarchical
@@ -201,7 +179,7 @@ while `snapshot.devices[("rxe0", 5)]` selects an indexed record. Name collisions
 renames and index reuse can change keys between snapshots. See the
 [Linux 7.3-rc1 implementation](https://github.com/torvalds/linux/blob/v7.3-rc1/kernel/cgroup/rdma.c).
 Each device exposes `.hca_handle` and `.hca_object` resource count quantities.
-`.max()` has the same device keys and `MaxOr[pint.Quantity[int]]` resource limits. Device pools
+`.max()` has the same device keys and `MaxOr[Count]` resource limits. Device pools
 may disappear when resources are released; an empty map is valid. `.events()`
 and `.events_local()` map devices to `.hca_handle` and `.hca_object` event objects,
 each with `.max` and `.alloc_fail` count quantities. Peak and event interfaces
@@ -213,12 +191,12 @@ See [Linux RDMA interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#r
 
 `group.dmem()` provides `.capacity()`, `.current()`, and `.peak()` byte snapshots with
 read-only `.regions` mappings keyed by driver-defined device-memory region names.
-Capacity values are byte quantities; current and peak values are `MaxOr[pint.Quantity[int]]` because
+Capacity values are byte quantities; current and peak values are `MaxOr[Bytes]` because
 the kernel also prints `max` at its page-counter sentinel. For usage this token
 represents that sentinel, rather than an unlimited configured limit. Peak
 requires Linux 7.3 release candidates; current exists since Linux 6.14.
 `.min()`, `.low()`, and `.max()` return `DmemLimits`, whose `.regions` values are
-`MaxOr[pint.Quantity[int]]` bytes. Min and low describe hard and best-effort protection; max is
+`MaxOr[Bytes]` bytes. Min and low describe hard and best-effort protection; max is
 the hard allocation limit. This controller requires Linux 6.14, its kernel
 configuration and a registering device driver. Capacity exists only at the root;
 protection and limit files exist only below it. Missing files raise
@@ -228,7 +206,7 @@ See [Linux device-memory interfaces](https://docs.kernel.org/admin-guide/cgroup-
 `group.misc()` reads `.capacity()`, `.current()`, and `.peak()` with immutable
 `.resources` mappings from hardware-dependent resource names, such as `sev`, to
 resource count quantities. `.max()` maps the
-same names to `MaxOr[pint.Quantity[int]]` resource limits; limits can exceed machine capacity.
+same names to `MaxOr[Count]` resource limits; limits can exceed machine capacity.
 `.events()` and `.events_local()` map resource names to max-boundary failure
 counts. Hierarchical events aggregate limit-hit locations in the subtree; local
 events count failures at this cgroup's own limit, including descendant requests.
