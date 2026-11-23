@@ -19,8 +19,8 @@ use crate::{
 /// An RDMA adapter name and its optional system-wide device index.
 ///
 /// Names can be shared by adapters in different network namespaces. Since
-/// Linux 7.3 release candidates, the kernel adds `index=N` when a name is
-/// ambiguous; see the [Linux 7.3-rc1 implementation](https://github.com/torvalds/linux/blob/v7.3-rc1/kernel/cgroup/rdma.c).
+/// Linux 7.3, the kernel adds `index=N` when a name is
+/// ambiguous; see the [Linux 7.3 implementation](https://github.com/torvalds/linux/blob/v7.3/kernel/cgroup/rdma.c).
 /// Older kernels and globally unique names omit the index. `None` means
 /// unreported, not index zero. Indices are unsigned identifiers, not counts.
 ///

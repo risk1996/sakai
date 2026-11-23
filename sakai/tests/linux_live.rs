@@ -11,6 +11,7 @@ use sakai::{
     core::{CgroupController, CgroupEvents, CgroupStat, CgroupType},
     cpu::{CpuIdle, CpuMax, CpuMaxBurst, CpuStat, CpuStatLocal, CpuUclampMax, CpuUclampMin, CpuWeight, Nice},
     cpuset::{CpuList, CpusetPartition, MemoryNodeList},
+    dmem::DmemPeak,
     io::{IoLatency, IoMax, IoStat, IoWeight},
     memory::{
       MemoryCurrent, MemoryEvents, MemoryEventsLocal, MemoryHigh, MemoryLow, MemoryMax, MemoryMin, MemoryNumaStat,
@@ -76,7 +77,6 @@ fn reads_current_cgroup_without_privileges() {
     cgroup.pids().events().map(|_| ()),
     cgroup.pids().peak().map(|_| ()),
     cgroup.pids().events_local().map(|_| ()),
-    cgroup.dmem().peak().map(|_| ()),
     cgroup.memory().current().map(|_| ()),
     cgroup.memory().max().map(|_| ()),
     cgroup.memory().high().map(|_| ()),
@@ -579,6 +579,7 @@ fn check_remaining_controllers(group: &Cgroup) -> io::Result<()> {
     ("misc.events.local", group.misc().events_local().map(|_| ())),
     ("dmem.capacity", group.dmem().capacity().map(|_| ())),
     ("dmem.current", group.dmem().current().map(|_| ())),
+    (DmemPeak::FILE_NAME, group.dmem().peak().map(|_| ())),
     ("dmem.min", group.dmem().min().map(|_| ())),
     ("dmem.low", group.dmem().low().map(|_| ())),
     ("dmem.max", group.dmem().max().map(|_| ())),

@@ -52,8 +52,8 @@ impl Dmem<'_> {
 
   /// Reads historical hierarchical device-memory usage peaks per region.
   ///
-  /// Since Linux 7.3 release candidates; non-root only. Each region has an
-  /// independent lifetime peak. Reading never resets peaks. See [`DmemPeak`].
+  /// Since Linux 7.3 and available below the hierarchy root. Each region has
+  /// an independent lifetime peak. Reading never resets peaks. See [`DmemPeak`].
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn peak(&self) -> Result<DmemPeak, Error> { self.cgroup.parse(DmemPeak::FILE_NAME) }
@@ -76,8 +76,11 @@ impl Dmem<'_> {
 
   /// Reads configured hierarchical usage limits in bytes, or `max`.
   ///
-  /// `max` removes this cgroup's limit; ancestor limits still apply. Since Linux
-  /// 6.14; see [Linux DMEM](https://www.kernel.org/doc/html/v6.14/admin-guide/cgroup-v2.html#dmem).
+  /// `max` removes this cgroup's limit. Ancestor limits still apply. A region's
+  /// usage can exceed the new limit after it is lowered. Since Linux 7.3,
+  /// lowering a limit can also trigger reclaim if the device driver supports it.
+  /// See the [Linux DMEM interface](https://www.kernel.org/doc/html/v6.14/admin-guide/cgroup-v2.html#dmem)
+  /// and [Linux 7.3 reclaim implementation](https://github.com/torvalds/linux/blob/v7.3/kernel/cgroup/dmem.c).
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn max(&self) -> Result<DmemLimits, Error> { self.cgroup.parse(DmemLimits::MAX_FILE_NAME) }
@@ -154,7 +157,7 @@ impl FromStr for DmemCurrent {
 /// from measured zero. Getters inspect this stored snapshot without I/O.
 /// Reading never resets peaks; the hierarchy root lacks this interface.
 ///
-/// Since Linux 7.3 release candidates; see [Linux 7.3-rc1 source](https://github.com/torvalds/linux/blob/v7.3-rc1/kernel/cgroup/dmem.c)
+/// Since Linux 7.3; see [Linux 7.3 source](https://github.com/torvalds/linux/blob/v7.3/kernel/cgroup/dmem.c)
 /// and [Linux `dmem.peak`](https://docs.kernel.org/admin-guide/cgroup-v2.html#dmem).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct DmemPeak {
@@ -162,7 +165,7 @@ pub struct DmemPeak {
 }
 
 impl DmemPeak {
-  /// The non-root historical device-memory peak filename, since Linux 7.3 release candidates.
+  /// The non-root historical device-memory peak filename, since Linux 7.3.
   pub const FILE_NAME: &'static str = "dmem.peak";
 
   /// Returns historical byte peaks or the kernel's `max` sentinel by region name.

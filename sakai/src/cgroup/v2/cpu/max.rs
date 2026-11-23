@@ -14,9 +14,10 @@ use crate::{
 /// Values are a point-in-time read of the kernel interface. Read the file
 /// again to obtain a fresh value.
 /// The first token is the quota, or `max`, and the second is its period;
-/// both numeric tokens are microseconds. Only fair-class tasks are limited.
+/// both numeric tokens are microseconds. The fair-class scheduler enforces
+/// this limit. A BPF scheduler can also apply it through its bandwidth callback.
 ///
-/// See [Linux `cpu.max` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
+/// See [Linux `cpu.max` interface](https://www.kernel.org/doc/html/v7.3/admin-guide/cgroup-v2.html#cpu-interface-files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CpuMax {
   quota: MaxOr<NonZeroTime>,

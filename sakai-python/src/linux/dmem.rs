@@ -65,11 +65,11 @@ impl DmemReader {
 
   /// Read historical hierarchical device-memory peaks as MaxOr[Bytes] bytes.
   ///
-  /// Since Linux 7.3 release candidates; non-root only. Each region records an
-  /// independent lifetime peak, including transient charges later canceled by
+  /// Since Linux 7.3 and available below the hierarchy root. Each region records
+  /// an independent lifetime peak, including transient charges later canceled by
   /// ancestor-limit failures. max preserves the PAGE_COUNTER_MAX sentinel;
   /// reading never resets peaks. Region removal removes its history. See
-  /// https://github.com/torvalds/linux/blob/v7.3-rc1/kernel/cgroup/dmem.c and
+  /// https://github.com/torvalds/linux/blob/v7.3/kernel/cgroup/dmem.c and
   /// DmemReader for read errors.
   fn peak(&self, py: Python<'_>) -> PyResult<DmemPeak> {
     PythonError::read(py, &self.owner, |owner| owner.dmem().peak()).map(Into::into)
@@ -98,8 +98,9 @@ impl DmemReader {
   /// Read configured hierarchical limits as MaxOr[Bytes] byte amounts.
   ///
   /// Zero is valid. max removes this cgroup's limit; ancestor limits still
-  /// apply. The file is absent at the root. Since Linux 6.14; see DmemReader
-  /// for read errors and the Linux interface reference.
+  /// apply. Since Linux 7.3, lowering a limit can trigger reclaim if the
+  /// driver supports it. See https://github.com/torvalds/linux/blob/v7.3/kernel/cgroup/dmem.c.
+  /// The file is absent at the root. Since Linux 6.14; see DmemReader for read errors.
   fn max(&self, py: Python<'_>) -> PyResult<DmemLimits> {
     PythonError::read(py, &self.owner, |owner| owner.dmem().max()).map(Into::into)
   }
@@ -169,13 +170,13 @@ impl DmemCurrent {
   }
 }
 
-/// Immutable hierarchical device-memory peak snapshot, since Linux 7.3 release candidates.
+/// Immutable hierarchical device-memory peak snapshot, since Linux 7.3.
 ///
 /// Each region maps to MaxOr[Bytes] bytes. max preserves the kernel's
 /// PAGE_COUNTER_MAX sentinel, not an unlimited configured limit. Region peaks
 /// are independent and lifetime-scoped; device removal removes their history.
 /// Properties inspect stored snapshots without I/O; reads never reset peaks.
-/// See https://github.com/torvalds/linux/blob/v7.3-rc1/kernel/cgroup/dmem.c.
+/// See https://github.com/torvalds/linux/blob/v7.3/kernel/cgroup/dmem.c.
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 pub(super) struct DmemPeak {
