@@ -40,8 +40,8 @@ impl PidsReader {
     PythonError::read(py, &self.owner, |owner| owner.pids().peak()).map(|value| value.value().into())
   }
 
-  /// Read the configured task limit as MaxOr[pint.Quantity[int]]; zero is a valid limit.
-  #[gen_stub(override_return_type(type_repr = "MaxOr[pint.Quantity[int]]"))]
+  /// Read the configured task limit as MaxOr[Count]; zero is a valid limit.
+  #[gen_stub(override_return_type(type_repr = "MaxOr[Count]"))]
   fn max(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, |owner| owner.pids().max()).map(|value| MaxOr::from_count(value.value()))
   }

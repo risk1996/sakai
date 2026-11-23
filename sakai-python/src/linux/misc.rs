@@ -53,7 +53,7 @@ impl MiscReader {
     PythonError::read(py, &self.owner, |owner| owner.misc().peak()).map(Into::into)
   }
 
-  /// Read resource limits as MaxOr[pint.Quantity[int]]; absent at the hierarchy root.
+  /// Read resource limits as MaxOr[Count]; absent at the hierarchy root.
   ///
   /// Performs fresh read-only I/O with the exception policy documented on MiscReader.
   fn max(&self, py: Python<'_>) -> PyResult<MiscMax> {
@@ -98,7 +98,7 @@ impl From<CoreCapacity> for MiscCapacity {
 impl MiscCapacity {
   /// Read-only resource-name mapping to integer resource counts in this stored snapshot.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, pint.Quantity[int]]", imports = ("collections.abc", "pint",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, Count]", imports = ("collections.abc",)))]
   fn resources(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     Ok(PyMappingProxy::new(py, (&self.resources).into_py_dict(py)?.as_mapping()).unbind())
   }
@@ -127,7 +127,7 @@ impl From<CoreCurrent> for MiscCurrent {
 impl MiscCurrent {
   /// Read-only resource-name mapping to integer resource counts in this stored snapshot.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, pint.Quantity[int]]", imports = ("collections.abc", "pint",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, Count]", imports = ("collections.abc",)))]
   fn resources(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     Ok(PyMappingProxy::new(py, (&self.resources).into_py_dict(py)?.as_mapping()).unbind())
   }
@@ -156,7 +156,7 @@ impl From<CorePeak> for MiscPeak {
 impl MiscPeak {
   /// Read-only resource-name mapping to integer resource counts in this stored snapshot.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, pint.Quantity[int]]", imports = ("collections.abc", "pint",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, Count]", imports = ("collections.abc",)))]
   fn resources(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     Ok(PyMappingProxy::new(py, (&self.resources).into_py_dict(py)?.as_mapping()).unbind())
   }
@@ -191,7 +191,7 @@ impl From<CoreEvents> for MiscEvents {
 impl MiscEvents {
   /// Read-only resource-name mapping to integer event counts in this stored snapshot.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, pint.Quantity[int]]", imports = ("collections.abc", "pint",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, Count]", imports = ("collections.abc",)))]
   fn resources(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     Ok(PyMappingProxy::new(py, (&self.resources).into_py_dict(py)?.as_mapping()).unbind())
   }
@@ -220,11 +220,11 @@ impl From<CoreMax> for MiscMax {
 #[cfg_attr(not(feature = "stubs"), pyo3_stub_gen_derive::remove_gen_stub)]
 #[pymethods]
 impl MiscMax {
-  /// Read-only resource-name mapping to immutable MaxOr[pint.Quantity[int]] resource limits.
+  /// Read-only resource-name mapping to immutable MaxOr[Count] resource limits.
   ///
   /// Check is_max before value; value raises ValueError for an unlimited limit.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, MaxOr[pint.Quantity[int]]]", imports = ("collections.abc", "pint",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, MaxOr[Count]]", imports = ("collections.abc",)))]
   fn resources(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     mapping(py, &self.resources, |value| Py::new(py, *value))
   }
@@ -241,7 +241,7 @@ mod tests {
 
   #[test]
   fn converts_unsigned_counts_and_limits_to_immutable_snapshots() {
-    crate::quantity::tests::initialize_python();
+    Python::initialize();
     Python::attach(|py| {
       for (input, expected) in [
         ("sev 0", BTreeMap::from([("sev".to_owned(), Quantity::<sakai::Count>::from(0_u64))])),
@@ -271,7 +271,7 @@ mod tests {
       let values = readonly(object.bind(py).as_any(), "resources", "sev");
       for (key, expected) in [("sev", None), ("sev_es", Some(u64::MAX)), ("future", Some(0))] {
         let limit = assert_ok!(values.get_item(key));
-        check_limit(&limit, expected);
+        check_limit(&limit, expected, "count");
         check_frozen(&limit, &["value"]);
       }
     });

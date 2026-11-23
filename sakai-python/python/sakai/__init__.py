@@ -2,6 +2,8 @@
 """Read-only cgroup v2 readers. Each method performs a fresh, non-atomic read."""
 
 from . import _sakai
+from ._sakai import Bytes as Bytes
+from ._sakai import BytesPerSecond as BytesPerSecond
 from ._sakai import Cgroup as Cgroup
 from ._sakai import CgroupEvents as CgroupEvents
 from ._sakai import CgroupParseError as CgroupParseError
@@ -10,6 +12,7 @@ from ._sakai import CgroupStatLocal as CgroupStatLocal
 from ._sakai import ChangeNotification as ChangeNotification
 from ._sakai import ConfigurationWatcher as ConfigurationWatcher
 from ._sakai import CoreReader as CoreReader
+from ._sakai import Count as Count
 from ._sakai import CpuBandwidthStat as CpuBandwidthStat
 from ._sakai import CpuBurstStat as CpuBurstStat
 from ._sakai import CpuList as CpuList
@@ -58,10 +61,13 @@ from ._sakai import MiscPeak as MiscPeak
 from ._sakai import MiscReader as MiscReader
 from ._sakai import NotCgroupV2Error as NotCgroupV2Error
 from ._sakai import NotSupportedError as NotSupportedError
+from ._sakai import OperationsPerSecond as OperationsPerSecond
+from ._sakai import Pages as Pages
 from ._sakai import PidsEvents as PidsEvents
 from ._sakai import PidsReader as PidsReader
 from ._sakai import Pressure as Pressure
 from ._sakai import PressureLine as PressureLine
+from ._sakai import Ratio as Ratio
 from ._sakai import RdmaCurrent as RdmaCurrent
 from ._sakai import RdmaDeviceCurrent as RdmaDeviceCurrent
 from ._sakai import RdmaDeviceEvents as RdmaDeviceEvents
@@ -73,6 +79,7 @@ from ._sakai import RdmaResourceEvents as RdmaResourceEvents
 from ._sakai import SakaiError as SakaiError
 from ._sakai import SwapEvents as SwapEvents
 from ._sakai import SwapReader as SwapReader
+from ._sakai import Time as Time
 from ._sakai import ZswapReader as ZswapReader
 
 __all__ = [name for name in dir(_sakai) if not name.startswith("_")]

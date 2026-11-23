@@ -45,17 +45,17 @@ impl HugetlbReader {
   /// Read volatile faulted HugeTLB usage for page_size in bytes, including descendants.
   ///
   /// page_size is a canonical kernel label, for example "2MB". This reads
-  /// hugetlb.<page_size>.current and returns a Pint quantity in bytes.
+  /// hugetlb.<page_size>.current and returns a Bytes quantity.
   fn current(&self, py: Python<'_>, page_size: &str) -> PyResult<Quantity<sakai::Bytes>> {
     let size = Self::size(page_size)?;
     PythonError::read(py, &self.owner, move |owner| owner.hugetlb().current(&size)).map(|value| value.value().into())
   }
 
-  /// Read the faulted HugeTLB limit for page_size as MaxOr[pint.Quantity[int]] in bytes.
+  /// Read the faulted HugeTLB limit for page_size as MaxOr[Bytes] in bytes.
   ///
   /// This reads hugetlb.<page_size>.max. max means no limit at this cgroup;
   /// ancestors still constrain usage. Configuration may change between reads.
-  #[gen_stub(override_return_type(type_repr = "MaxOr[pint.Quantity[int]]"))]
+  #[gen_stub(override_return_type(type_repr = "MaxOr[Bytes]"))]
   fn max(&self, py: Python<'_>, page_size: &str) -> PyResult<MaxOr> {
     let size = Self::size(page_size)?;
     PythonError::read(py, &self.owner, move |owner| owner.hugetlb().max(&size))
@@ -73,11 +73,11 @@ impl HugetlbReader {
       .map(|value| value.value().into())
   }
 
-  /// Read the reservation-accounting limit for page_size as MaxOr[pint.Quantity[int]] in bytes.
+  /// Read the reservation-accounting limit for page_size as MaxOr[Bytes] in bytes.
   ///
   /// hugetlb.<page_size>.rsvd.max limits reservations and faults without prior
   /// reservations. max means no limit here; ancestor limits still apply.
-  #[gen_stub(override_return_type(type_repr = "MaxOr[pint.Quantity[int]]"))]
+  #[gen_stub(override_return_type(type_repr = "MaxOr[Bytes]"))]
   fn reserved_max(&self, py: Python<'_>, page_size: &str) -> PyResult<MaxOr> {
     let size = Self::size(page_size)?;
     PythonError::read(py, &self.owner, move |owner| owner.hugetlb().reserved_max(&size))
@@ -159,7 +159,7 @@ impl From<CoreHugetlbNumaStat> for HugetlbNumaStat {
 impl HugetlbNumaStat {
   /// Read-only mapping from integer NUMA node IDs to stored in-use bytes.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[int, pint.Quantity[int]]", imports = ("collections.abc", "pint",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[int, Bytes]", imports = ("collections.abc",)))]
   fn nodes(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     Ok(PyMappingProxy::new(py, (&self.nodes).into_py_dict(py)?.as_mapping()).unbind())
   }
@@ -177,7 +177,7 @@ mod tests {
 
   #[test]
   fn converts_snapshots_to_immutable_unsigned_python_values() {
-    crate::quantity::tests::initialize_python();
+    Python::initialize();
     Python::attach(|py| {
       let events = HugetlbEvents::from(assert_ok!("max 18446744073709551615".parse::<CoreHugetlbEvents>()));
       assert_eq!(events, HugetlbEvents { max: u64::MAX.into() });

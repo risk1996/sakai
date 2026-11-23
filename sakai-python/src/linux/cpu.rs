@@ -63,7 +63,7 @@ impl CpuReader {
   }
 
   /// Read the maximum utilization clamp as `max` or a concrete ratio.
-  #[gen_stub(override_return_type(type_repr = "MaxOr[pint.Quantity[float]]"))]
+  #[gen_stub(override_return_type(type_repr = "MaxOr[Ratio]"))]
   fn uclamp_max(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, |owner| owner.cpu().uclamp_max()).map(|clamp| MaxOr::from_ratio(clamp.value()))
   }

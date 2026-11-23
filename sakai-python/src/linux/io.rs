@@ -49,7 +49,7 @@ impl IoReader {
     PythonError::read(py, &self.owner, |owner| owner.io().weight()).map(Into::into)
   }
 
-  /// Read per-device bandwidth and IOPS limits as MaxOr[pint.Quantity[int]] values.
+  /// Read per-device bandwidth and IOPS limits as MaxOr[BytesPerSecond] and MaxOr[OperationsPerSecond] values.
   fn max(&self, py: Python<'_>) -> PyResult<IoMax> {
     PythonError::read(py, &self.owner, |owner| owner.io().max()).map(Into::into)
   }
@@ -101,7 +101,7 @@ impl From<CoreIoStat> for IoStat {
 impl IoStat {
   /// Read-only mapping of (major, minor) keys to immutable device counters.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[tuple[int, int], IoDeviceStat]", imports = ("collections.abc", "pint",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[tuple[int, int], IoDeviceStat]", imports = ("collections.abc",)))]
   fn devices(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     mapping(py, &self.devices, |value| Py::new(py, value.clone()))
   }
@@ -198,7 +198,7 @@ impl From<CoreIoDeviceStat> for IoDeviceStat {
 impl IoDeviceStat {
   /// Queue-depth limit, or max when unrestricted; None means the field was omitted.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "MaxOr[pint.Quantity[int]] | None"))]
+  #[gen_stub(override_return_type(type_repr = "MaxOr[Count] | None"))]
   fn depth(&self) -> Option<MaxOr> { self.depth.map(MaxOr::from_count) }
 }
 
@@ -231,7 +231,7 @@ impl From<CoreIoWeight> for IoWeight {
 impl IoWeight {
   /// Read-only mapping of (major, minor) device keys to numeric weight overrides.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[tuple[int, int], int]", imports = ("collections.abc", "pint",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[tuple[int, int], int]", imports = ("collections.abc",)))]
   fn devices(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     Ok(PyMappingProxy::new(py, (&self.devices).into_py_dict(py)?.as_mapping()).unbind())
   }
@@ -257,7 +257,7 @@ impl From<CoreIoMax> for IoMax {
 impl IoMax {
   /// Read-only mapping of (major, minor) keys to immutable per-device limits.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[tuple[int, int], IoDeviceMax]", imports = ("collections.abc", "pint",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[tuple[int, int], IoDeviceMax]", imports = ("collections.abc",)))]
   fn devices(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     mapping(py, &self.devices, |value| Py::new(py, value.clone()))
   }
@@ -313,7 +313,7 @@ impl From<CoreIoLatency> for IoLatency {
 impl IoLatency {
   /// Read-only mapping of (major, minor) device keys to latency targets in nanoseconds.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[tuple[int, int], pint.Quantity[int]]", imports = ("collections.abc", "pint",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[tuple[int, int], Time]", imports = ("collections.abc",)))]
   fn targets(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     Ok(PyMappingProxy::new(py, self.targets.clone().into_py_dict(py)?.as_mapping()).unbind())
   }
@@ -341,7 +341,7 @@ impl From<CoreIoCostQos> for IoCostQos {
 impl IoCostQos {
   /// Read-only mapping of (major, minor) device keys to QoS parameters.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[tuple[int, int], IoDeviceCostQos]", imports = ("collections.abc", "pint",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[tuple[int, int], IoDeviceCostQos]", imports = ("collections.abc",)))]
   fn devices(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     mapping(py, &self.devices, |value| Py::new(py, value.clone()))
   }
@@ -410,7 +410,7 @@ impl From<CoreIoCostModel> for IoCostModel {
 impl IoCostModel {
   /// Read-only mapping of (major, minor) device keys to cost model parameters.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[tuple[int, int], IoDeviceCostModel]", imports = ("collections.abc", "pint",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[tuple[int, int], IoDeviceCostModel]", imports = ("collections.abc",)))]
   fn devices(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     mapping(py, &self.devices, |value| Py::new(py, value.clone()))
   }
@@ -491,7 +491,7 @@ mod tests {
 
   #[test]
   fn converts_io_counters_and_freezes_snapshots_and_device_maps() {
-    crate::quantity::tests::initialize_python();
+    Python::initialize();
     Python::attach(|py| {
       for (input, expected) in [
         (include_str!("../../../sakai/src/cgroup/v2/fixtures/p3/io.stat"), IoStat {
@@ -521,16 +521,18 @@ mod tests {
         let devices = readonly(object.bind(py).as_any(), "devices", (8, 0));
         for (key, expected) in expected.devices {
           let device = assert_ok!(devices.get_item(key));
-          for (name, expected) in [
-            ("read_bytes", expected.read_bytes.map(|value| value.0.value)),
-            ("write_bytes", expected.write_bytes.map(|value| value.0.value)),
-            ("discard_bytes", expected.discard_bytes.map(|value| value.0.value)),
-            ("read_operations", expected.read_operations.map(|value| value.0.value)),
-            ("write_operations", expected.write_operations.map(|value| value.0.value)),
-            ("discard_operations", expected.discard_operations.map(|value| value.0.value)),
+          for (name, unit, expected) in [
+            ("read_bytes", "bytes", expected.read_bytes.map(|value| value.0.value)),
+            ("write_bytes", "bytes", expected.write_bytes.map(|value| value.0.value)),
+            ("discard_bytes", "bytes", expected.discard_bytes.map(|value| value.0.value)),
+            ("read_operations", "count", expected.read_operations.map(|value| value.0.value)),
+            ("write_operations", "count", expected.write_operations.map(|value| value.0.value)),
+            ("discard_operations", "count", expected.discard_operations.map(|value| value.0.value)),
           ] {
             assert_eq!(
-              assert_ok!(super::super::tests::magnitudes(&assert_ok!(device.getattr(name))).extract::<Option<u64>>()),
+              assert_ok!(
+                super::super::tests::magnitudes(&assert_ok!(device.getattr(name)), unit).extract::<Option<u64>>()
+              ),
               expected
             );
             check_frozen(&device, &[name]);
@@ -542,7 +544,7 @@ mod tests {
 
   #[test]
   fn converts_default_and_device_weights_to_immutable_integer_maps() {
-    crate::quantity::tests::initialize_python();
+    Python::initialize();
     Python::attach(|py| {
       for (input, expected) in [
         (include_str!("../../../sakai/src/cgroup/v2/fixtures/p3/io.weight"), IoWeight {
@@ -572,7 +574,7 @@ mod tests {
 
   #[test]
   fn converts_io_limits_without_losing_small_rates_or_unsigned_values() {
-    crate::quantity::tests::initialize_python();
+    Python::initialize();
     Python::attach(|py| {
       for (input, expected) in [
         (
@@ -595,11 +597,17 @@ mod tests {
         assert_eq!(assert_ok!(devices.len()), expected.len());
         for (key, expected) in expected {
           let device = assert_ok!(devices.get_item(key));
-          for (name, expected) in
-            ["read_bandwidth", "write_bandwidth", "read_iops", "write_iops"].into_iter().zip(expected)
+          for ((name, unit), expected) in [
+            ("read_bandwidth", "bytes_per_second"),
+            ("write_bandwidth", "bytes_per_second"),
+            ("read_iops", "operations_per_second"),
+            ("write_iops", "operations_per_second"),
+          ]
+          .into_iter()
+          .zip(expected)
           {
             let limit = assert_ok!(device.getattr(name));
-            check_limit(&limit, expected);
+            check_limit(&limit, expected, unit);
             check_frozen(&limit, &["value"]);
             check_frozen(&device, &[name]);
           }
@@ -610,7 +618,7 @@ mod tests {
 
   #[test]
   fn converts_latency_targets_to_immutable_nanosecond_maps() {
-    crate::quantity::tests::initialize_python();
+    Python::initialize();
     Python::attach(|py| {
       for (input, expected) in [
         (include_str!("../../../sakai/src/cgroup/v2/fixtures/p3/io.latency"), IoLatency {
@@ -653,7 +661,7 @@ mod tests {
 
   #[test]
   fn converts_cost_configuration_into_immutable_typed_device_maps() {
-    crate::quantity::tests::initialize_python();
+    Python::initialize();
     Python::attach(|py| {
       let qos = IoCostQos::from(assert_ok!(
         "8:0 enable=1 ctrl=user rpct=95 rlat=2 wpct=0 wlat=0 min=50 max=10000".parse::<CoreIoCostQos>()
@@ -669,7 +677,7 @@ mod tests {
       );
       for (name, expected) in [("read_percentile", 0.95_f64), ("min_scaling", 0.5), ("max_scaling", 100.0)] {
         assert_in_delta!(
-          assert_ok!(assert_ok!(assert_ok!(device.getattr(name)).getattr("magnitude")).extract::<f64>()),
+          assert_ok!(assert_ok!(assert_ok!(device.getattr(name)).getattr("fraction")).extract::<f64>()),
           expected,
           f64::EPSILON * expected.max(1.0)
         );
@@ -685,18 +693,15 @@ mod tests {
       let device = assert_ok!(devices.get_item((8, 0)));
       assert_eq!(assert_ok!(assert_ok!(device.getattr("control")).extract::<String>()), "auto");
       assert_eq!(assert_ok!(assert_ok!(device.getattr("model")).extract::<String>()), "linear");
-      for (name, expected) in [
-        ("read_bandwidth", 1),
-        ("read_sequential_iops", 2),
-        ("read_random_iops", 3),
-        ("write_bandwidth", u64::MAX),
-        ("write_sequential_iops", 5),
-        ("write_random_iops", 6),
+      for (name, unit, expected) in [
+        ("read_bandwidth", "bytes_per_second", 1),
+        ("read_sequential_iops", "operations_per_second", 2),
+        ("read_random_iops", "operations_per_second", 3),
+        ("write_bandwidth", "bytes_per_second", u64::MAX),
+        ("write_sequential_iops", "operations_per_second", 5),
+        ("write_random_iops", "operations_per_second", 6),
       ] {
-        assert_eq!(
-          assert_ok!(assert_ok!(assert_ok!(device.getattr(name)).getattr("magnitude")).extract::<u64>()),
-          expected
-        );
+        assert_eq!(assert_ok!(assert_ok!(assert_ok!(device.getattr(name)).getattr(unit)).extract::<u64>()), expected);
         check_frozen(&device, &[name]);
       }
     });

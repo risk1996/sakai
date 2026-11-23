@@ -63,14 +63,15 @@ pub fn generate_stubs() -> pyo3_stub_gen::Result<()> {
   module.class.append(&mut exceptions.class);
   // The generator does not apply type overrides to automatic field getters.
   for (id, names, ty) in [
-    (TypeId::of::<CpuMax>(), "quota", "MaxOr[pint.Quantity[int]]"),
-    (TypeId::of::<CpuMax>(), "cpu_count", "MaxOr[pint.Quantity[float]]"),
+    (TypeId::of::<CpuMax>(), "quota", "MaxOr[Time]"),
+    (TypeId::of::<CpuMax>(), "cpu_count", "MaxOr[Ratio]"),
     (TypeId::of::<CpusetPartition>(), "state", "typing.Literal['member', 'root', 'isolated']"),
     (TypeId::of::<IoDeviceCostQos>(), "control", "typing.Literal['auto', 'user']"),
     (TypeId::of::<IoDeviceCostModel>(), "control", "typing.Literal['auto', 'user']"),
     (TypeId::of::<IoDeviceCostModel>(), "model", "typing.Literal['linear']"),
-    (TypeId::of::<IoDeviceMax>(), "read_bandwidth write_bandwidth read_iops write_iops", "MaxOr[pint.Quantity[int]]"),
-    (TypeId::of::<RdmaDeviceMax>(), "hca_handle hca_object", "MaxOr[pint.Quantity[int]]"),
+    (TypeId::of::<IoDeviceMax>(), "read_bandwidth write_bandwidth", "MaxOr[BytesPerSecond]"),
+    (TypeId::of::<IoDeviceMax>(), "read_iops write_iops", "MaxOr[OperationsPerSecond]"),
+    (TypeId::of::<RdmaDeviceMax>(), "hca_handle hca_object", "MaxOr[Count]"),
   ] {
     let class = module.class.get_mut(&id).ok_or_else(|| std::io::Error::other("missing field override class"))?;
     for name in names.split_whitespace() {
@@ -98,11 +99,18 @@ pub fn generate_stubs() -> pyo3_stub_gen::Result<()> {
     }
   }
   // pyo3-stub-gen has no generic class metadata yet.
-  let stub = module.format_with_config(false).replace(
+  let mut stub = module.format_with_config(false).replace(
     "@typing.final\nclass MaxOr:",
-    "_ValueT = typing.TypeVar(\"_ValueT\", bound=pint.Quantity[typing.Any], covariant=True)\n\n@typing.final\nclass \
-     MaxOr(typing.Generic[_ValueT]):",
+    "_ValueT = typing.TypeVar(\"_ValueT\", covariant=True)\n\n@typing.final\nclass MaxOr(typing.Generic[_ValueT]):",
   );
+  // Native quantities are returned by readers and have no Python constructor.
+  for name in crate::quantity::QUANTITY_CLASS_NAMES {
+    let header = format!("class {name}:\n");
+    let (before, after) =
+      stub.split_once(&header).ok_or_else(|| std::io::Error::other(format!("missing quantity class {name}")))?;
+    stub =
+      format!("{before}{header}    def __new__(cls, _unconstructible: typing.Never, /) -> typing.Self: ...\n{after}");
+  }
   let package = Path::new(env!("CARGO_MANIFEST_DIR")).join("python/sakai");
   fs::write(package.join("_sakai.pyi"), stub)?;
   // Derive public re-exports from the same class metadata.

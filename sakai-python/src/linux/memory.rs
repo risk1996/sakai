@@ -43,27 +43,27 @@ impl MemoryReader {
   }
 
   /// Read the hard memory limit as `max` or a concrete byte count.
-  #[gen_stub(override_return_type(type_repr = "MaxOr[pint.Quantity[int]]"))]
+  #[gen_stub(override_return_type(type_repr = "MaxOr[Bytes]"))]
   fn max(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, |owner| owner.memory().max()).map(|value| MaxOr::from_bytes(value.value()))
   }
 
   /// Read the throttling threshold as `max` or a concrete byte count.
-  #[gen_stub(override_return_type(type_repr = "MaxOr[pint.Quantity[int]]"))]
+  #[gen_stub(override_return_type(type_repr = "MaxOr[Bytes]"))]
   fn high(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, |owner| owner.memory().high()).map(|value| MaxOr::from_bytes(value.value()))
   }
 
   /// Read best-effort memory protection as `max` or a concrete byte count.
   /// Ancestor boundaries and sibling competition affect effective protection.
-  #[gen_stub(override_return_type(type_repr = "MaxOr[pint.Quantity[int]]"))]
+  #[gen_stub(override_return_type(type_repr = "MaxOr[Bytes]"))]
   fn low(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, |owner| owner.memory().low()).map(|value| MaxOr::from_bytes(value.value()))
   }
 
   /// Read hard memory protection as `max` or a concrete byte count.
   /// Ancestor boundaries and sibling competition affect effective protection.
-  #[gen_stub(override_return_type(type_repr = "MaxOr[pint.Quantity[int]]"))]
+  #[gen_stub(override_return_type(type_repr = "MaxOr[Bytes]"))]
   fn min(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, |owner| owner.memory().min()).map(|value| MaxOr::from_bytes(value.value()))
   }
@@ -160,14 +160,14 @@ impl SwapReader {
   }
 
   /// Read the hard swap limit as `max` or a concrete byte count.
-  #[gen_stub(override_return_type(type_repr = "MaxOr[pint.Quantity[int]]"))]
+  #[gen_stub(override_return_type(type_repr = "MaxOr[Bytes]"))]
   fn max(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, |owner| owner.memory().swap().max())
       .map(|value| MaxOr::from_bytes(value.value()))
   }
 
   /// Read the swap throttling threshold as `max` or a concrete byte count.
-  #[gen_stub(override_return_type(type_repr = "MaxOr[pint.Quantity[int]]"))]
+  #[gen_stub(override_return_type(type_repr = "MaxOr[Bytes]"))]
   fn high(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, |owner| owner.memory().swap().high())
       .map(|value| MaxOr::from_bytes(value.value()))
@@ -221,7 +221,7 @@ impl ZswapReader {
   }
 
   /// Read the hard zswap pool limit as `max` or a concrete byte count.
-  #[gen_stub(override_return_type(type_repr = "MaxOr[pint.Quantity[int]]"))]
+  #[gen_stub(override_return_type(type_repr = "MaxOr[Bytes]"))]
   fn max(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, |owner| owner.memory().zswap().max())
       .map(|value| MaxOr::from_bytes(value.value()))
@@ -263,17 +263,17 @@ impl From<CoreMemoryStat> for MemoryStat {
 impl MemoryStat {
   /// Read-only mapping of memory.stat byte-valued fields.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, pint.Quantity[int]]", imports = ("collections.abc", "pint",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, Bytes]", imports = ("collections.abc",)))]
   fn bytes(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> { Self::mapping(py, &self.bytes) }
 
   /// Read-only mapping of memory.stat page-valued fields.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, pint.Quantity[int]]", imports = ("collections.abc", "pint",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, Pages]", imports = ("collections.abc",)))]
   fn pages(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> { Self::mapping(py, &self.pages) }
 
   /// Read-only mapping of memory.stat count-valued fields.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, pint.Quantity[int]]", imports = ("collections.abc", "pint",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, Count]", imports = ("collections.abc",)))]
   fn counts(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> { Self::mapping(py, &self.counts) }
 }
 
@@ -336,17 +336,17 @@ impl From<CoreMemoryNumaStat> for MemoryNumaStat {
 impl MemoryNumaStat {
   /// Read-only byte amounts by memory field and NUMA node ID.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, collections.abc.Mapping[int, pint.Quantity[int]]]", imports = ("collections.abc", "pint",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, collections.abc.Mapping[int, Bytes]]", imports = ("collections.abc",)))]
   fn bytes(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> { Self::mapping(py, &self.bytes) }
 
   /// Read-only page quantities by memory field and NUMA node ID.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, collections.abc.Mapping[int, pint.Quantity[int]]]", imports = ("collections.abc", "pint",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, collections.abc.Mapping[int, Pages]]", imports = ("collections.abc",)))]
   fn pages(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> { Self::mapping(py, &self.pages) }
 
   /// Read-only event counts by memory field and NUMA node ID.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, collections.abc.Mapping[int, pint.Quantity[int]]]", imports = ("collections.abc", "pint",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, collections.abc.Mapping[int, Count]]", imports = ("collections.abc",)))]
   fn counts(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> { Self::mapping(py, &self.counts) }
 }
 
@@ -384,7 +384,7 @@ mod tests {
 
   #[test]
   fn preserves_memory_optional_events_zero_and_unsigned_counts() {
-    crate::quantity::tests::initialize_python();
+    Python::initialize();
     Python::attach(|py| {
       for (input, expected) in [
         ("low 1\nhigh 2\nmax 3\noom 4\noom_kill 5", MemoryEventCounts {
@@ -436,7 +436,7 @@ mod tests {
 
   #[test]
   fn preserves_swap_optional_high_and_unsigned_counts() {
-    crate::quantity::tests::initialize_python();
+    Python::initialize();
     Python::attach(|py| {
       for (input, expected) in [
         ("max 1\nfail 2\n", SwapEvents { high: None, max: 1.into(), fail: 2.into() }),
@@ -471,18 +471,21 @@ mod tests {
       counts: BTreeMap::from([("workingset_refault_file", BTreeMap::from([(2, 7.into())]))]),
     });
 
-    crate::quantity::tests::initialize_python();
+    Python::initialize();
     Python::attach(|py| {
       let object = assert_ok!(Py::new(py, stat));
-      for (name, field, expected) in [
-        ("bytes", "anon", BTreeMap::from([(0_u32, 4096_u64), (2, 8192)])),
-        ("pages", "pgdemote_direct", BTreeMap::from([(2, 3)])),
-        ("counts", "workingset_refault_file", BTreeMap::from([(2, 7)])),
+      for (name, field, unit, expected) in [
+        ("bytes", "anon", "bytes", BTreeMap::from([(0_u32, 4096_u64), (2, 8192)])),
+        ("pages", "pgdemote_direct", "pages", BTreeMap::from([(2, 3)])),
+        ("counts", "workingset_refault_file", "count", BTreeMap::from([(2, 7)])),
       ] {
         let mapping = readonly(object.bind(py).as_any(), name, "future");
         let nodes = assert_ok!(mapping.get_item(field));
         let values = assert_ok!(py.get_type::<PyDict>().call1((&nodes,)));
-        assert_eq!(assert_ok!(super::super::tests::magnitudes(&values).extract::<BTreeMap<u32, u64>>()), expected);
+        assert_eq!(
+          assert_ok!(super::super::tests::magnitudes(&values, unit).extract::<BTreeMap<u32, u64>>()),
+          expected
+        );
         assert!(assert_err!(nodes.set_item(0, 0)).is_instance_of::<PyTypeError>(py));
       }
     });

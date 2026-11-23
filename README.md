@@ -80,7 +80,7 @@ Newer kernel counters and configuration remain optional.
 
 Memory protections (`memory.min`, `memory.low`) accept `max` as well as byte
 amounts, so their Rust snapshots use `MaxOr<Bytes>` and Python uses
-`MaxOr[pint.Quantity[int]]`.
+`MaxOr[Bytes]`.
 This preserves valid kernel output instead of rejecting unlimited protection.
 
 The remaining cgroup v2 controllers are available through `Cgroup::hugetlb()`,

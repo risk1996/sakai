@@ -48,7 +48,7 @@ impl DmemReader {
     PythonError::read(py, &self.owner, |owner| owner.dmem().capacity()).map(Into::into)
   }
 
-  /// Read current hierarchical device-memory usage as MaxOr[pint.Quantity[int]] bytes per region.
+  /// Read current hierarchical device-memory usage as MaxOr[Bytes] bytes per region.
   ///
   /// Counts include this cgroup and its descendants and can change immediately
   /// after a read. Zero is measured zero; an absent key means the region was
@@ -63,7 +63,7 @@ impl DmemReader {
     PythonError::read(py, &self.owner, |owner| owner.dmem().current()).map(Into::into)
   }
 
-  /// Read historical hierarchical device-memory peaks as MaxOr[pint.Quantity[int]] bytes.
+  /// Read historical hierarchical device-memory peaks as MaxOr[Bytes] bytes.
   ///
   /// Since Linux 7.3 release candidates; non-root only. Each region records an
   /// independent lifetime peak, including transient charges later canceled by
@@ -75,7 +75,7 @@ impl DmemReader {
     PythonError::read(py, &self.owner, |owner| owner.dmem().peak()).map(Into::into)
   }
 
-  /// Read configured hard eviction protections as MaxOr[pint.Quantity[int]] byte amounts.
+  /// Read configured hard eviction protections as MaxOr[Bytes] byte amounts.
   ///
   /// Zero disables protection; max requests protection without a numeric
   /// upper boundary. Effective protection depends on ancestors and sibling
@@ -85,7 +85,7 @@ impl DmemReader {
     PythonError::read(py, &self.owner, |owner| owner.dmem().min()).map(Into::into)
   }
 
-  /// Read configured best-effort eviction protections as MaxOr[pint.Quantity[int]] bytes.
+  /// Read configured best-effort eviction protections as MaxOr[Bytes] bytes.
   ///
   /// Zero disables protection; max requests protection without a numeric
   /// upper boundary. Effective protection depends on ancestors and sibling
@@ -95,7 +95,7 @@ impl DmemReader {
     PythonError::read(py, &self.owner, |owner| owner.dmem().low()).map(Into::into)
   }
 
-  /// Read configured hierarchical limits as MaxOr[pint.Quantity[int]] byte amounts.
+  /// Read configured hierarchical limits as MaxOr[Bytes] byte amounts.
   ///
   /// Zero is valid. max removes this cgroup's limit; ancestor limits still
   /// apply. The file is absent at the root. Since Linux 6.14; see DmemReader
@@ -130,7 +130,7 @@ impl From<CoreDmemCapacity> for DmemCapacity {
 impl DmemCapacity {
   /// Read-only mapping from opaque region names to integer byte capacities.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, pint.Quantity[int]]", imports = ("collections.abc", "pint",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, Bytes]", imports = ("collections.abc",)))]
   fn regions(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     Ok(PyMappingProxy::new(py, (&self.regions).into_py_dict(py)?.as_mapping()).unbind())
   }
@@ -144,7 +144,7 @@ impl DmemCapacity {
 /// DmemReader for the Linux interface reference.
 /// max preserves the kernel's PAGE_COUNTER_MAX sentinel, not an unlimited
 /// configured limit; its numeric boundary depends on kernel architecture and
-/// system page size. Finite quantities are byte amounts wrapped in MaxOr[pint.Quantity[int]].
+/// system page size. Finite quantities are byte amounts wrapped in MaxOr[Bytes].
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, module = "sakai._sakai")]
 pub(super) struct DmemCurrent {
@@ -161,9 +161,9 @@ impl From<CoreDmemCurrent> for DmemCurrent {
 #[cfg_attr(not(feature = "stubs"), pyo3_stub_gen_derive::remove_gen_stub)]
 #[pymethods]
 impl DmemCurrent {
-  /// Read-only mapping from opaque region names to MaxOr[pint.Quantity[int]] hierarchical bytes.
+  /// Read-only mapping from opaque region names to MaxOr[Bytes] hierarchical bytes.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, MaxOr[pint.Quantity[int]]]", imports = ("collections.abc", "pint",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, MaxOr[Bytes]]", imports = ("collections.abc",)))]
   fn regions(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     mapping(py, &self.regions, |value| Py::new(py, *value))
   }
@@ -171,7 +171,7 @@ impl DmemCurrent {
 
 /// Immutable hierarchical device-memory peak snapshot, since Linux 7.3 release candidates.
 ///
-/// Each region maps to MaxOr[pint.Quantity[int]] bytes. max preserves the kernel's
+/// Each region maps to MaxOr[Bytes] bytes. max preserves the kernel's
 /// PAGE_COUNTER_MAX sentinel, not an unlimited configured limit. Region peaks
 /// are independent and lifetime-scoped; device removal removes their history.
 /// Properties inspect stored snapshots without I/O; reads never reset peaks.
@@ -192,9 +192,9 @@ impl From<CoreDmemPeak> for DmemPeak {
 #[cfg_attr(not(feature = "stubs"), pyo3_stub_gen_derive::remove_gen_stub)]
 #[pymethods]
 impl DmemPeak {
-  /// Read-only mapping from opaque region names to MaxOr[pint.Quantity[int]] historical byte peaks.
+  /// Read-only mapping from opaque region names to MaxOr[Bytes] historical byte peaks.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, MaxOr[pint.Quantity[int]]]", imports = ("collections.abc", "pint",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, MaxOr[Bytes]]", imports = ("collections.abc",)))]
   fn regions(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     mapping(py, &self.regions, |value| Py::new(py, *value))
   }
@@ -202,7 +202,7 @@ impl DmemPeak {
 
 /// Immutable configuration from dmem.max, dmem.min, or dmem.low.
 ///
-/// Each region maps to MaxOr[pint.Quantity[int]], with finite amounts measured in bytes.
+/// Each region maps to MaxOr[Bytes], with finite amounts measured in bytes.
 /// max means unlimited here for a usage limit or protection without a numeric
 /// boundary for min/low. These are configured values; ancestor limits and
 /// protection, and sibling demand, can affect effective behavior. Zero is valid.
@@ -225,9 +225,9 @@ impl From<CoreDmemLimits> for DmemLimits {
 #[cfg_attr(not(feature = "stubs"), pyo3_stub_gen_derive::remove_gen_stub)]
 #[pymethods]
 impl DmemLimits {
-  /// Read-only mapping from opaque region names to immutable MaxOr[pint.Quantity[int]] bytes.
+  /// Read-only mapping from opaque region names to immutable MaxOr[Bytes] bytes.
   #[getter]
-  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, MaxOr[pint.Quantity[int]]]", imports = ("collections.abc", "pint",)))]
+  #[gen_stub(override_return_type(type_repr = "collections.abc.Mapping[str, MaxOr[Bytes]]", imports = ("collections.abc",)))]
   fn regions(&self, py: Python<'_>) -> PyResult<Py<PyMappingProxy>> {
     mapping(py, &self.regions, |value| Py::new(py, *value))
   }
@@ -244,7 +244,7 @@ mod tests {
 
   #[test]
   fn converts_byte_snapshots_into_immutable_region_maps() {
-    crate::quantity::tests::initialize_python();
+    Python::initialize();
     Python::attach(|py| {
       let input = include_str!("../../../sakai/src/cgroup/v2/fixtures/p6_dmem/dmem.current");
       let expected = BTreeMap::from([
@@ -263,7 +263,7 @@ mod tests {
 
   #[test]
   fn converts_finite_and_max_protections_without_losing_unsigned_values() {
-    crate::quantity::tests::initialize_python();
+    Python::initialize();
     Python::attach(|py| {
       for input in ["device 18446744073709551615\nother max\nzero 0", ""] {
         let limits = assert_ok!(Py::new(py, DmemLimits::from(assert_ok!(input.parse::<CoreDmemLimits>()))));
@@ -276,7 +276,7 @@ mod tests {
           } else {
             for (name, expected) in [("device", Some(u64::MAX)), ("other", None), ("zero", Some(0))] {
               let limit = assert_ok!(mapping.get_item(name));
-              check_limit(&limit, expected);
+              check_limit(&limit, expected, "bytes");
               check_frozen(&limit, &["value"]);
             }
           }
