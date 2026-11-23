@@ -43,3 +43,6 @@ rustc-ice-*.txt
 # Python
 __pycache__/
 *.pyc
+
+# Agentic Development
+AGENTS.override.md
