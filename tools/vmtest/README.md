@@ -27,16 +27,13 @@ Fixtures and the staged executable are stored under
 `tests/.cache/sakai-vmtest`. The executable metadata records the current
 commit for diagnosis. The vmtest binary comes from the `devenv.yaml` input,
 resolved in `devenv.lock`, on both platforms. QEMU comes from devenv on Linux
-and the container's Debian packages on macOS. Container images and kernel
-downloads have no manually maintained checksum pins. Kernel downloads use
-a file lock and atomic rename; remove a cached image to download it again.
-Transient network failures, HTTP 429, and server errors are retried up to three
-attempts, waiting 10 then 20 seconds between attempts. A valid HTTP 429
-`Retry-After` header overrides that backoff.
-Kernel images (including cache hits) and the container's vmtest executable
-are not independently checksum- or signature-verified. These paths trust
-upstream releases and local cache contents; locks and atomic rename do not
-establish artifact authenticity.
+and the container's Debian packages on macOS. The wrapper uses
+`nix-prefetch-url` on the host to fetch the selected kernel fixtures by their
+pinned SHA-256. It atomically stages copies from the Nix store into the
+workspace cache and mounts the selected fixtures read-only on macOS. A CI
+cache restore can seed an empty Nix store after hash verification. When
+importing a cached image fails, the wrapper fetches it from upstream. The
+container's `vmtest` executable still comes from the upstream release URL.
 
 GitHub Actions builds the test executable and wrapper once, uploads them as a
 short-lived artifact, and runs a separate job for each kernel. The matrix comes

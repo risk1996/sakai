@@ -192,7 +192,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: tests/.cache/sakai-vmtest/kernels/bzImage-v${{ matrix.kernel }}-archlinux
-          key: vmtest-kernel-v1-x86_64-${{ matrix.kernel }}-${{ hashFiles('xtask/src/vmtest/kernel.rs') }}
+          key: vmtest-kernel-v2-x86_64-${{ matrix.kernel }}-${{ hashFiles('xtask/src/vmtest/kernel.rs') }}
 
       - name: Test cgroup v2 against Linux ${{ matrix.kernel }}
         shell: bash

@@ -46,6 +46,7 @@ impl Vmtest {
   const CACHE_DIRECTORY: &str = "tests/.cache/sakai-vmtest";
   const CONFIG_FILE_NAME: &str = "vmtest.toml";
   const CONTAINER_IMAGE: &str = "sakai-vmtest:devenv";
+  const CONTAINER_KERNEL_DIR: &str = "/kernel-fixtures";
   const CONTAINER_PLATFORM: &str = "linux/amd64";
   const CONTAINER_WORKDIR: &str = "/workspace";
   const EXECUTABLE: &str = "vmtest-upstream";
@@ -53,6 +54,7 @@ impl Vmtest {
   const LIVE_TEST_TARGET: &str = "linux_live";
   const METADATA_PATH: &str = "bin/linux_live.meta";
   const RUN_TIMEOUT: Duration = Duration::from_secs(480);
+  const STAGED_KERNELS_ENV: &str = "SAKAI_VMTEST_STAGED_KERNEL_DIR";
 
   fn executable(message: Message) -> Option<PathBuf> {
     match message {
@@ -93,12 +95,8 @@ impl Vmtest {
       .map_err(Into::into)
   }
 
-  pub(crate) async fn run(self) -> Result<()> {
+  pub(crate) fn run(self) -> Result<()> {
     let repository = Self::repository()?;
-    if env::consts::OS == "macos" {
-      return self.run_in_container(&repository);
-    }
-    ensure!(env::consts::OS == "linux" && env::consts::ARCH == "x86_64", "vmtest requires an x86-64 Linux host");
     let selected = Kernel::ALL
       .iter()
       .filter(|kernel| match self.kernel.is_empty() {
@@ -113,6 +111,10 @@ impl Vmtest {
     );
 
     let cache = repository.join(Self::CACHE_DIRECTORY);
+    if env::consts::OS == "macos" {
+      return self.run_in_container(&repository, &cache, &selected);
+    }
+    ensure!(env::consts::OS == "linux" && env::consts::ARCH == "x86_64", "vmtest requires an x86-64 Linux host");
     fs::create_dir_all(&cache)?;
     let supplied = self.test_binary.is_some();
     let binary = match self.test_binary {
@@ -128,14 +130,18 @@ impl Vmtest {
     if supplied {
       Self::record_binary(&repository, &cache, &guest_binary)?;
     }
+    let staged = env::var_os(Self::STAGED_KERNELS_ENV).map(PathBuf::from);
     for kernel in selected {
-      let image = kernel.image(&cache.join("kernels")).await?;
+      let image = match &staged {
+        | Some(directory) => directory.join(kernel.filename()),
+        | None => kernel.image(&cache.join("kernels"))?,
+      };
       Self::run_kernel(&cache, kernel, &image)?;
     }
     Ok(())
   }
 
-  fn run_in_container(self, repository: &Path) -> Result<()> {
+  fn run_in_container(self, repository: &Path, cache: &Path, selected: &[&Kernel]) -> Result<()> {
     ensure!(
       self.test_binary.is_none(),
       "--test-binary must be a Linux executable; build it inside the container instead"
@@ -168,6 +174,14 @@ impl Vmtest {
     run.args(["run", "--rm", "--platform", Self::CONTAINER_PLATFORM]);
     run.arg("--volume").arg(format!("{}:{}", repository.display(), Self::CONTAINER_WORKDIR));
     run.args(["--workdir", Self::CONTAINER_WORKDIR]);
+    fs::create_dir_all(cache)?;
+    let staged = tempfile::tempdir_in(cache)?;
+    for kernel in selected {
+      let image = kernel.image(&cache.join("kernels"))?;
+      fs::hard_link(image, staged.path().join(kernel.filename()))?;
+    }
+    run.arg("--volume").arg(format!("{}:{}:ro", staged.path().display(), Self::CONTAINER_KERNEL_DIR));
+    run.arg("--env").arg(format!("{}={}", Self::STAGED_KERNELS_ENV, Self::CONTAINER_KERNEL_DIR));
     for name in ["RUST_LOG", "CARGO_NET_OFFLINE"] {
       if let Some(value) = env::var_os(name) {
         run.arg("--env").arg(format!("{name}={}", value.to_string_lossy()));

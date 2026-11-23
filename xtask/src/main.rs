@@ -38,7 +38,7 @@ async fn main() -> Result<()> {
   match Xtask::parse().command {
     | Command::Release(command) => command.run().await,
     | Command::InstallationSize(command) => command.run(),
-    | Command::Vmtest(command) => command.run().await,
+    | Command::Vmtest(command) => command.run(),
     | Command::BuildLiveTest => Vmtest::build_live_test(),
     | Command::KernelMatrix { profile } => Vmtest::kernel_matrix(profile),
   }

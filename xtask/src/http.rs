@@ -20,15 +20,13 @@ pub(crate) mod tests {
   use anyhow::{Result, ensure};
 
   pub(crate) enum Response {
-    Reply { status: &'static str, body: &'static str, content_length: usize },
+    Reply { status: &'static str, body: &'static str },
     Disconnect,
     Stall(Duration),
   }
 
   impl From<(&'static str, &'static str)> for Response {
-    fn from((status, body): (&'static str, &'static str)) -> Self {
-      Self::Reply { status, body, content_length: body.len() }
-    }
+    fn from((status, body): (&'static str, &'static str)) -> Self { Self::Reply { status, body } }
   }
 
   /// A scripted loopback server with bounded accept, read, and write operations.
@@ -68,11 +66,8 @@ pub(crate) mod tests {
             }
           }
           match response {
-            | Response::Reply { status, body, content_length } => {
-              write!(
-                stream,
-                "HTTP/1.1 {status}\r\nContent-Length: {content_length}\r\nConnection: close\r\n\r\n{body}"
-              )?;
+            | Response::Reply { status, body } => {
+              write!(stream, "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len())?;
             },
             | Response::Disconnect => {},
             | Response::Stall(delay) => thread::sleep(*delay),
