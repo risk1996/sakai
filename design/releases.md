@@ -93,7 +93,7 @@ metadata, lockfile, or commit change, including a squash merge.
    checks and prepare the candidate without a tag or publishing credentials:
 
    ```sh
-   devenv test
+   devenv --profile python test
    devenv tasks run check:security
    devenv shell -- rtk cargo package --package sakai --list --locked
    devenv shell -- rtk cargo xtask release prepare
