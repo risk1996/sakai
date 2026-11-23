@@ -5,6 +5,16 @@ the `sakai` Rust crate. Python 3.11 or newer is required. The native module
 uses the `cp311-abi3` stable ABI for regular CPython; free-threaded CPython
 needs a separate wheel and is not supported by this build.
 
+On Linux with cgroup v2 and glibc 2.17 or newer, install the alpha wheel
+for x86_64 or AArch64:
+
+```sh
+python -m pip install --pre --only-binary=:all: sakai
+```
+
+The source distribution requires the Maturin build backend, Rust, and a native
+compiler/linker. The published wheels cover the Linux targets listed above.
+
 ```python
 from sakai import Cgroup, InterfaceMissingError
 
@@ -328,8 +338,8 @@ The devenv Python profile uses Python 3.15, and CI tests installed wheels and
 source distributions on Python 3.11 and 3.15.
 
 The package version is inherited from Cargo's workspace release version via
-Maturin's dynamic version metadata, which converts Rust's `0.1.0-alpha.1` to
-Python's `0.1.0a1`. The devenv Python interpreter is a development
+Maturin's dynamic version metadata, which converts Rust's `0.1.0-alpha.2` to
+Python's `0.1.0a2`. The devenv Python interpreter is a development
 tool choice; it does not change the package's minimum supported Python version.
 
 To build locally on Linux, use an explicit Python 3.11 or newer interpreter:
@@ -364,7 +374,7 @@ stub-only aliases, and PyO3's generic subscription method. Runtime tests check
 exports, exception attributes, and documentation separately.
 
 Publication decisions and artifact verification remain in the
-[PyPI pre-publication checklist](../design/pypi-prepublish-checklist.md).
+[PyPI pre-publication checklist](https://github.com/risk1996/sakai/blob/main/design/pypi-prepublish-checklist.md).
 Adding free-threaded wheels requires a separate ABI choice, native-state audit,
 and build/test matrix; adding portable parser bindings requires a concrete use
 case. Neither is part of this Linux handle package.
@@ -381,6 +391,6 @@ explain ABI and wheel portability. Public naming, units, and exception policy
 are defined by this package's native docstrings, stubs, and contract tests.
 
 For exact assertions against Kubernetes container CPU and memory resources,
-run the [Kubernetes resource test](../tools/kubernetes/README.md). It checks the
+run the [Kubernetes resource test](https://github.com/risk1996/sakai/blob/main/tools/kubernetes/README.md). It checks the
 installed Python bindings inside a Pod, including request mappings with
 MemoryQoS enabled.

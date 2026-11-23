@@ -2,8 +2,9 @@
 
 The shared version lives in `[workspace.package]` in the root `Cargo.toml`.
 Rust and Python inherit it; Maturin derives Python metadata from Cargo.
-Release preparation and registry uploads are separate responsibilities. Only
-crates.io publishing is implemented here; no PyPI upload is configured yet.
+Release preparation and registry uploads are separate responsibilities.
+The tag workflow publishes the Rust crate to crates.io and the Linux Python
+distributions to PyPI.
 
 Research checked on 2026-10-11. The key references are
 [crates.io trusted publishing](https://blog.rust-lang.org/2025/07/11/crates-io-development-update-2025-07/),
@@ -34,7 +35,8 @@ source commit, and exact versioned changelog section as an Actions artifact.
 
 The `publish-crates` job depends on those checks and uses the protected
 `crates-io` environment. It repackages and compares the candidate before
-authentication. Only this job receives `id-token: write`. The official
+authentication. Each registry publishing job has its own `id-token: write`
+permission and protected environment. The official
 `rust-lang/crates-io-auth-action` exchanges OIDC identity for a temporary
 crates.io token and revokes it in its post step. This is a registry API token,
 not a GitHub PAT. Neither a long-lived registry token nor a secret-store
@@ -48,15 +50,17 @@ not persisted with `cargo login` or exported through `GITHUB_ENV`. SecretSpec
 does not provide OIDC authentication itself: it validates and supplies the
 already-issued token. Secrets are not resolved during Nix evaluation.
 
-The separate `announce` job has `contents: write`, but no OIDC permission.
-It creates a GitHub release from the reviewed changelog only after the upload
-is verified. Tags with a SemVer prerelease suffix produce GitHub prereleases.
-The checked archive remains in Actions artifacts for 30 days;
-the public distribution is crates.io. New registry jobs can depend on the
-same checks/preparation, use their own environment and authentication, and
-run independently. Add each to `announce.needs` so announcements wait for
-every requested destination. Uploads across registries cannot be atomic:
-retry failed destinations rather than trying to roll back immutable versions.
+The Python artifact jobs build and audit the two manylinux wheels and the
+sdist. They install the exact wheels outside the checkout and rebuild from
+the extracted source archive with its shipped lockfile. Both publishing jobs
+wait for these checks. The `publish-pypi` job downloads the checked artifact
+by ID and publishes through PyPI Trusted Publishing.
+
+The separate `announce` job has `contents: write` and creates the GitHub release
+only after both registry jobs succeed. Tags with a SemVer prerelease suffix
+produce GitHub prereleases. Checked archives remain in Actions artifacts for
+30 days. The uploads can complete independently. Retry failed destinations
+after checking what each registry already received.
 
 ## One-time manual setup and first publication
 
@@ -152,6 +156,20 @@ metadata, lockfile, or commit change, including a squash merge.
    the GitHub release notes. A later new version is needed to exercise the
    actual OIDC upload end to end. If the Mac and Linux candidates differ,
    stop and investigate; do not disable the checksum check or repoint the tag.
+
+## First PyPI publication
+
+1. Protect the `pypi` GitHub environment with the same reviewer and tag rules
+   as `crates-io`. The environment requires no upload secret.
+2. In the [PyPI account's Publishing settings](https://pypi.org/manage/account/publishing/),
+   add a pending GitHub Actions publisher with project name `sakai`, owner
+   `risk1996`, repository `sakai`, workflow `release.yml`, and environment
+   `pypi`. The first upload creates the project. Recheck availability before
+   tagging because pending publishers do not reserve names.
+3. Complete the [Python archive checks](pypi-prepublish-checklist.md) on the
+   final commit. Push `v0.1.0-alpha.2` on that commit. Review the Python
+   distributions and SHA-256 digests in the workflow summary, then approve the
+   `pypi` and `crates-io` deployments. The first Python version is `0.1.0a2`.
 
 ## Subsequent releases and rehearsals
 

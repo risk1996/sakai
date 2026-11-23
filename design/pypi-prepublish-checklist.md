@@ -16,20 +16,18 @@ sources are linked below.
 Verification baseline (2026-10-11): the Linux wheel/sdist candidates below
 were built from clean commit `ae898a12a72414cda5855036d17a304050ec8768`,
 not a final release candidate. Checked preparation items describe that baseline;
-repeat archive checks after changing packaged files or metadata. README/package
-information, registry uploads (including TestPyPI), credentials, publishers,
-and release automation remain deferred. No macOS CI or additional kernel matrix
-is required; existing Linux 5.15/6.18 smoke coverage is sufficient here.
+repeat archive checks after changing packaged files or metadata. The
+[release runbook](releases.md#first-pypi-publication) covers production setup.
+Existing Linux 5.15/6.18 smoke coverage is sufficient here.
 
-The current release target is `0.1.0a1` on PyPI. Maturin derives this from
-Cargo's workspace version `0.1.0-alpha.1`; no separate Python version is set.
+The current release target is `0.1.0a2` on PyPI. Maturin derives this from
+Cargo's workspace version `0.1.0-alpha.2`; no separate Python version is set.
 The `0.1.0` metadata and archive digests below describe the earlier baseline,
 and must be reverified for the alpha release. Repeat commands use the alpha
 version.
 
-The proposed wheel matrix is regular CPython 3.11–3.15 on Linux x86_64 and
-aarch64, glibc ≥2.17 (`manylinux2014`). Both architectures were verified locally,
-but the release support promise still needs owner confirmation. Musl, other
+The wheel matrix is regular CPython 3.11–3.15 on Linux x86_64 and
+aarch64, glibc ≥2.17 (`manylinux2014`). Musl, other
 architectures, macOS, Windows, PyPy, and free-threaded CPython are outside this
 candidate wheel matrix. Successful tests on newer glibc hosts plus native audits
 are not execution tests on glibc 2.17 itself.
@@ -84,10 +82,8 @@ are not execution tests on glibc 2.17 itself.
 - [ ] Set `requires-python = ">=3.11"` and accurate Linux/CPython classifiers.
   Do not use classifiers as a substitute for `Requires-Python`; the latter
   controls install compatibility.
-  The requirement is already set and verified in all baseline archives; Linux
-  and Python 3 classifiers are present. A CPython implementation classifier
-  is absent. Its addition is deferred with package-information work, not an
-  install-compatibility failure; wheel tags already restrict the implementation.
+  The metadata declares Python 3.11 or newer and the Linux and CPython
+  classifiers. Recheck them in the final release archives.
   [Pyproject guidance](https://packaging.python.org/en/latest/guides/writing-pyproject-toml/).
 - [ ] Provide a Python-facing README with installation, a working cgroup v2
   example, Linux-only availability, missing-interface behavior, units, and
@@ -177,7 +173,7 @@ are not execution tests on glibc 2.17 itself.
   their digests are preserved; these are not immutable release CI outputs.
 - [ ] Build one sdist and all intended release wheels from the same reviewed
   commit with locked dependencies and a recorded toolchain. Store the artifacts
-  as immutable CI outputs for promotion to TestPyPI and PyPI; do not rebuild
+  as immutable CI outputs for publication to PyPI; do not rebuild
   different bytes after testing. [Maturin distribution](https://www.maturin.rs/distribution),
   [Python package formats](https://packaging.python.org/en/latest/discussions/package-formats/).
 - [x] Build baseline Linux wheels in a suitable `manylinux` environment (or supported
@@ -234,8 +230,8 @@ are not execution tests on glibc 2.17 itself.
   dependency metadata across artifacts.
   Twine 7.0.0 checked all baseline archives and both sdist-rebuilt wheels:
   passed **with warnings** for missing long description and content type.
-  Metadata matches across the three candidates. No description rendering or
-  strict Twine pass is claimed; README/metadata work remains deferred.
+  Metadata matched across the three baseline candidates. The release workflow
+  runs strict Twine checks against the packaged README and metadata.
   [PyPI-friendly README](https://packaging.python.org/en/latest/guides/making-a-pypi-friendly-readme/),
   [core metadata](https://packaging.python.org/en/latest/specifications/core-metadata/).
 - [x] Install each baseline wheel by filename or from a local wheel directory in a clean
@@ -258,24 +254,18 @@ are not execution tests on glibc 2.17 itself.
   release tags. Give `id-token: write` only to the upload job; keep other jobs
   at read-only permissions. [PyPI Trusted Publisher setup](https://docs.pypi.org/trusted-publishers/using-a-publisher/),
   [security guidance](https://docs.pypi.org/trusted-publishers/security-model/).
-- [ ] Configure PyPI and TestPyPI Trusted Publishers for the **exact** GitHub
+- [ ] Configure the PyPI Trusted Publisher for the **exact** GitHub
   owner/repository, workflow filename, and environment. For a first PyPI
   release, use a pending publisher if the project does not yet exist; remember
   this does not reserve the name. Avoid long-lived upload tokens in the
   repository or CI. [PyPI Trusted Publishing](https://docs.pypi.org/trusted-publishers/),
   [pending publisher](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/).
-- [ ] Run the release workflow against TestPyPI with the candidate artifacts,
-  then install the uploaded wheel from **TestPyPI** into a fresh Python 3.11
-  environment and run a short live smoke test. TestPyPI and PyPI are separate
-  indices/accounts, so verify both publisher configurations. Use dependency
-  resolution from PyPI only if needed, and inspect what index supplied each
-  dependency. [Using TestPyPI](https://packaging.python.org/en/latest/guides/using-testpypi/),
-  [Trusted Publisher TestPyPI example](https://docs.pypi.org/trusted-publishers/using-a-publisher/).
 - [ ] Confirm the production upload job will consume exactly the artifacts
-  that passed inspection and TestPyPI, and that no further code or metadata
-  change requires rebuilding. Record filenames and SHA-256 digests for the
-  release review. PyPI's default publish attestations can then bind the
-  uploaded files to the Trusted Publisher identity.
+  that passed audit and isolated installation, and that no further code or
+  metadata change requires rebuilding. The first release goes directly to
+  PyPI after these checks and environment approval. Record filenames and
+  SHA-256 digests for the release review. PyPI's default publish attestations
+  can bind the uploaded files to the Trusted Publisher identity.
   [PyPI attestations](https://docs.pypi.org/attestations/),
   [automatic publish attestations](https://docs.pypi.org/attestations/producing-attestations/).
 
@@ -284,7 +274,7 @@ are not execution tests on glibc 2.17 itself.
 Proceed to production PyPI only when every applicable box above is checked,
 the distribution name and ownership are confirmed, the exact archives are
 preserved, and the release workflow is ready to upload them. A failed artifact
-or TestPyPI check means fix the cause, build a new candidate, and repeat the
+check means fix the cause, build a new candidate, and repeat the
 artifact checks. This checklist ends at the production upload; post-publication
 installation, project-page review, and provenance verification belong in the
 release runbook.
@@ -305,7 +295,7 @@ in that disposable builder (not in the package's runtime dependencies):
 
 ```text
 python3 -m venv /verification/tools
-/verification/tools/bin/pip install 'maturin[zig,patchelf]==1.15.0' 'ziglang==0.17.0' 'twine==7.0.0' 'check-wheel-contents==0.6.3' 'auditwheel==6.8.2' 'abi3audit==0.0.26' 'uv==0.13.0' 'packaging==26.3'
+/verification/tools/bin/pip install 'maturin[zig,patchelf]==1.15.0' 'ziglang==0.17.1' 'twine==7.0.0' 'check-wheel-contents==0.6.3' 'auditwheel==6.8.2' 'abi3audit==0.0.26' 'uv==0.13.0' 'packaging==26.3'
 rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
 ```
 
@@ -320,8 +310,8 @@ maturin sdist --manifest-path sakai-python/Cargo.toml --out /verification/dist
 twine check /verification/dist/*
 check-wheel-contents /verification/dist/*.whl
 abi3audit --strict --verbose /verification/dist/*.whl
-auditwheel show /verification/dist/sakai-0.1.0a1-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl
-auditwheel show /verification/dist/sakai-0.1.0a1-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+auditwheel show /verification/dist/sakai-0.1.0a2-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl
+auditwheel show /verification/dist/sakai-0.1.0a2-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
 sha256sum /verification/dist/*
 ```
 
@@ -358,7 +348,7 @@ with each unsupported platform (`win_amd64`, `macosx_11_0_x86_64`,
 `musllinux_1_2_x86_64`, `manylinux_2_17_ppc64le`) and expect no matching wheel:
 
 ```text
-pip download --no-cache-dir --no-index --no-deps --only-binary=:all: --find-links /verification/dist --platform <platform> --python-version 3.11 --implementation cp --abi abi3 --dest /tmp/downloads sakai==0.1.0a1
+pip download --no-cache-dir --no-index --no-deps --only-binary=:all: --find-links /verification/dist --platform <platform> --python-version 3.11 --implementation cp --abi abi3 --dest /tmp/downloads sakai==0.1.0a2
 ```
 
 Repeat with the x86_64 manylinux platform, `--implementation pp`, and
@@ -366,16 +356,13 @@ Repeat with the x86_64 manylinux platform, `--implementation pp`, and
 against `packaging.tags.cpython_tags` for Python 3.13–3.15 with only `cp313t`,
 `cp314t`, or `cp315t` respectively; `cp311-abi3` must not be selected.
 
-Extract the original sdist into fresh artifact storage and start a separate
-Linux builder with **no checkout mount**. First attempt the corresponding
-`maturin build --release --locked --offline ...` from the extracted tree.
-The recorded failure must remain visible; do not silently remove `--locked`.
-For diagnostic normalization, preserve the original Cargo.lock, run
-`cargo metadata --offline --format-version 1`, and compare parsed lockfiles:
-retained package name/version/source/checksum and resolved dependency targets
-must be identical; only unused packages/disambiguation may disappear. If a
-retained dependency changes, stop rather than claiming the locked graph passed.
-Then run both Maturin wheel builds above with `--locked --offline` from the
+After building the sdist, run `python tools/release/prepare_sdist.py <archive>`
+from the checkout with the workspace dependencies already fetched. The script
+lets Cargo prune the archived lockfile to the packaged workspace and verifies
+that retained packages and dependency targets match the original lockfile.
+Extract the resulting sdist into fresh artifact storage and start a separate
+Linux builder with **no checkout mount**. Run both Maturin wheel builds above
+with `--locked --offline` from the
 extracted tree, a fresh target directory, and output to `/verification/from-sdist`.
 Repeat audits and clean installed tests on those wheels. A networkless container
 requires the backend/compiler/dependency cache to be prepared beforehand; fetch

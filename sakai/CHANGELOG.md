@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.0-alpha.2]
+
+### Added
+
+- First PyPI release. Linux wheels for regular CPython 3.11 and newer support
+  x86_64 and AArch64 with glibc 2.17 or newer.
+
 ## [0.1.0-alpha.1]
 
 ### Added
