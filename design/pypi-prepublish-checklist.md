@@ -356,8 +356,8 @@ Repeat with the x86_64 manylinux platform, `--implementation pp`, and
 against `packaging.tags.cpython_tags` for Python 3.13–3.15 with only `cp313t`,
 `cp314t`, or `cp315t` respectively; `cp311-abi3` must not be selected.
 
-After building the sdist, run `python tools/release/prepare_sdist.py <archive>`
-from the checkout with the workspace dependencies already fetched. The script
+After building the sdist, run `devenv shell -- rtk cargo xtask release prepare-sdist <archive>`
+from the checkout with the workspace dependencies already fetched. The release tool
 lets Cargo prune the archived lockfile to the packaged workspace and verifies
 that retained packages and dependency targets match the original lockfile.
 Extract the resulting sdist into fresh artifact storage and start a separate

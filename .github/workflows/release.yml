@@ -98,6 +98,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment: pypi
+    env:
+      RUSTUP_TOOLCHAIN: stable
     permissions:
       contents: read
       id-token: write
@@ -110,13 +112,13 @@ jobs:
           artifact-ids: ${{ needs.python.outputs.artifact-id }}
           merge-multiple: true
           path: dist/
+      - name: Build the release tool
+        run: |
+          rustup update stable --no-self-update
+          cargo build --locked --package xtask
       - name: Verify existing PyPI files and stage any missing archives
         id: stage
-        run: |
-          python3 tools/release/pypi_registry.py dist --stage upload
-          if compgen -G 'upload/*' >/dev/null; then
-            echo 'needed=true' >> "$GITHUB_OUTPUT"
-          fi
+        run: ./target/debug/xtask release stage-pypi dist --output upload
       - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
         if: steps.stage.outputs.needed == 'true'
         with:
@@ -124,7 +126,7 @@ jobs:
           # PyPI's index can lag the upload endpoint. Verify the registry bytes below.
           skip-existing: true
       - name: Verify the published archives against the audited files
-        run: python3 tools/release/pypi_registry.py dist
+        run: ./target/debug/xtask release verify-pypi dist
 
   announce:
     name: Create GitHub release notes

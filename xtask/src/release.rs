@@ -2,7 +2,7 @@ use std::{
   env,
   fs::{self, OpenOptions},
   io::Write,
-  path::Path,
+  path::{Path, PathBuf},
   process::Command,
   time::Duration,
 };
@@ -16,6 +16,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use crate::http;
+
+mod python;
 
 /// Explicit release operations; package preparation never uploads a crate.
 #[derive(Debug, Args)]
@@ -43,6 +45,16 @@ enum ReleaseCommand {
   RegistryStatus,
   /// Require the published registry checksum to match the candidate.
   VerifyRegistry,
+  /// Prune the source archive's lockfile to the packaged workspace.
+  PrepareSdist { archive: PathBuf },
+  /// Check published PyPI files and stage any archives that still need uploading.
+  StagePypi {
+    distributions: PathBuf,
+    #[arg(long)]
+    output: PathBuf,
+  },
+  /// Require PyPI to contain exactly the audited release files.
+  VerifyPypi { distributions: PathBuf },
   /// Create GitHub release notes only after the registry upload is verified.
   GithubRelease,
 }
@@ -106,6 +118,9 @@ impl Release {
         )
         .await
       },
+      | ReleaseCommand::PrepareSdist { archive } => python::prepare_sdist(archive),
+      | ReleaseCommand::StagePypi { distributions, output } => python::stage(distributions, output).await,
+      | ReleaseCommand::VerifyPypi { distributions } => python::verify(distributions).await,
       | ReleaseCommand::GithubRelease => Self::github_release().await,
     }
   }

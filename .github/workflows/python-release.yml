@@ -8,7 +8,7 @@ on:
       - 'Cargo.*'
       - 'sakai/**'
       - 'sakai-python/**'
-      - 'tools/release/prepare_sdist.py'
+      - 'xtask/**'
   workflow_call:
     outputs:
       artifact-id:
@@ -48,7 +48,7 @@ jobs:
               --auditwheel check --interpreter "$(command -v python)" --out dist
           done
           maturin sdist --manifest-path sakai-python/Cargo.toml --out dist
-          python tools/release/prepare_sdist.py dist/*.tar.gz
+          cargo run --locked --package xtask -- release prepare-sdist dist/*.tar.gz
           python -m twine check --strict dist/*
           abi3audit --strict dist/*.whl
           check-wheel-contents dist/*.whl
