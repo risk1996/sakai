@@ -38,7 +38,6 @@
     pkgs.protobuf
     pkgs.release-plz
     pkgs.rtk
-    pkgs.secretspec
   ] ++ lib.optionals (pkgs.stdenv.hostPlatform.isLinux && pkgs.stdenv.hostPlatform.isx86_64) [
     pkgs.qemu
     (pkgs.runCommand "vmtest" { } ''
