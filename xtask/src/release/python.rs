@@ -89,6 +89,9 @@ impl Lockfile {
 }
 
 /// Prune the packaged workspace lockfile offline and replace just that archive entry.
+// TODO: Remove this workaround once a Maturin release includes
+// https://github.com/PyO3/maturin/pull/3192 and the unmodified Sakai source
+// archive builds with `--locked --offline` from an extracted copy.
 pub(super) fn prepare_sdist(path: &Path) -> Result<()> {
   let filename = path.file_name().and_then(|name| name.to_str()).context("missing UTF-8 source archive filename")?;
   let root = filename.strip_suffix(SDIST_SUFFIX).context("source archive must end in .tar.gz")?;
