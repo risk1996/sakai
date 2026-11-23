@@ -45,7 +45,7 @@ and an honest statement of scope. Retain this method; an additive
 needed to start this work. Avoid a second, unrelated method named `cpu_count`
 that returns an integer selected by a worker-pool policy.
 
-The report builds on the existing [read-only project direction](project-direction.md),
+The report builds on the existing [read-only library scope](../README.md),
 [interface roadmap](../TODO.md), [coding conventions](../CODE_STYLE.md), and
 [resource-introspection research](bindings.md). The latter already distinguishes
 CPU quota, CPU placement, affinity, and host resources.
