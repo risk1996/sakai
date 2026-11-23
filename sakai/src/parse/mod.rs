@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, str::SplitAsciiWhitespace};
+use std::{collections::BTreeMap, fmt::Write, str::SplitAsciiWhitespace};
 
 use nutype::nutype;
 use uom::si::{information::byte, ratio::percent, time::nanosecond};
@@ -8,6 +8,11 @@ use crate::{
   limit::MaxOr,
   unit::{Bytes, Count, NonZeroTime, Pages, Ratio, Time},
 };
+
+mod codec;
+pub(crate) use codec::{EncodeCgroup, cgroup_value};
+
+const MAX_TOKEN: &str = "max";
 
 /// Borrowed keyed values with the complete source file for field errors.
 pub(crate) struct KeyedFields<'a> {
@@ -188,6 +193,10 @@ impl ParseCgroup<ParseBytes> for Bytes {
   fn parse_cgroup(value: &str) -> Result<Self, Self::Error> { Ok(Self::new::<byte>(value.parse()?)) }
 }
 
+impl EncodeCgroup<ParseBytes> for Bytes {
+  fn encode_token(&self, output: &mut String) -> Option<()> { write!(output, "{}", self.get::<byte>()).ok() }
+}
+
 /// A zero-sized marker for cgroup percentages encoded as decimal percents.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct ParsePercent;
@@ -238,6 +247,17 @@ impl ParseCgroup<ParseNonZeroMicroseconds> for NonZeroTime {
   }
 }
 
+impl EncodeCgroup<ParseNonZeroMicroseconds> for NonZeroTime {
+  fn encode_token(&self, output: &mut String) -> Option<()> {
+    let nanoseconds = self.as_ref().get::<nanosecond>();
+    let scale = ParseMicroseconds::NANOSECONDS_PER_MICROSECOND;
+    if nanoseconds % scale != 0 {
+      return None;
+    }
+    write!(output, "{}", nanoseconds / scale).ok()
+  }
+}
+
 impl<Unit, T> ParseCgroup<Unit> for MaxOr<T>
 where
   T: ParseCgroup<Unit>,
@@ -246,8 +266,20 @@ where
 
   fn parse_cgroup(value: &str) -> Result<Self, Self::Error> {
     match value {
-      | "max" => Ok(Self::Max),
+      | MAX_TOKEN => Ok(Self::Max),
       | value => T::parse_cgroup(value).map(Self::Value),
+    }
+  }
+}
+
+impl<Unit, T: EncodeCgroup<Unit>> EncodeCgroup<Unit> for MaxOr<T> {
+  fn encode_token(&self, output: &mut String) -> Option<()> {
+    match self {
+      | Self::Max => {
+        output.push_str(MAX_TOKEN);
+        Some(())
+      },
+      | Self::Value(value) => value.encode_token(output),
     }
   }
 }
