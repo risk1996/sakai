@@ -1,9 +1,11 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use installation_size::InstallationSize;
 use release::Release;
 use vmtest::{Profile, Vmtest};
 
 mod http;
+mod installation_size;
 mod release;
 mod vmtest;
 
@@ -17,6 +19,8 @@ struct Xtask {
 enum Command {
   /// Prepare and verify stable release candidates without reading credentials.
   Release(Release),
+  /// Measure the packages a clean downstream project downloads for Sakai.
+  InstallationSize(InstallationSize),
   /// Run live cgroup tests in Linux microVMs.
   Vmtest(Vmtest),
   /// Build and stage the linux_live test executable for CI.
@@ -33,6 +37,7 @@ enum Command {
 async fn main() -> Result<()> {
   match Xtask::parse().command {
     | Command::Release(command) => command.run().await,
+    | Command::InstallationSize(command) => command.run(),
     | Command::Vmtest(command) => command.run().await,
     | Command::BuildLiveTest => Vmtest::build_live_test(),
     | Command::KernelMatrix { profile } => Vmtest::kernel_matrix(profile),
