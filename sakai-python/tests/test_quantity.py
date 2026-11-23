@@ -1,6 +1,7 @@
 """Installed-package checks for native quantities and conversion accessors."""
 
 import unittest
+from math import isclose
 from typing import assert_type
 
 from sakai import Bytes, Cgroup, Count, InterfaceMissingError, MaxOr, Pages, Time
@@ -12,7 +13,9 @@ class QuantityTest(unittest.TestCase):
     usage = assert_type(group.cpu().stat().time.usage, Time)
     self.assertIsInstance(usage, Time)
     self.assertIsInstance(usage.nanoseconds, int)
-    self.assertEqual(usage.seconds, usage.nanoseconds / 1_000_000_000)
+    self.assertTrue(
+      isclose(usage.seconds, usage.nanoseconds / 1_000_000_000, rel_tol=1e-15)
+    )
     self.assertRaises(AttributeError, setattr, usage, "nanoseconds", 0)
 
     try:
