@@ -243,13 +243,14 @@ mod tests {
   use std::{collections::BTreeSet, fs};
 
   use anyhow::{Result, ensure};
+  use indoc::{formatdoc, indoc};
   use tempfile::tempdir;
 
   use super::{Distributions, Lockfile, RegistryDigests, RegistryFile, RegistryVersion, Release};
 
   #[test]
   fn pruning_keeps_the_resolved_identity_when_cargo_shortens_an_edge() -> Result<()> {
-    let original: Lockfile = toml::from_str(
+    let original: Lockfile = toml::from_str(indoc!(
       r#"
         [[package]]
         name = "binding"
@@ -262,9 +263,9 @@ mod tests {
         name = "shared"
         version = "2.0.0"
       "#,
-    )?;
+    ))?;
     for (version, valid) in [("1.0.0", true), ("2.0.0", false)] {
-      let pruned = toml::from_str(&format!(
+      let pruned = toml::from_str(&formatdoc!(
         r#"
           [[package]]
           name = "binding"
