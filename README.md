@@ -172,8 +172,9 @@ Dependency licenses must be explicitly allowed, and dependency sources must be
 crates.io. Duplicate crate versions produce warnings for review.
 
 Upgrade affected dependencies first. If an advisory cannot be fixed immediately,
-document why it does not affect Sakai and when the exception will be reviewed
-before adding a specific advisory ID to `.cargo/audit.toml` and `deny.toml`.
+document its impact on Sakai and when the exception will be reviewed before
+adding the advisory ID to `deny.toml`. The `check:audit` task passes the same
+list of exceptions to `cargo audit`.
 Do not suppress a class of advisories or lower the severity threshold.
 Dependabot already checks Cargo dependencies and GitHub Actions weekly;
 repository administrators should also enable its security alerts and security
