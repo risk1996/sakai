@@ -1,4 +1,4 @@
-use uom::si::{ratio::ratio, time::microsecond};
+use uom::si::{ratio::ratio, time::nanosecond};
 
 use crate::{
   limit::MaxOr,
@@ -17,8 +17,10 @@ use crate::{
 /// See [Linux `cpu.max` interface](https://www.kernel.org/doc/html/v7.3/admin-guide/cgroup-v2.html#cpu-interface-files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CpuMax {
-  quota: MaxOr<NonZeroTime>,
-  period: NonZeroTime,
+  /// CPU time allowed per period, or `max` for no quota at this cgroup.
+  pub quota: MaxOr<NonZeroTime>,
+  /// Length of the CPU bandwidth enforcement period.
+  pub period: NonZeroTime,
 }
 
 impl CpuMax {
@@ -26,19 +28,6 @@ impl CpuMax {
   ///
   /// See [Linux `cpu.max` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
   pub const FILE_NAME: &'static str = "cpu.max";
-
-  /// Returns the CPU time allowed per enforcement period, converted from microseconds.
-  /// [`MaxOr::Max`] means no quota at this cgroup; ancestor quotas can still apply.
-  ///
-  /// See [Linux CPU interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
-  #[must_use]
-  pub const fn quota(&self) -> MaxOr<NonZeroTime> { self.quota }
-
-  /// Returns the enforcement period, converted from kernel microseconds.
-  ///
-  /// See [Linux CPU interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
-  #[must_use]
-  pub const fn period(&self) -> NonZeroTime { self.period }
 
   /// Returns the CPU bandwidth implied by this cgroup's quota and period.
   ///
@@ -55,8 +44,8 @@ impl CpuMax {
       | MaxOr::Max => MaxOr::Max,
       #[expect(clippy::cast_precision_loss, reason = "the public ratio uses f64; large quotas may lose precision")]
       | MaxOr::Value(quota) => {
-        let quota = quota.as_ref().get::<microsecond>() as f64;
-        let period = self.period.as_ref().get::<microsecond>() as f64;
+        let quota = quota.as_ref().get::<nanosecond>() as f64;
+        let period = self.period.as_ref().get::<nanosecond>() as f64;
 
         MaxOr::Value(Ratio::new::<ratio>(quota / period))
       },
@@ -163,5 +152,15 @@ mod tests {
     let cpu_max = assert_ok!("max 100000".parse::<CpuMax>());
 
     assert!(matches!(cpu_max.cpu_count(), MaxOr::Max));
+  }
+
+  #[test]
+  fn calculates_cpu_count_for_directly_constructed_nanosecond_durations() {
+    let limit = CpuMax {
+      quota: MaxOr::Value(assert_ok!(NonZeroTime::try_new(Time::new::<nanosecond>(250)))),
+      period: assert_ok!(NonZeroTime::try_new(Time::new::<nanosecond>(500))),
+    };
+    let MaxOr::Value(count) = limit.cpu_count() else { panic!("expected finite CPU quota") };
+    assert_in_delta!(count.get::<ratio>(), 0.5, f64::EPSILON);
   }
 }

@@ -14,39 +14,34 @@ typed values into canonical strings and can reject inexact encodings. They
 also encode read-only snapshots, so having an encoder says nothing about
 which operations the kernel accepts.
 
-## First implementation
+## Read, edit, and write
 
-Start with two Linux-only controller methods. These signatures are proposals.
+Controller views expose a named setter for each setting. A value with multiple
+fields can be read, edited directly, and passed back to its setter. One setter
+call submits one command for the interface.
 
 ```rust,ignore
-impl Cpu<'_> {
-  pub fn set_max(&self, value: &CpuMax) -> Result<(), Error>;
-}
-
-impl Memory<'_> {
-  pub fn set_max(&self, value: MaxOr<Bytes>) -> Result<(), Error>;
-}
+let cpu = cgroup.cpu();
+let mut limit = cpu.max()?;
+limit.quota = MaxOr::Value(NonZeroTime::try_new(Time::new::<microsecond>(30_000))?);
+limit.period = NonZeroTime::try_new(Time::new::<microsecond>(50_000))?;
+cpu.set_max(&limit)?;
 ```
 
-* `Cpu::set_max` replaces both quota and period using
-  [`CpuMax::encode_cgroup()`](../sakai/src/cgroup/v2/cpu/max.rs). If callers
-  need to build a value programmatically, add a constructor taking the
-  existing typed quantities and rejecting sub-microsecond remainders.
-  Keep the snapshot parser's accepted range intact. The kernel validates
-  settings against scheduler constraints and the current hierarchy.
-* `Memory::set_max` can turn its typed limit into a
-  [`MemoryMax`](../sakai/src/cgroup/v2/memory.rs) with the existing crate-private
-  [`Scalar::new`](../sakai/src/scalar.rs) and use the scalar encoder. Test
-  finite page-aligned limits and `max`. Other values may be normalized to page
-  granularity on readback. Lowering a live limit can initiate reclaim or OOM
-  handling, so use an empty scratch cgroup for the first live tests.
-  [Linux CPU and memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#interface-files)
+`Cpu::set_max` replaces both fields. Encoding checks whole-microsecond precision
+using the same codec as the reader. The kernel validates scheduler constraints
+and the current hierarchy. A concurrent writer can change the setting between
+the initial read and the write. Use `Cpu::set_quota` for a quota-only update.
 
-Expose explicit methods on the controller views. Each method owns its
-choice of interface and command type, and uses the existing `FILE_NAME`
-constant. If access metadata later becomes useful for multiple callers,
-associate snapshot and command types with an interface descriptor. A
-shared text codec does not require a generic public write API.
+Scalar setters such as `Memory::set_max` take the typed field directly, such as
+`MaxOr<Bytes>`. Lowering a live memory limit can initiate reclaim or OOM
+handling. Readback can reflect page-granularity normalization.
+[Linux CPU and memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#interface-files)
+
+Keyed files accept a command for one device, resource, or region. For example,
+`Io::set_max` replaces one device's four limits and `Io::update_max` updates
+only the fields supplied. For changes spanning multiple files or distinct
+rows, each setter can succeed or fail independently.
 
 ## Transport and errors
 
@@ -72,11 +67,8 @@ shared text codec does not require a generic public write API.
    mounts. Report success once the full command is accepted. Readback is
    a separate operation and can observe normalization or another writer.
 
-Use the codec's canonical bytes for the first two setters. Later commands
-may need interface-specific framing. For example, an empty placement list
-for an interface that supports clearing needs a nonempty write such as a
-newline, after confirming the kernel's accepted syntax. A zero-length
-syscall cannot serve as an explicit clear.
+Use the codec's canonical bytes for value commands. Empty placement lists
+use a newline to clear the request.
 
 ## Extend by command semantics
 

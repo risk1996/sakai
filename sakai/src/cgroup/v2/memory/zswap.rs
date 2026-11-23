@@ -44,6 +44,15 @@ impl Zswap<'_> {
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn max(&self) -> Result<ZswapMax, Error> { self.cgroup.parse(ZswapMax::FILE_NAME) }
 
+  /// Sets the zswap pool limit in bytes or removes it with `max`.
+  /// See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
+  ///
+  /// # Errors
+  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
+  pub fn set_max(&self, value: MaxOr<Bytes>) -> Result<(), Error> {
+    self.cgroup.write(ZswapMax::FILE_NAME, ZswapMax::new(value).encode_cgroup())
+  }
+
   /// This cgroup's configured disk swap writeback policy.
   ///
   /// Reads a fresh [`ZswapWriteback`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
@@ -53,6 +62,15 @@ impl Zswap<'_> {
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn writeback(&self) -> Result<ZswapWriteback, Error> { self.cgroup.parse(ZswapWriteback::FILE_NAME) }
+
+  /// Sets whether zswap can write back to disk.
+  /// See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
+  ///
+  /// # Errors
+  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
+  pub fn set_writeback(&self, value: bool) -> Result<(), Error> {
+    self.cgroup.write(ZswapWriteback::FILE_NAME, ZswapWriteback::new(value).encode_cgroup())
+  }
 }
 
 /// Memory consumed by the zswap compression backend for this cgroup and descendants, in bytes.

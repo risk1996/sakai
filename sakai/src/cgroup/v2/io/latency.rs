@@ -20,7 +20,8 @@ use crate::{
 /// See [Linux `io.latency` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct IoLatency {
-  devices: BTreeMap<Device, NonZeroTime>,
+  /// Configured latency targets by block device.
+  pub devices: BTreeMap<Device, NonZeroTime>,
 }
 
 impl IoLatency {
@@ -54,6 +55,23 @@ impl IoLatency {
       crate::parse::encode_pair::<ParseNonZeroMicroseconds, _>(&mut output, " ", '=', TARGET, target)?;
     }
     Ok(output)
+  }
+}
+
+#[cfg(target_os = "linux")]
+impl super::Io<'_> {
+  /// Sets a device's latency target in whole microseconds. Pass `None` to clear it.
+  /// See [Linux I/O latency](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-latency-interface-files).
+  ///
+  /// # Errors
+  /// A target must be exactly representable in microseconds. See the
+  /// shared [interface-write errors](crate::v2#interface-write-errors).
+  pub fn set_latency(&self, device: Device, target: Option<NonZeroTime>) -> Result<(), crate::Error> {
+    let mut command = device.to_string();
+    let duration = target.map_or_else(crate::Time::default, NonZeroTime::into_inner);
+    let encoded =
+      crate::parse::encode_pair::<crate::parse::ParseMicroseconds, _>(&mut command, " ", '=', TARGET, &duration);
+    self.cgroup.write(IoLatency::FILE_NAME, encoded.map(|()| command))
   }
 }
 

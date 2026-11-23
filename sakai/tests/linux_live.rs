@@ -4,7 +4,7 @@ use std::{fmt::Debug, fs, io, path::PathBuf, process::Command, str::FromStr, tim
 
 use assertables::{assert_ok, assert_some};
 use sakai::{
-  Bytes, Cgroup, Error, MaxOr, Pressure,
+  Bytes, Cgroup, Error, MaxOr, NonZeroTime, Pressure, Time,
   error::{ParseError, ParseValueError},
   v2::{
     CgroupPath,
@@ -23,7 +23,10 @@ use sakai::{
   },
 };
 use strum::IntoEnumIterator;
-use uom::si::information::byte;
+use uom::si::{
+  information::byte,
+  time::{microsecond, nanosecond},
+};
 
 #[test]
 fn reads_current_cgroup_without_privileges() {
@@ -270,10 +273,30 @@ fn parses_live_delegated_controller_interfaces() {
   assert!(assert_ok!(reader.children()).iter().any(|entry| entry.path() == child_path));
   assert_ok!(child.cpu().stat());
   assert_ok!(fs::remove_dir(&child_path));
-  let finite = assert_ok!(reader.cpu().max());
-  assert_eq!(finite, assert_ok!("25000 100000".parse::<CpuMax>()));
-  assert_eq!(assert_ok!(fs::read_to_string(fixture.path.join(CpuMax::FILE_NAME))).trim(), "25000 100000");
-  fixture.configure(CpuMax::FILE_NAME, "max 100000", assert_ok!("max 100000".parse::<CpuMax>()), || reader.cpu().max());
+  let cpu = reader.cpu();
+  let mut limit = assert_ok!(cpu.max());
+  assert_eq!(limit, assert_ok!("25000 100000".parse::<CpuMax>()));
+  limit.quota = MaxOr::Value(assert_ok!(NonZeroTime::try_new(Time::new::<microsecond>(30_000))));
+  limit.period = assert_ok!(NonZeroTime::try_new(Time::new::<microsecond>(50_000)));
+  assert_ok!(cpu.set_max(&limit));
+  assert_eq!(assert_ok!(cpu.max()), limit);
+  assert_eq!(assert_ok!(fs::read_to_string(fixture.path.join(CpuMax::FILE_NAME))).trim(), "30000 50000");
+  assert_ok!(cpu.set_quota(MaxOr::Max));
+  assert_eq!(assert_ok!(cpu.max()), CpuMax { quota: MaxOr::Max, ..limit });
+
+  let path = fixture.path.join(CpuMax::FILE_NAME);
+  let inexact = assert_ok!(NonZeroTime::try_new(Time::new::<nanosecond>(50_000_001)));
+  assert!(matches!(
+    cpu.set_max(&CpuMax { period: inexact, ..limit }),
+    Err(Error::Encode { path: actual, source }) if actual == path && source.field() == "period"
+  ));
+  let too_short = assert_ok!(NonZeroTime::try_new(Time::new::<microsecond>(1)));
+  assert!(matches!(
+    cpu.set_max(&CpuMax { period: too_short, ..limit }),
+    Err(Error::Operation { operation: "write interface", path: actual, source })
+      if actual == path && source.kind() == io::ErrorKind::InvalidInput && source.raw_os_error().is_some()
+  ));
+  assert_eq!(assert_ok!(cpu.max()), CpuMax { quota: MaxOr::Max, ..limit });
   assert_ok!(reader.cpu().stat());
   match reader.cpu().stat_local() {
     | Ok(_) | Err(Error::FileMissing { .. }) => {},
@@ -293,10 +316,17 @@ fn parses_live_delegated_controller_interfaces() {
       // No process enters this fixture; these writes only exercise the test hierarchy.
       let cpu = assert_ok!(reader.cpuset().cpus_effective()).ids().next().expect("online CPU").to_string();
       let node = assert_ok!(reader.cpuset().mems_effective()).ids().next().expect("online memory node").to_string();
-      fixture.configure(CpuList::CPUS_FILE_NAME, &cpu, assert_ok!(cpu.parse::<CpuList>()), || reader.cpuset().cpus());
-      fixture.configure(MemoryNodeList::MEMS_FILE_NAME, &node, assert_ok!(node.parse::<MemoryNodeList>()), || {
-        reader.cpuset().mems()
-      });
+      let cpuset = reader.cpuset();
+      let cpu = assert_ok!(cpu.parse::<CpuList>());
+      let node = assert_ok!(node.parse::<MemoryNodeList>());
+      assert_ok!(cpuset.set_cpus(&cpu));
+      assert_ok!(cpuset.set_mems(&node));
+      assert_eq!(assert_ok!(cpuset.cpus()), cpu);
+      assert_eq!(assert_ok!(cpuset.mems()), node);
+      assert_ok!(cpuset.set_cpus(&CpuList::default()));
+      assert_ok!(cpuset.set_mems(&MemoryNodeList::default()));
+      assert_eq!(assert_ok!(cpuset.cpus()), CpuList::default());
+      assert_eq!(assert_ok!(cpuset.mems()), MemoryNodeList::default());
     },
     | false => {},
   }
@@ -389,9 +419,11 @@ fn parses_live_delegated_controller_interfaces() {
     fixture
       .configure(MemoryOomGroup::FILE_NAME, input, expected, || reader.memory().oom_group().map(|value| value.value()));
   }
-  fixture.configure(MemoryMax::FILE_NAME, "67108864", MaxOr::Value(Bytes::new::<byte>(67_108_864)), || {
-    reader.memory().max().map(|value| value.value())
-  });
+  let memory = reader.memory();
+  for limit in [MaxOr::Value(Bytes::new::<byte>(67_108_864)), MaxOr::Max] {
+    assert_ok!(memory.set_max(limit));
+    assert_eq!(assert_ok!(memory.max()).value, limit);
+  }
   fixture.configure(MemoryHigh::FILE_NAME, "33554432", MaxOr::Value(Bytes::new::<byte>(33_554_432)), || {
     reader.memory().high().map(|value| value.value())
   });

@@ -18,7 +18,7 @@ mod partition;
 
 /// A borrowed reader for one cgroup's CPU and memory placement.
 ///
-/// Each method opens a fresh read-only descriptor; separate reads are not
+/// Each read opens a fresh read-only descriptor; separate reads are not
 /// atomic together. Controller availability and kernel configuration affect
 /// file presence. The hierarchy root lacks configured lists and partition state.
 /// See [Linux cpuset interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpuset-interface-files).
@@ -30,6 +30,54 @@ pub struct Cpuset<'a> {
 
 #[cfg(target_os = "linux")]
 impl Cpuset<'_> {
+  /// Replaces the requested CPU list. An empty list restores inheritance.
+  /// See [Linux cpuset interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpuset-interface-files).
+  ///
+  /// # Errors
+  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
+  pub fn set_cpus(&self, value: &CpuList) -> Result<(), Error> {
+    self.write_list(CpuList::CPUS_FILE_NAME, value.encode_cgroup())
+  }
+
+  /// Replaces the requested exclusive CPU list. An empty list clears the request.
+  /// See [Linux cpuset interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpuset-interface-files).
+  ///
+  /// # Errors
+  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
+  pub fn set_cpus_exclusive(&self, value: &CpuList) -> Result<(), Error> {
+    self.write_list(CpuList::EXCLUSIVE_FILE_NAME, value.encode_cgroup())
+  }
+
+  /// Replaces the requested memory-node list. An empty list restores inheritance.
+  /// See [Linux cpuset interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpuset-interface-files).
+  ///
+  /// # Errors
+  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
+  pub fn set_mems(&self, value: &MemoryNodeList) -> Result<(), Error> {
+    self.write_list(MemoryNodeList::MEMS_FILE_NAME, value.encode_cgroup())
+  }
+
+  /// Requests the base partition state of this value. Any diagnostic reason is ignored.
+  /// See [Linux cpuset interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpuset-interface-files).
+  ///
+  /// # Errors
+  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
+  pub fn set_partition(&self, value: &CpusetPartition) -> Result<(), Error> {
+    self.cgroup.write(CpusetPartition::FILE_NAME, Ok(value.state().to_owned()))
+  }
+
+  fn write_list(&self, file: &str, command: Result<String, crate::error::EncodeError>) -> Result<(), Error> {
+    self.cgroup.write(
+      file,
+      command.map(|mut command| {
+        if command.is_empty() {
+          command.push('\n');
+        }
+        command
+      }),
+    )
+  }
+
   /// Reads requested CPU IDs; an empty list means inheritance from ancestors.
   ///
   /// The request stays unchanged by CPU hotplug and can differ from the

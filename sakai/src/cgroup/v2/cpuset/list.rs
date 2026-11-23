@@ -2,46 +2,43 @@ use std::{fmt::Write, ops::RangeInclusive, str::FromStr};
 
 use crate::error::{ParseError, ParseValueError};
 
-/// Shared storage for the kernel's ascending, non-overlapping decimal ID ranges.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-struct IdList {
-  ranges: Vec<RangeInclusive<u32>>,
-}
-
 const RANGE_SEPARATOR: char = '-';
 const LIST_SEPARATOR: char = ',';
 
-impl IdList {
-  fn parse(raw: &str, field: &'static str) -> Result<Self, ParseError<ParseValueError>> {
-    let value = raw.trim();
-    let ranges = match value.is_empty() {
-      | true => Vec::new(),
-      | false => value
-        .split(LIST_SEPARATOR)
-        .map(|part| {
-          let invalid = |source| ParseError::invalid(raw, field, part, source);
-          let number = |text: &str| match !text.is_empty() && text.bytes().all(|byte| byte.is_ascii_digit()) {
-            | true => text.parse::<u32>().map_err(|error| invalid(error.into())),
-            | false => Err(invalid(ParseValueError::OutOfRange)),
-          };
-          let (start, end) = match part.split_once(RANGE_SEPARATOR) {
-            | Some((start, end)) => (number(start)?, number(end)?),
-            | None => {
-              let id = number(part)?;
-              (id, id)
-            },
-          };
-          match start <= end {
-            | true => Ok(start..=end),
-            | false => Err(invalid(ParseValueError::OutOfRange)),
-          }
-        })
-        .collect::<Result<Vec<_>, _>>()?,
-    };
-    match ranges.iter().zip(ranges.iter().skip(1)).all(|(previous, next)| previous.end() < next.start()) {
-      | true => Ok(Self { ranges }),
-      | false => Err(ParseError::invalid(raw, field, value, ParseValueError::OutOfRange)),
-    }
+fn valid_ranges(ranges: &[RangeInclusive<u32>]) -> bool {
+  ranges.iter().all(|range| !range.is_empty())
+    && ranges.iter().zip(ranges.iter().skip(1)).all(|(previous, next)| previous.end() < next.start())
+}
+
+fn parse_ranges(raw: &str, field: &'static str) -> Result<Vec<RangeInclusive<u32>>, ParseError<ParseValueError>> {
+  let value = raw.trim();
+  let ranges = match value.is_empty() {
+    | true => Vec::new(),
+    | false => value
+      .split(LIST_SEPARATOR)
+      .map(|part| {
+        let invalid = |source| ParseError::invalid(raw, field, part, source);
+        let number = |text: &str| match !text.is_empty() && text.bytes().all(|byte| byte.is_ascii_digit()) {
+          | true => text.parse::<u32>().map_err(|error| invalid(error.into())),
+          | false => Err(invalid(ParseValueError::OutOfRange)),
+        };
+        let (start, end) = match part.split_once(RANGE_SEPARATOR) {
+          | Some((start, end)) => (number(start)?, number(end)?),
+          | None => {
+            let id = number(part)?;
+            (id, id)
+          },
+        };
+        match start <= end {
+          | true => Ok(start..=end),
+          | false => Err(invalid(ParseValueError::OutOfRange)),
+        }
+      })
+      .collect::<Result<Vec<_>, _>>()?,
+  };
+  match valid_ranges(&ranges) {
+    | true => Ok(ranges),
+    | false => Err(ParseError::invalid(raw, field, value, ParseValueError::OutOfRange)),
   }
 }
 
@@ -50,7 +47,8 @@ macro_rules! placement_list {
     $(#[$doc])*
     #[derive(Debug, Clone, PartialEq, Eq, Default)]
     pub struct $name {
-      list: IdList,
+      /// Inclusive ID ranges, in ascending order without overlap.
+      pub ranges: Vec<RangeInclusive<u32>>,
     }
 
     impl $name {
@@ -67,16 +65,16 @@ macro_rules! placement_list {
       /// Single IDs have equal endpoints. Storage is proportional to the number
       /// of ranges, not the number of IDs. This getter performs no kernel I/O.
       #[must_use]
-      pub fn ranges(&self) -> &[RangeInclusive<u32>] { &self.list.ranges }
+      pub fn ranges(&self) -> &[RangeInclusive<u32>] { &self.ranges }
 
       /// Iterates the stored IDs in ascending order without allocating an expanded list.
       ///
       /// This inspects the snapshot only. Iterating a large range can take a long time.
-      pub fn ids(&self) -> impl Iterator<Item = u32> + '_ { self.list.ranges.iter().cloned().flatten() }
+      pub fn ids(&self) -> impl Iterator<Item = u32> + '_ { self.ranges.iter().cloned().flatten() }
 
       /// Tests membership in the stored snapshot without kernel I/O.
       #[must_use]
-      pub fn contains(&self, id: u32) -> bool { self.list.ranges.iter().any(|range| range.contains(&id)) }
+      pub fn contains(&self, id: u32) -> bool { self.ranges.iter().any(|range| range.contains(&id)) }
     }
 
     impl $name {
@@ -84,10 +82,13 @@ macro_rules! placement_list {
       ///
       /// # Errors
       ///
-      /// All stored ID ranges are representable.
+      /// Returns an error if a range is empty or the ranges are out of order or overlap.
       pub fn encode_cgroup(&self) -> Result<String, crate::error::EncodeError> {
+        if !valid_ranges(&self.ranges) {
+          return Err(crate::error::EncodeError { field: $field });
+        }
         let mut output = String::new();
-        for range in &self.list.ranges {
+        for range in &self.ranges {
           if !output.is_empty() {
             output.push(LIST_SEPARATOR);
           }
@@ -105,7 +106,7 @@ macro_rules! placement_list {
     impl FromStr for $name {
       type Err = ParseError<ParseValueError>;
 
-      fn from_str(raw: &str) -> Result<Self, Self::Err> { Ok(Self { list: IdList::parse(raw, $field)? }) }
+      fn from_str(raw: &str) -> Result<Self, Self::Err> { Ok(Self { ranges: parse_ranges(raw, $field)? }) }
     }
   };
 }
@@ -196,8 +197,8 @@ mod tests {
       ("0-4294967295", std::iter::once(0..=u32::MAX).collect()),
       ("4294967295", std::iter::once(u32::MAX..=u32::MAX).collect()),
     ] {
-      Cases::<CpuList>::check([(raw, Ok(CpuList { list: IdList { ranges: expected.clone() } }))]);
-      Cases::<MemoryNodeList>::check([(raw, Ok(MemoryNodeList { list: IdList { ranges: expected } }))]);
+      Cases::<CpuList>::check([(raw, Ok(CpuList { ranges: expected.clone() }))]);
+      Cases::<MemoryNodeList>::check([(raw, Ok(MemoryNodeList { ranges: expected }))]);
     }
     for (raw, bad) in [
       (",", ""),

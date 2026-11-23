@@ -1,7 +1,7 @@
 # Sakai
 
-A _read-only_ Rust cgroup v2 library. While kernel reads require Linux, the
-parsers are OS-independent. Linux Python bindings expose the same readers.
+A Rust library for reading and configuring cgroup v2 on Linux. The parsers
+are OS-independent. Linux Python bindings expose the readers.
 
 The `sakai` crate supports Rust 1.88 and newer. This is a fixed minimum,
 not a policy that tracks the latest stable release. Raising it requires an

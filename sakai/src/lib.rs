@@ -91,7 +91,7 @@ pub use unit::{
 pub use v2::Cgroup;
 pub use v2::cpu::{CpuWeight, Nice, Weight};
 
-/// Cgroup hierarchy interfaces; currently the read-only v2 hierarchy.
+/// Cgroup hierarchy interfaces; currently the unified v2 hierarchy.
 pub mod cgroup;
 /// Discovery, operating-system, and typed parsing errors.
 pub mod error;

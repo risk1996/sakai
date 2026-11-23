@@ -7,7 +7,7 @@ use std::{collections::BTreeMap, str::FromStr};
 
 pub use cost::{IoCostControl, IoCostModel, IoCostModelName, IoCostQos, IoDeviceCostModel, IoDeviceCostQos};
 pub use latency::IoLatency;
-pub use max::{IoDeviceMax, IoMax};
+pub use max::{IoDeviceMax, IoMax, IoMaxUpdate};
 pub use priority::IoPriorityClass;
 pub use stat::{DelayUsage, IoDeviceStat, IoStat};
 pub use weight::{IoWeight, Weight};
@@ -30,7 +30,7 @@ mod weight;
 
 /// A borrowed view of one cgroup's I/O controller.
 ///
-/// Every method opens a fresh read-only descriptor. Missing interfaces,
+/// Reads open fresh read-only descriptors. Missing interfaces,
 /// including disabled controllers, kernel configuration omissions, and root
 /// exemptions, return [`crate::Error::FileMissing`].
 ///
@@ -106,6 +106,15 @@ impl Io<'_> {
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn priority_class(&self) -> Result<IoPriorityClass, Error> { self.cgroup.parse(IoPriorityClass::FILE_NAME) }
+
+  /// Sets the I/O request priority policy.
+  /// See the [Linux I/O priority controller](https://github.com/torvalds/linux/blob/v6.5/block/blk-ioprio.c).
+  ///
+  /// # Errors
+  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
+  pub fn set_priority_class(&self, value: IoPriorityClass) -> Result<(), Error> {
+    self.cgroup.write(IoPriorityClass::FILE_NAME, value.encode_cgroup())
+  }
 }
 
 /// A block-device identifier keyed by the kernel's decimal `major:minor` pair.

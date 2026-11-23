@@ -64,7 +64,8 @@ impl ParseCgroup<Self> for IoCostModelName {
 /// See [Linux I/O cost interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct IoCostQos {
-  devices: BTreeMap<Device, IoDeviceCostQos>,
+  /// QoS settings by block device.
+  pub devices: BTreeMap<Device, IoDeviceCostQos>,
 }
 
 impl IoCostQos {
@@ -81,14 +82,22 @@ impl IoCostQos {
 /// See [Linux I/O cost interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct IoDeviceCostQos {
-  enabled: bool,
-  control: IoCostControl,
-  read_percentile: Ratio,
-  read_latency: Time,
-  write_percentile: Ratio,
-  write_latency: Time,
-  min_scaling: Ratio,
-  max_scaling: Ratio,
+  /// Whether the I/O cost controller is enabled for this device.
+  pub enabled: bool,
+  /// Whether the kernel or user controls the parameters.
+  pub control: IoCostControl,
+  /// Read latency percentile as a ratio from zero to one.
+  pub read_percentile: Ratio,
+  /// Read latency target in whole microseconds.
+  pub read_latency: Time,
+  /// Write latency percentile as a ratio from zero to one.
+  pub write_percentile: Ratio,
+  /// Write latency target in whole microseconds.
+  pub write_latency: Time,
+  /// Minimum issue-rate scaling as a ratio from 0.01 to 100.
+  pub min_scaling: Ratio,
+  /// Maximum issue-rate scaling as a ratio from 0.01 to 100.
+  pub max_scaling: Ratio,
 }
 
 impl IoDeviceCostQos {
@@ -161,7 +170,8 @@ impl ParseCgroup<ParseScalingPercent> for Ratio {
 /// See [Linux I/O cost interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct IoCostModel {
-  devices: BTreeMap<Device, IoDeviceCostModel>,
+  /// Cost models by block device.
+  pub devices: BTreeMap<Device, IoDeviceCostModel>,
 }
 
 impl IoCostModel {
@@ -178,14 +188,22 @@ impl IoCostModel {
 /// See [Linux I/O cost interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct IoDeviceCostModel {
-  control: IoCostControl,
-  model: IoCostModelName,
-  read_bandwidth: BytesPerSecond,
-  read_sequential_iops: OperationsPerSecond,
-  read_random_iops: OperationsPerSecond,
-  write_bandwidth: BytesPerSecond,
-  write_sequential_iops: OperationsPerSecond,
-  write_random_iops: OperationsPerSecond,
+  /// Whether the kernel or user controls the cost model.
+  pub control: IoCostControl,
+  /// Cost model used by the kernel.
+  pub model: IoCostModelName,
+  /// Maximum sequential read throughput in bytes per second.
+  pub read_bandwidth: BytesPerSecond,
+  /// Maximum sequential 4 KiB reads per second.
+  pub read_sequential_iops: OperationsPerSecond,
+  /// Maximum random 4 KiB reads per second.
+  pub read_random_iops: OperationsPerSecond,
+  /// Maximum sequential write throughput in bytes per second.
+  pub write_bandwidth: BytesPerSecond,
+  /// Maximum sequential 4 KiB writes per second.
+  pub write_sequential_iops: OperationsPerSecond,
+  /// Maximum random 4 KiB writes per second.
+  pub write_random_iops: OperationsPerSecond,
 }
 
 impl IoDeviceCostModel {
@@ -234,6 +252,45 @@ cgroup_value! { fields IoDeviceCostModel, {
 } }
 
 cgroup_value! { device_rows IoCostModel, devices: IoDeviceCostModel, Device::parse_lines }
+
+#[cfg(target_os = "linux")]
+impl super::Io<'_> {
+  /// Applies one device's QoS settings in one write at the hierarchy root.
+  /// Automatic control writes the enable flag and control mode. User control
+  /// also writes the latency targets and scaling bounds.
+  /// See [Linux I/O cost interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
+  ///
+  /// # Errors
+  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
+  pub fn set_cost_qos(&self, device: Device, value: &IoDeviceCostQos) -> Result<(), crate::Error> {
+    let command = match value.control {
+      | IoCostControl::Auto => Ok(format!("{device} enable={} ctrl=auto", u8::from(value.enabled))),
+      | IoCostControl::User => {
+        let mut command = device.to_string();
+        value.encode_fields(&mut command, " ", '=').map(|()| command)
+      },
+    };
+    self.cgroup.write(IoCostQos::FILE_NAME, command)
+  }
+
+  /// Applies one device's cost model in one write at the hierarchy root.
+  /// Automatic control lets the kernel choose the coefficients. User control
+  /// supplies the model and all coefficients.
+  /// See [Linux I/O cost interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
+  ///
+  /// # Errors
+  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
+  pub fn set_cost_model(&self, device: Device, value: &IoDeviceCostModel) -> Result<(), crate::Error> {
+    let command = match value.control {
+      | IoCostControl::Auto => Ok(format!("{device} ctrl=auto")),
+      | IoCostControl::User => {
+        let mut command = device.to_string();
+        value.encode_fields(&mut command, " ", '=').map(|()| command)
+      },
+    };
+    self.cgroup.write(IoCostModel::FILE_NAME, command)
+  }
+}
 
 impl EncodeCgroup<IoCostControl> for IoCostControl {
   fn encode_token(&self, output: &mut String) -> Option<()> { write!(output, "{self}").ok() }

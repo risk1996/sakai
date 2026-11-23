@@ -199,8 +199,8 @@ pub(super) struct CpuMax {
 impl From<CoreCpuMax> for CpuMax {
   fn from(value: CoreCpuMax) -> Self {
     Self {
-      quota: MaxOr::from_time(value.quota()),
-      period: value.period().as_ref().into(),
+      quota: MaxOr::from_time(value.quota),
+      period: value.period.as_ref().into(),
       cpu_count: MaxOr::from_ratio(value.cpu_count()),
     }
   }

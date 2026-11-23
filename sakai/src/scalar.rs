@@ -21,7 +21,8 @@ pub trait Interface: Copy {
 /// Different interfaces retain different types even when their units match.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Scalar<T, I> {
-  value: T,
+  /// The stored quantity or limit. Editing it only changes this value.
+  pub value: T,
   interface: PhantomData<I>,
 }
 

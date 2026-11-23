@@ -47,6 +47,15 @@ impl Pids<'_> {
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn max(&self) -> Result<PidsMax, Error> { self.cgroup.parse(PidsMax::FILE_NAME) }
 
+  /// Sets the task count limit or removes it with `max`.
+  /// See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#pid).
+  ///
+  /// # Errors
+  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
+  pub fn set_max(&self, value: MaxOr<Count>) -> Result<(), Error> {
+    self.cgroup.write(PidsMax::FILE_NAME, PidsMax::new(value).encode_cgroup())
+  }
+
   /// Hierarchical process-limit event counts.
   ///
   /// Reads a fresh [`PidsEvents`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#pid).

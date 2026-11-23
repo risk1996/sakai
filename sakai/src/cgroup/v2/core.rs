@@ -170,9 +170,38 @@ impl CgroupController {
   pub const SUBTREE_CONTROL_FILE_NAME: &'static str = "cgroup.subtree_control";
 }
 
+/// One controller change to submit to `cgroup.subtree_control`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SubtreeControl {
+  /// Enables this controller for child cgroups.
+  Enable(CgroupController),
+  /// Disables this controller for child cgroups.
+  Disable(CgroupController),
+}
+
+/// A task to migrate, interpreted in the writer's PID namespace.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MigrationTarget {
+  /// A process or thread ID. Zero is rejected; use [`Self::Caller`] explicitly.
+  Id(TaskId),
+  /// The process or thread issuing the write.
+  Caller,
+}
+
+#[cfg(target_os = "linux")]
+impl MigrationTarget {
+  fn command(self) -> Result<String, crate::error::EncodeError> {
+    match self {
+      | Self::Caller => Ok("0".to_owned()),
+      | Self::Id(id) if *id.as_ref() > 0 => id.encode_cgroup(),
+      | Self::Id(_) => Err(crate::error::EncodeError { field: "task_id" }),
+    }
+  }
+}
+
 /// A borrowed view of one open cgroup's core interfaces.
 ///
-/// Each method reads a fresh snapshot; separate reads are not atomic together.
+/// Each read returns a fresh snapshot; separate reads are not atomic together.
 ///
 /// See [Linux core cgroup interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
 #[cfg(target_os = "linux")]
@@ -235,12 +264,30 @@ impl Core<'_> {
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn freeze(&self) -> Result<CgroupFreeze, Error> { self.cgroup.parse(CgroupFreeze::FILE_NAME) }
 
+  /// Requests freeze or thaw. Read events to observe completion.
+  /// See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
+  ///
+  /// # Errors
+  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
+  pub fn set_freeze(&self, value: bool) -> Result<(), Error> {
+    self.cgroup.write(CgroupFreeze::FILE_NAME, CgroupFreeze::new(value).encode_cgroup())
+  }
+
   /// Reads the configured descendant depth limit, including at the root.
   ///
   /// See [`CgroupMaxDepth`] for units and ancestor restrictions.
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn max_depth(&self) -> Result<CgroupMaxDepth, Error> { self.cgroup.parse(CgroupMaxDepth::FILE_NAME) }
+
+  /// Sets the maximum descendant depth or removes the limit with `max`.
+  /// See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
+  ///
+  /// # Errors
+  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
+  pub fn set_max_depth(&self, value: MaxOr<Count>) -> Result<(), Error> {
+    self.cgroup.write(CgroupMaxDepth::FILE_NAME, CgroupMaxDepth::new(value).encode_cgroup())
+  }
 
   /// Reads the configured descendant cgroup count limit, including at the root.
   ///
@@ -251,12 +298,30 @@ impl Core<'_> {
     self.cgroup.parse(CgroupMaxDescendants::FILE_NAME)
   }
 
+  /// Sets the maximum descendant count or removes the limit with `max`.
+  /// See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
+  ///
+  /// # Errors
+  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
+  pub fn set_max_descendants(&self, value: MaxOr<Count>) -> Result<(), Error> {
+    self.cgroup.write(CgroupMaxDescendants::FILE_NAME, CgroupMaxDescendants::new(value).encode_cgroup())
+  }
+
   /// Reads the local pressure accounting enable flag, including at the root.
   ///
   /// Since Linux 6.1; see [`CgroupPressure`] for configuration requirements.
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn pressure_enabled(&self) -> Result<CgroupPressure, Error> { self.cgroup.parse(CgroupPressure::FILE_NAME) }
+
+  /// Sets local pressure accounting. At the root, this is the system-wide switch.
+  /// See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
+  ///
+  /// # Errors
+  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
+  pub fn set_pressure_enabled(&self, value: bool) -> Result<(), Error> {
+    self.cgroup.write(CgroupPressure::FILE_NAME, CgroupPressure::new(value).encode_cgroup())
+  }
 
   /// Configuration snapshot; the hierarchy root may lack this file.
   ///
@@ -287,6 +352,65 @@ impl Core<'_> {
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn subtree_control(&self) -> Result<Vec<CgroupController>, Error> {
     self.controller_list(CgroupController::SUBTREE_CONTROL_FILE_NAME)
+  }
+
+  /// Applies the controller actions in one kernel batch.
+  ///
+  /// If a controller appears more than once, the last action for it wins.
+  /// See [Linux subtree control](https://docs.kernel.org/admin-guide/cgroup-v2.html#controlling-controllers).
+  ///
+  /// # Errors
+  /// The batch must contain at least one action. See the shared
+  /// [interface-write errors](crate::v2#interface-write-errors).
+  pub fn set_subtree_control(&self, actions: &[SubtreeControl]) -> Result<(), Error> {
+    let command = (|| {
+      let mut command = String::new();
+      for action in actions {
+        let (prefix, controller) = match action {
+          | SubtreeControl::Enable(controller) => ('+', controller),
+          | SubtreeControl::Disable(controller) => ('-', controller),
+        };
+        let name = controller.to_string();
+        super::file::check_token(&name, "controller")?;
+        if !command.is_empty() {
+          command.push(' ');
+        }
+        command.push(prefix);
+        command.push_str(&name);
+      }
+      if command.is_empty() {
+        return Err(crate::error::EncodeError { field: "controllers" });
+      }
+      Ok(command)
+    })();
+    self.cgroup.write(CgroupController::SUBTREE_CONTROL_FILE_NAME, command)
+  }
+
+  /// Moves one process and its threads into this cgroup.
+  /// See [Linux process migration](https://docs.kernel.org/admin-guide/cgroup-v2.html#organizing-processes-and-threads).
+  ///
+  /// # Errors
+  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
+  pub fn move_process(&self, target: MigrationTarget) -> Result<(), Error> {
+    self.cgroup.write(TaskId::PROCS_FILE_NAME, target.command())
+  }
+
+  /// Moves one thread into this cgroup within its threaded domain.
+  /// See [Linux thread migration](https://docs.kernel.org/admin-guide/cgroup-v2.html#organizing-processes-and-threads).
+  ///
+  /// # Errors
+  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
+  pub fn move_thread(&self, target: MigrationTarget) -> Result<(), Error> {
+    self.cgroup.write(TaskId::THREADS_FILE_NAME, target.command())
+  }
+
+  /// Converts this cgroup into a member of a threaded subtree.
+  /// See [Linux threaded cgroups](https://docs.kernel.org/admin-guide/cgroup-v2.html#threads).
+  ///
+  /// # Errors
+  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
+  pub fn set_threaded(&self) -> Result<(), Error> {
+    self.cgroup.write(CgroupType::FILE_NAME, CgroupType::Threaded.encode_cgroup())
   }
 
   fn controller_list(&self, file: &'static str) -> Result<Vec<CgroupController>, Error> {

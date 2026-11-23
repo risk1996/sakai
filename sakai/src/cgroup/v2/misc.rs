@@ -20,7 +20,7 @@ use crate::{
 
 /// A borrowed miscellaneous-resource reader for one pinned cgroup.
 ///
-/// Every method performs fresh read-only I/O; separate calls are not atomic.
+/// Each read performs fresh I/O; separate calls are not atomic.
 /// Disabled controllers, unsupported kernels and root exemptions return
 /// [`crate::Error::FileMissing`]. See [Linux misc interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#misc).
 #[cfg(target_os = "linux")]
@@ -58,6 +58,15 @@ impl Misc<'_> {
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn max(&self) -> Result<MiscMax, Error> { self.cgroup.parse(MiscMax::FILE_NAME) }
+
+  /// Sets the maximum count for one miscellaneous resource, or removes its limit with `max`.
+  /// See [Linux miscellaneous resource interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#misc).
+  ///
+  /// # Errors
+  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
+  pub fn set_max(&self, resource: &str, value: MaxOr<Count>) -> Result<(), Error> {
+    self.cgroup.write_keyed::<ParseCount>(MiscMax::FILE_NAME, resource, "resource", &value, "limit")
+  }
 
   /// Hierarchical resource limit or capacity failures; absent at the root.
   ///
@@ -161,7 +170,8 @@ cgroup_value! { map MiscPeak, resources: ParseCount, "value" }
 /// See [Linux misc interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#misc).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MiscMax {
-  resources: BTreeMap<String, MaxOr<Count>>,
+  /// Maximum counts per resource.
+  pub resources: BTreeMap<String, MaxOr<Count>>,
 }
 
 impl MiscMax {

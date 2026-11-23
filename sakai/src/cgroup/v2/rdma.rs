@@ -30,8 +30,10 @@ use crate::{
 /// the name. See [Linux RDMA interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#rdma-interface-files).
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RdmaDevice {
-  name: String,
-  index: Option<u32>,
+  /// Adapter name.
+  pub name: String,
+  /// Device index, when reported.
+  pub index: Option<u32>,
 }
 
 impl RdmaDevice {
@@ -87,7 +89,7 @@ impl EncodeCgroup<UsageCount> for Count {
 
 /// A borrowed view of one cgroup's RDMA controller.
 ///
-/// Each call reads a fresh, read-only snapshot. Separate calls are not atomic
+/// Each read returns a fresh snapshot. Separate reads are not atomic
 /// together. Interfaces are absent on the hierarchy root and when the RDMA
 /// controller is disabled or unavailable in the kernel configuration.
 ///
@@ -116,6 +118,20 @@ impl Rdma<'_> {
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn max(&self) -> Result<RdmaMax, Error> { self.cgroup.parse(RdmaMax::FILE_NAME) }
+
+  /// Sets both resource limits for one RDMA device in one write.
+  /// See [Linux RDMA interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#rdma-interface-files).
+  ///
+  /// # Errors
+  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
+  pub fn set_max(&self, device: &RdmaDevice, value: &RdmaDeviceMax) -> Result<(), Error> {
+    let command = super::file::check_token(device.name(), "device").and_then(|()| {
+      let mut command = device.to_string();
+      value.encode_fields(&mut command, " ", '=')?;
+      Ok(command)
+    });
+    self.cgroup.write(RdmaMax::FILE_NAME, command)
+  }
 
   /// Reads historical hierarchical HCA resource high-water marks in counts.
   ///
@@ -228,7 +244,8 @@ cgroup_value! { device_rows RdmaCurrent, devices: RdmaDeviceCurrent, parse_devic
 /// See [Linux RDMA interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#rdma-interface-files).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct RdmaMax {
-  devices: BTreeMap<RdmaDevice, RdmaDeviceMax>,
+  /// Resource limits by RDMA device.
+  pub devices: BTreeMap<RdmaDevice, RdmaDeviceMax>,
 }
 
 impl RdmaMax {
@@ -245,8 +262,10 @@ impl RdmaMax {
 /// See [Linux RDMA interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#rdma-interface-files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RdmaDeviceMax {
-  hca_handle: MaxOr<Count>,
-  hca_object: MaxOr<Count>,
+  /// HCA handle limit, or `max` for no limit here.
+  pub hca_handle: MaxOr<Count>,
+  /// HCA object limit, or `max` for no limit here.
+  pub hca_object: MaxOr<Count>,
 }
 
 impl RdmaDeviceMax {

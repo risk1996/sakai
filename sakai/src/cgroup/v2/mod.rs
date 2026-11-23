@@ -1,7 +1,7 @@
-//! Typed snapshots and read-only handles for the unified cgroup v2 hierarchy.
+//! Typed snapshots and handles for the unified cgroup v2 hierarchy.
 //!
 //! Snapshots implement string parsing on any OS. Handles and borrowed
-//! controller readers are available on Linux. See the
+//! controller views are available on Linux. See the
 //! [Linux cgroup v2 guide](https://docs.kernel.org/admin-guide/cgroup-v2.html).
 //!
 //! # Interface-read errors
@@ -16,6 +16,17 @@
 //!   operation, diagnostic path, and source error.
 //!
 //! Reader-specific availability and root exemptions are documented on each interface.
+//!
+//! # Interface-write errors
+//!
+//! Setters encode a full command before opening the interface. They report
+//! [`crate::Error::Encode`] for values that cannot be expressed as a command,
+//! [`crate::Error::FileMissing`] for an absent interface, and
+//! [`crate::Error::NotSupported`] when the kernel reports an unsupported
+//! operation. Other failures, including kernel rejection, permission errors,
+//! a read-only mount, and incomplete writes, return [`crate::Error::Operation`].
+//! A successful write means the kernel accepted the command. A separate read
+//! can observe kernel normalization or a concurrent change.
 
 #[cfg(target_os = "linux")]
 pub use handle::Cgroup;

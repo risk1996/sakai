@@ -26,7 +26,7 @@ use super::{
   pids::Pids,
   rdma::Rdma,
 };
-use crate::error::Error;
+use crate::error::{EncodeError, Error};
 
 const DIRECTORY_FLAGS: OFlags = OFlags::RDONLY.union(OFlags::CLOEXEC).union(OFlags::NOFOLLOW).union(OFlags::DIRECTORY);
 
@@ -36,7 +36,7 @@ const CGROUP2_SUPER_MAGIC: fs::FsWord = 0x6367_7270;
 /// An open cgroup v2 directory. Reads use its descriptor, not its display path.
 ///
 /// Each read opens a fresh, read-only interface descriptor. Reads across files
-/// are separate snapshots, not a transaction. No controller is enabled or changed.
+/// are separate snapshots. Explicit setters write one command at a time.
 ///
 /// See [cgroups(7)](https://man7.org/linux/man-pages/man7/cgroups.7.html),
 /// [proc_pid_cgroup(5)](https://man7.org/linux/man-pages/man5/proc_pid_cgroup.5.html), and
@@ -345,6 +345,28 @@ impl Cgroup {
 
   pub(crate) fn read(&self, file: &str) -> Result<String, Error> {
     super::file::read_file(&self.directory, file).map_err(|error| Error::read(self.path.join(file), error))
+  }
+
+  pub(crate) fn write(&self, file: &str, command: Result<String, EncodeError>) -> Result<(), Error> {
+    let command = command.map_err(|source| Error::Encode { path: self.path.join(file), source })?;
+    super::file::write_file(&self.directory, file, &command)
+      .map_err(|source| Error::interface_operation("write interface", self.path.join(file), source))
+  }
+
+  pub(super) fn write_keyed<Unit>(
+    &self,
+    file: &str,
+    key: &str,
+    key_field: &'static str,
+    value: &impl crate::parse::EncodeCgroup<Unit>,
+    value_field: &'static str,
+  ) -> Result<(), Error> {
+    let command = super::file::check_token(key, key_field).and_then(|()| {
+      let mut command = format!("{key} ");
+      value.encode_field(&mut command, value_field)?;
+      Ok(command)
+    });
+    self.write(file, command)
   }
 
   pub(crate) fn parse<T: FromStr>(&self, file: &str) -> Result<T, Error>

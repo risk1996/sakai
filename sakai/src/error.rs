@@ -5,7 +5,7 @@ use std::{
   path::PathBuf,
 };
 
-/// A cgroup discovery, read, or parse failure.
+/// A cgroup discovery, read, write, or codec failure.
 ///
 /// Downstream matches must handle future error categories.
 ///
@@ -13,7 +13,8 @@ use std::{
 /// use sakai::Error;
 /// match Error::NotCgroupV2 {
 ///     Error::FileMissing { .. } | Error::NotSupported { .. } | Error::NotCgroupV2
-///     | Error::DeletedCgroup { .. } | Error::Parse { .. } | Error::Operation { .. } | Error::Io(_) => (),
+///     | Error::DeletedCgroup { .. } | Error::Parse { .. } | Error::Encode { .. }
+///     | Error::Operation { .. } | Error::Io(_) => (),
 /// }
 /// ```
 ///
@@ -28,7 +29,7 @@ pub enum Error {
     path: PathBuf,
   },
   /// The kernel does not support this operation for the cgroup.
-  #[error("reading {} is not supported: {source}", path.display())]
+  #[error("cgroup operation on {} is not supported: {source}", path.display())]
   NotSupported {
     /// Diagnostic path of the unsupported interface.
     path: PathBuf,
@@ -54,6 +55,15 @@ pub enum Error {
     #[source]
     source: Box<dyn StdError + Send + Sync + 'static>,
   },
+  /// A command could not be encoded for its interface.
+  #[error("failed to encode {}: {source}", path.display())]
+  Encode {
+    /// Full path to the interface.
+    path: PathBuf,
+    /// The original encoding error.
+    #[source]
+    source: EncodeError,
+  },
   /// An operating-system failure with operation and diagnostic path context.
   #[error("failed to {operation} {}: {source}", path.display())]
   Operation {
@@ -73,10 +83,15 @@ pub enum Error {
 impl Error {
   #[cfg(target_os = "linux")]
   pub(crate) fn read(path: PathBuf, error: io::Error) -> Self {
+    Self::interface_operation("read interface", path, error)
+  }
+
+  #[cfg(target_os = "linux")]
+  pub(crate) fn interface_operation(operation: &'static str, path: PathBuf, error: io::Error) -> Self {
     match error.kind() {
       | io::ErrorKind::NotFound => Self::FileMissing { path },
       | io::ErrorKind::Unsupported => Self::NotSupported { path, source: error },
-      | _ => Self::Operation { operation: "read interface", path, source: error },
+      | _ => Self::Operation { operation, path, source: error },
     }
   }
 

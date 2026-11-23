@@ -27,7 +27,7 @@ mod zswap;
 
 /// A borrowed view of one open cgroup's memory interfaces.
 ///
-/// Each method reads a fresh snapshot through the cgroup's directory. The
+/// Each read returns a fresh snapshot through the cgroup's directory. The
 /// hierarchy root and cgroups without the memory controller can lack these
 /// files; such reads return [`crate::Error::FileMissing`]. Separate reads are not
 /// atomic together.
@@ -115,12 +115,30 @@ impl Memory<'_> {
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn max(&self) -> Result<MemoryMax, Error> { self.cgroup.parse(MemoryMax::FILE_NAME) }
 
+  /// Sets the hard memory limit in bytes or removes it with `max`. Lowering it can cause reclaim or OOM handling.
+  /// See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
+  ///
+  /// # Errors
+  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
+  pub fn set_max(&self, value: MaxOr<Bytes>) -> Result<(), Error> {
+    self.cgroup.write(MemoryMax::FILE_NAME, MemoryMax::new(value).encode_cgroup())
+  }
+
   /// Configuration snapshot of this cgroup's throttling limit in bytes.
   ///
   /// Reads a fresh [`MemoryHigh`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn high(&self) -> Result<MemoryHigh, Error> { self.cgroup.parse(MemoryHigh::FILE_NAME) }
+
+  /// Sets the memory throttling threshold in bytes or removes it with `max`.
+  /// See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
+  ///
+  /// # Errors
+  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
+  pub fn set_high(&self, value: MaxOr<Bytes>) -> Result<(), Error> {
+    self.cgroup.write(MemoryHigh::FILE_NAME, MemoryHigh::new(value).encode_cgroup())
+  }
 
   /// Configuration snapshot of this cgroup's best-effort memory protection, in bytes or `max`.
   ///
@@ -129,6 +147,15 @@ impl Memory<'_> {
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn low(&self) -> Result<MemoryLow, Error> { self.cgroup.parse(MemoryLow::FILE_NAME) }
 
+  /// Sets the best-effort memory protection in bytes, or requests full protection with `max`.
+  /// See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
+  ///
+  /// # Errors
+  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
+  pub fn set_low(&self, value: MaxOr<Bytes>) -> Result<(), Error> {
+    self.cgroup.write(MemoryLow::FILE_NAME, MemoryLow::new(value).encode_cgroup())
+  }
+
   /// Configuration snapshot of this cgroup's hard memory protection, in bytes or `max`.
   ///
   /// Reads a fresh [`MemoryMin`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
@@ -136,12 +163,30 @@ impl Memory<'_> {
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn min(&self) -> Result<MemoryMin, Error> { self.cgroup.parse(MemoryMin::FILE_NAME) }
 
+  /// Sets the hard memory protection in bytes, or requests full protection with `max`.
+  /// See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
+  ///
+  /// # Errors
+  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
+  pub fn set_min(&self, value: MaxOr<Bytes>) -> Result<(), Error> {
+    self.cgroup.write(MemoryMin::FILE_NAME, MemoryMin::new(value).encode_cgroup())
+  }
+
   /// Configuration snapshot of group OOM kill behavior.
   ///
   /// Reads a fresh [`MemoryOomGroup`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn oom_group(&self) -> Result<MemoryOomGroup, Error> { self.cgroup.parse(MemoryOomGroup::FILE_NAME) }
+
+  /// Sets whether OOM handling treats this cgroup as a single workload.
+  /// See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
+  ///
+  /// # Errors
+  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
+  pub fn set_oom_group(&self, value: bool) -> Result<(), Error> {
+    self.cgroup.write(MemoryOomGroup::FILE_NAME, MemoryOomGroup::new(value).encode_cgroup())
+  }
 }
 
 /// Whether this cgroup is treated as an indivisible workload by the OOM killer.

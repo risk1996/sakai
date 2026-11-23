@@ -129,6 +129,15 @@ impl Hugetlb<'_> {
     self.cgroup.parse(&size.file_name(HugetlbMax::SUFFIX))
   }
 
+  /// Sets the HugeTLB fault limit in bytes or removes it with `max`.
+  /// See [Linux HugeTLB interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#hugetlb).
+  ///
+  /// # Errors
+  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
+  pub fn set_max(&self, size: &PageSize, value: MaxOr<Bytes>) -> Result<(), Error> {
+    self.cgroup.write(&size.file_name(HugetlbMax::SUFFIX), HugetlbMax { value }.encode_cgroup())
+  }
+
   /// Reads hierarchical reserved and unreserved-faulted HugeTLB bytes.
   ///
   /// Reservations are charged before faulting; faulted pages without a prior
@@ -149,6 +158,15 @@ impl Hugetlb<'_> {
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn reserved_max(&self, size: &PageSize) -> Result<HugetlbReservedMax, Error> {
     self.cgroup.parse(&size.file_name(HugetlbReservedMax::SUFFIX))
+  }
+
+  /// Sets the HugeTLB reservation limit in bytes or removes it with `max`.
+  /// See [Linux HugeTLB interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#hugetlb).
+  ///
+  /// # Errors
+  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
+  pub fn set_reserved_max(&self, size: &PageSize, value: MaxOr<Bytes>) -> Result<(), Error> {
+    self.cgroup.write(&size.file_name(HugetlbReservedMax::SUFFIX), HugetlbReservedMax { value }.encode_cgroup())
   }
 
   /// Reads cumulative hierarchical allocation failures caused by HugeTLB limits.
@@ -189,7 +207,8 @@ macro_rules! scalar {
     /// and [v2 source](https://github.com/torvalds/linux/blob/v5.15/mm/hugetlb_cgroup.c).
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub struct $name {
-      value: $value,
+      /// Stored quantity or limit in bytes.
+      pub value: $value,
     }
 
     impl $name {
