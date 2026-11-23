@@ -157,6 +157,29 @@ On Linux this also runs an unprivileged read of the current cgroup.
 only its explicit delegated-cgroup fixture writes test configuration.
 CI tests on Linux, including multiple Linux kernel versions.
 
+## Installation size
+
+The **Installation size** workflow reports one row per pushed commit, including
+commits pushed together. Its job summary and downloadable CSV show the bytes
+and dependency counts for a clean Linux x86-64 project adding Sakai with
+default features.
+
+- **Rust** measures the packaged `.crate` and the crates downloaded by
+  `cargo check` in a minimal downstream project seeded with the packaged
+  lockfile. Compiled size depends on the downstream program and build settings.
+- **Python** measures a stripped release wheel and the runtime distributions
+  pip downloads on CPython 3.11. When `uv.lock` is present, its runtime versions
+  constrain the download. The wheel includes Sakai's compiled Rust extension.
+
+Projects that already have some of these dependencies may download fewer bytes.
+To measure an earlier range, run the workflow manually on the branch of
+interest and enter an exclusive base revision such as `HEAD~3`. To measure a
+clean checkout locally on your platform, run:
+
+```sh
+devenv --profile python shell -- rtk cargo xtask installation-size --python /path/to/python3.11
+```
+
 ## Dependency security
 
 Run `devenv tasks run check:security` to audit `Cargo.lock` against the current

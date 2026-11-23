@@ -1,0 +1,89 @@
+name: Installation size
+
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+    inputs:
+      base:
+        description: Measure commits after this Git revision, or leave blank to measure only the tip
+        type: string
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  measure:
+    name: Linux x86-64 installation size
+    if: github.event_name != 'push' || !github.event.deleted
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+      - uses: ./.github/actions/setup-devenv
+      - name: Select commits
+        env:
+          BASE_REF: ${{ inputs.base }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          commits="$RUNNER_TEMP/size-commits"
+          if [[ -n "$BASE_REF" ]]; then
+            base=$(git rev-parse --verify --end-of-options "$BASE_REF^{commit}")
+            git rev-list --reverse "$base..$GITHUB_SHA" > "$commits"
+            if [[ ! -s "$commits" ]]; then
+              echo 'The requested range contains no commits.' >&2
+              exit 1
+            fi
+          elif [[ -n "$PUSH_BEFORE" ]] && git cat-file -e "$PUSH_BEFORE^{commit}" 2>/dev/null; then
+            git rev-list --reverse "$PUSH_BEFORE..$GITHUB_SHA" > "$commits"
+          elif [[ "$GITHUB_EVENT_NAME" == push ]]; then
+            # New branches and some force pushes have no previous tip locally.
+            jq -r '([.commits[].id, .after])[]' "$GITHUB_EVENT_PATH" | awk '!seen[$0]++' > "$commits"
+          else
+            printf '%s\n' "$GITHUB_SHA" > "$commits"
+          fi
+          if [[ ! -s "$commits" ]]; then printf '%s\n' "$GITHUB_SHA" > "$commits"; fi
+      - name: Measure cold downloads for each commit
+        id: sizes
+        run: |
+          SIZE_PYTHON="$(command -v python)"
+          export SIZE_PYTHON
+          export SIZE_CHECKOUT="$RUNNER_TEMP/size-checkout"
+          git worktree add --detach "$SIZE_CHECKOUT" "$GITHUB_SHA"
+          devenv --profile python shell -- bash -euo pipefail <<'BASH' | awk '/^commit,/ {if (!header++) print; next} /^[0-9a-f]+,/ {print}' > "$RUNNER_TEMP/installation-size.csv"
+          tools="$RUNNER_TEMP/size-tools"
+          cargo build --locked --package xtask --target-dir "$tools"
+          failures=0
+          while IFS= read -r commit; do
+            git -C "$SIZE_CHECKOUT" checkout --quiet --detach "$commit"
+            if ! "$tools/debug/xtask" installation-size --checkout "$SIZE_CHECKOUT" --python "$SIZE_PYTHON"; then
+              echo "::error::Could not measure installation size for $commit" >&2
+              failures=1
+            fi
+          done < "$RUNNER_TEMP/size-commits"
+          exit "$failures"
+          BASH
+      - name: Summarize download sizes in bytes
+        if: ${{ !cancelled() && (steps.sizes.outcome == 'success' || steps.sizes.outcome == 'failure') }}
+        run: |
+          {
+            echo '| Commit | Rust crate | Rust dependencies | Rust total | Python wheel | Python dependencies | Python total |'
+            echo '| --- | ---: | ---: | ---: | ---: | ---: | ---: |'
+            awk -F, 'NR > 1 {printf "| `%.12s` | %s | %s (%s crates) | %.0f | %s | %s (%s packages) | %.0f |\n", $1, $2, $4, $3, $2+$4, $5, $7, $6, $5+$7}' "$RUNNER_TEMP/installation-size.csv"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() && (steps.sizes.outcome == 'success' || steps.sizes.outcome == 'failure') }}
+        with:
+          name: installation-size
+          path: ${{ runner.temp }}/installation-size.csv
+          if-no-files-found: error
