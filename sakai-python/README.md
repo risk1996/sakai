@@ -373,8 +373,8 @@ against each installed distribution. Its small allowlist covers dynamic exports,
 stub-only aliases, and PyO3's generic subscription method. Runtime tests check
 exports, exception attributes, and documentation separately.
 
-Publication decisions and artifact verification remain in the
-[PyPI pre-publication checklist](https://github.com/risk1996/sakai/blob/main/design/pypi-prepublish-checklist.md).
+The [release runbook](https://github.com/risk1996/sakai/blob/main/design/releases.md#review-the-release-archives)
+covers publication and artifact verification.
 Adding free-threaded wheels requires a separate ABI choice, native-state audit,
 and build/test matrix; adding portable parser bindings requires a concrete use
 case. Neither is part of this Linux handle package.

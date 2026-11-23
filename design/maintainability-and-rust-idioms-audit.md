@@ -81,12 +81,10 @@ The kernel matrix and installed wheel/sdist jobs extend the checks beyond
 unit parsing. Preserve separate validation of kernel behavior and installed
 packages as the library grows.
 
-## Remaining publication work (deferred)
+## Release validation
 
-Complete the remaining Cargo description, repository, and README metadata through
-[the crates.io checklist](cratesio-prepublish-checklist.md). Reconcile package,
-release, and design documentation with the implemented API through that checklist
-and [the PyPI checklist](pypi-prepublish-checklist.md).
+Use the [release runbook](releases.md#review-the-release-archives) to check the
+published package metadata and the contents of future release archives.
 
 Apply publication checks to the actual release archives after packaged code or
 metadata changes. Earlier verified artifacts do not establish the contents or
