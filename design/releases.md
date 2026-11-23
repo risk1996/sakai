@@ -18,8 +18,9 @@ Research checked on 2026-10-11. The key references are
 and the Rust/Python changelog. It follows `v<version>` Git tags rather than a
 particular registry. The preparation workflow invokes **only** `release-pr`:
 it never uploads packages, merges its PR, or creates a tag. There is no
-preparation before the first stable tag, preserving the reviewed `0.1.0`
-bootstrap version. Conventional Commits produce draft changelog entries;
+preparation before the first stable tag. The initial `0.1.0-alpha.1` release and
+the first stable release use manually prepared versions and notes.
+Conventional Commits produce draft changelog entries;
 reviewers must edit them into accurate user-facing notes and check Python
 behavior as well as Rust compatibility. While below 1.0, compatible additions
 and fixes can increment the patch version; breaking changes increment the
@@ -27,7 +28,7 @@ minor version. Automated compatibility checks do not replace review.
 
 The release workflow runs the existing Linux CI, including MSRV, Python
 packaging, security, Kubernetes, and Linux 5.15/6.18 smoke tests. It requires a
-stable tag matching the workspace version, whose commit is on `origin/main`.
+SemVer tag matching the workspace version, whose commit is on `origin/main`.
 Preparation dry-runs Cargo publishing and preserves the archive, SHA-256,
 source commit, and exact versioned changelog section as an Actions artifact.
 
@@ -49,7 +50,8 @@ already-issued token. Secrets are not resolved during Nix evaluation.
 
 The separate `announce` job has `contents: write`, but no OIDC permission.
 It creates a GitHub release from the reviewed changelog only after the upload
-is verified. The checked archive remains in Actions artifacts for 30 days;
+is verified. Tags with a SemVer prerelease suffix produce GitHub prereleases.
+The checked archive remains in Actions artifacts for 30 days;
 the public distribution is crates.io. New registry jobs can depend on the
 same checks/preparation, use their own environment and authentication, and
 run independently. Add each to `announce.needs` so announcements wait for
@@ -91,7 +93,7 @@ metadata, lockfile, or commit change, including a squash merge.
    checks and prepare the candidate without a tag or publishing credentials:
 
    ```sh
-   devenv test
+   devenv --profile python test
    devenv tasks run check:security
    devenv shell -- rtk cargo package --package sakai --list --locked
    devenv shell -- rtk cargo xtask release prepare
@@ -139,8 +141,8 @@ metadata, lockfile, or commit change, including a squash merge.
    and push it yourself using your YubiKey. For the initial version:
 
    ```sh
-   rtk git tag -s v0.1.0 -m 'Release v0.1.0'
-   rtk git push origin refs/tags/v0.1.0
+   rtk git tag -s v0.1.0-alpha.1 -m 'Release v0.1.0-alpha.1'
+   rtk git push origin refs/tags/v0.1.0-alpha.1
    ```
 
    Wait for release CI, inspect the candidate artifact, and approve the
@@ -167,7 +169,7 @@ Tag pushes publish automatically after checks and environment approval.
 Tags created by `GITHUB_TOKEN` normally do not trigger another workflow, which
 is another reason the preparation job does not create them.
 
-For a credential-free rehearsal, dispatch **Release** on an existing stable
+For a credential-free rehearsal, dispatch **Release** on an existing
 version tag with `publish: false` (the default). It runs release checks and
 preserves the candidate but never enters a publishing environment, requests
 OIDC, uploads, or creates a GitHub release. Dispatching on a branch fails

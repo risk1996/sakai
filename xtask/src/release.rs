@@ -30,7 +30,7 @@ enum ReleaseCommand {
   Baseline,
   /// Package, dry-run publishing, and record a credential-free candidate.
   Prepare {
-    /// Require this stable tag to match HEAD and the shared package version.
+    /// Require this release tag to match HEAD and the shared package version.
     #[arg(long)]
     tag: Option<String>,
   },
@@ -81,7 +81,7 @@ impl Release {
     match &self.command {
       | ReleaseCommand::Baseline => {
         let tags = Self::command("git", &["tag", "--list", "v*"])?;
-        let ready = tags.lines().any(|tag| Self::stable_version(tag).is_ok());
+        let ready = tags.lines().filter_map(|tag| Self::tag_version(tag).ok()).any(|version| version.pre.is_empty());
         Self::output("ready", &ready.to_string())
       },
       | ReleaseCommand::Prepare { tag } => Self::prepare(tag.as_deref()),
@@ -110,10 +110,10 @@ impl Release {
     }
   }
 
-  /// Require a canonical stable version tag rather than a branch or prerelease.
-  fn stable_version(tag: &str) -> Result<Version> {
+  /// Require a canonical SemVer tag without build metadata.
+  fn tag_version(tag: &str) -> Result<Version> {
     let version = Version::parse(tag.strip_prefix('v').context("release tag must start with v")?)?;
-    ensure!(version.pre.is_empty() && version.build.is_empty(), "only stable release versions are supported");
+    ensure!(version.build.is_empty(), "release tags cannot include build metadata");
     ensure!(tag == format!("v{version}"), "release tag must use canonical SemVer");
     Ok(version)
   }
@@ -165,14 +165,14 @@ impl Release {
     );
     let package = metadata.packages.iter().find(|package| package.name == "sakai").context("missing sakai package")?;
     let tag_name = format!("v{}", package.version);
-    Self::stable_version(&tag_name)?;
+    Self::tag_version(&tag_name)?;
     let python =
       metadata.packages.iter().find(|package| package.name == "sakai-python").context("missing Python package")?;
     ensure!(package.version == python.version, "Rust and Python versions must stay synchronized");
     let commit = Self::command("git", &["rev-parse", "HEAD"])?.trim().to_owned();
     match tag {
       | Some(tag) => {
-        Self::stable_version(tag)?;
+        Self::tag_version(tag)?;
         ensure!(tag == tag_name, "tag does not match the workspace version");
         let tagged_commit = Self::command("git", &["rev-parse", &format!("refs/tags/{tag}^{{commit}}")])?;
         ensure!(tagged_commit.trim() == commit, "checkout is not the tagged commit");
@@ -228,7 +228,7 @@ impl Release {
   /// Load the retained candidate and reject inconsistent identities or archive bytes.
   fn candidate() -> Result<Candidate> {
     let candidate: Candidate = serde_json::from_str(&fs::read_to_string(Self::MANIFEST)?)?;
-    ensure!(Self::stable_version(&candidate.tag)?.to_string() == candidate.version, "candidate tag/version mismatch");
+    ensure!(Self::tag_version(&candidate.tag)?.to_string() == candidate.version, "candidate tag/version mismatch");
     ensure!(candidate.archive == format!("sakai-{}.crate", candidate.version), "unexpected candidate filename");
     ensure!(
       Self::checksum(&Path::new(Self::DIST).join(&candidate.archive))? == candidate.sha256,
@@ -315,6 +315,7 @@ impl Release {
   /// Create or validate non-draft GitHub release notes after registry verification.
   async fn github_release() -> Result<()> {
     let candidate = Self::candidate()?;
+    let prerelease = !Self::tag_version(&candidate.tag)?.pre.is_empty();
     ensure!(
       candidate.commit == Self::command("git", &["rev-parse", "HEAD"])?.trim(),
       "checkout differs from the release candidate's commit"
@@ -332,7 +333,7 @@ impl Release {
     match response.status() {
       | StatusCode::NOT_FOUND => {
         let body = json!({ "tag_name": candidate.tag, "target_commitish": candidate.commit,
-          "name": candidate.tag, "body": notes, "draft": false, "prerelease": false });
+          "name": candidate.tag, "body": notes, "draft": false, "prerelease": prerelease });
         client
           .post(Self::GITHUB_RELEASES)
           .bearer_auth(&token)
@@ -354,8 +355,8 @@ impl Release {
           "existing GitHub release is still a draft"
         );
         ensure!(
-          existing.get("prerelease").and_then(serde_json::Value::as_bool) == Some(false),
-          "existing GitHub release is marked as a prerelease"
+          existing.get("prerelease").and_then(serde_json::Value::as_bool) == Some(prerelease),
+          "existing GitHub release's prerelease status differs from the tag"
         );
         println!("Matching GitHub release already exists");
       },
@@ -387,18 +388,19 @@ mod tests {
     }
   }
 
-  /// Canonical stable tags exclude ambiguous versions, branches, and prereleases.
+  /// Tags identify stable and prerelease versions and reject ambiguous versions and branches.
   #[test]
-  fn stable_tags() {
-    for (tag, valid) in [
-      ("v0.1.0", true),
-      ("v1.2.3", true),
-      ("0.1.0", false),
-      ("v01.1.0", false),
-      ("v0.1.0-rc.1", false),
-      ("v0.1.0+build", false),
+  fn release_tags() {
+    for (tag, prerelease) in [
+      ("v0.1.0", Some(false)),
+      ("v1.2.3", Some(false)),
+      ("v0.1.0-alpha.1", Some(true)),
+      ("0.1.0", None),
+      ("v01.1.0", None),
+      ("v0.1.0+build", None),
+      ("main", None),
     ] {
-      assert_eq!(Release::stable_version(tag).is_ok(), valid, "{tag}");
+      assert_eq!(Release::tag_version(tag).ok().map(|version| !version.pre.is_empty()), prerelease, "{tag}");
     }
   }
 
@@ -406,8 +408,9 @@ mod tests {
   #[test]
   fn changelog_sections() {
     let changelog = "# Changelog\n\n## [Unreleased]\n\nLater\n\n## [0.2.0](https://example.com) - 2026-10-11\n\n### \
-                     Added\n\n- New\n\n## [0.1.0]\n\nInitial\n";
-    for (version, notes) in [("0.2.0", Some("### Added\n\n- New")), ("0.1.0", Some("Initial")), ("0.3.0", None)] {
+                     Added\n\n- New\n\n## [0.1.0-alpha.1]\n\nInitial\n";
+    for (version, notes) in [("0.2.0", Some("### Added\n\n- New")), ("0.1.0-alpha.1", Some("Initial")), ("0.1.0", None)]
+    {
       assert_eq!(Release::release_notes(changelog, version).ok().as_deref(), notes);
     }
   }

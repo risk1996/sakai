@@ -27,7 +27,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - uses: ./.github/actions/setup-devenv
-      - name: Wait for the manually published first release and its stable tag
+      - name: Wait for the first stable tag
         id: baseline
         run: devenv shell -- rtk cargo xtask release baseline
       - name: Open or update the release PR without publishing or tagging

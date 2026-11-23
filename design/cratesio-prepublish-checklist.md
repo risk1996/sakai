@@ -279,7 +279,7 @@ because it executes fixture tests and doctests. A new consumer tests resolution
 without inheriting the library's lockfile.
 
 ```sh
-devenv test
+devenv --profile python test
 devenv shell -- rtk cargo package -p sakai --list --locked
 devenv shell -- rtk cargo package -p sakai --locked
 devenv shell -- rtk cargo publish -p sakai --dry-run --locked

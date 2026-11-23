@@ -36,7 +36,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - uses: ./.github/actions/setup-devenv
-      - name: Require a matching stable tag on main and dry-run the upload
+      - name: Require a matching release tag on main and dry-run the upload
         run: devenv shell -- rtk cargo xtask release prepare --tag "$RELEASE_TAG"
       - name: Preserve the checked candidate, checksum, and release notes
         id: upload
