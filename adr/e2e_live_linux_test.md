@@ -19,8 +19,7 @@ VM runtime of our own.
 - Keep the guest small: no Cargo build or package installation inside it.
 - Share one developer entry point with CI and keep the kernel matrix bounded.
 - Select `vmtest` and kernel versions and record the test executable's build
-  provenance. The original checksum-verification requirement was superseded by
-  the 2026-10-10 implementation update below.
+  provenance. The implementation updates below describe how fixtures are verified.
 
 ## Considered Options
 
@@ -95,6 +94,13 @@ revalidation. HTTPS protects transport; file locks and atomic rename protect
 download publication, not artifact authenticity. This development and CI
 tooling trusts upstream releases and local cache contents, accepting the risk
 that tampering with either can cause altered code to execute.
+
+### Implementation update (2026-11-23)
+
+Nix now downloads and verifies kernel fixtures against SHA-256 pins. The
+workspace cache can seed the Nix store after verification, and the wrapper
+stages verified images for the macOS container. The container's `vmtest`
+download still uses the resolved upstream URL.
 
 ## References
 
