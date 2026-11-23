@@ -99,14 +99,32 @@ jobs:
     timeout-minutes: 15
     environment: pypi
     permissions:
+      contents: read
       id-token: write
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           artifact-ids: ${{ needs.python.outputs.artifact-id }}
           merge-multiple: true
           path: dist/
+      - name: Verify existing PyPI files and stage any missing archives
+        id: stage
+        run: |
+          python3 tools/release/pypi_registry.py dist --stage upload
+          if compgen -G 'upload/*' >/dev/null; then
+            echo 'needed=true' >> "$GITHUB_OUTPUT"
+          fi
       - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+        if: steps.stage.outputs.needed == 'true'
+        with:
+          packages-dir: upload/
+          # PyPI's index can lag the upload endpoint. Verify the registry bytes below.
+          skip-existing: true
+      - name: Verify the published archives against the audited files
+        run: python3 tools/release/pypi_registry.py dist
 
   announce:
     name: Create GitHub release notes

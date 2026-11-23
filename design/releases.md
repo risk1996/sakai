@@ -57,10 +57,11 @@ wait for these checks. The `publish-pypi` job downloads the checked artifact
 by ID and publishes through PyPI Trusted Publishing.
 
 The separate `announce` job has `contents: write` and creates the GitHub release
-only after both registry jobs succeed. Tags with a SemVer prerelease suffix
+only after both registry jobs verify the published files. Tags with a SemVer prerelease suffix
 produce GitHub prereleases. Checked archives remain in Actions artifacts for
-30 days. The uploads can complete independently. Retry failed destinations
-after checking what each registry already received.
+30 days. The uploads can complete independently. Rerun failed jobs on the
+same tag to reuse the original artifacts. The PyPI job verifies files already
+present and uploads only missing files.
 
 ## One-time manual setup and first publication
 
