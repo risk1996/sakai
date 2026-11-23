@@ -149,7 +149,7 @@ impl ConfigurationWatcher {
 /// These flags are volatile hints, not configuration snapshots or event counts.
 /// Multiple flags may be True, and repeated changes may be coalesced.
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
-#[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
+#[pyclass(frozen, get_all, module = "sakai._sakai")]
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct ChangeNotification {
   /// Whether a write or kernel content notification was reported; read fresh values.

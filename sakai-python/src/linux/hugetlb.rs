@@ -118,7 +118,7 @@ impl HugetlbReader {
 /// and reservation limit failures contribute. Counts are volatile and stored
 /// getters never perform I/O. Unknown future keys are ignored.
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
-#[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
+#[pyclass(frozen, get_all, module = "sakai._sakai")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct HugetlbEvents {
   /// Stored count of HugeTLB allocation failures caused by a cgroup limit.

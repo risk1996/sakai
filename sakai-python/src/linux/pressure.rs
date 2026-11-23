@@ -7,7 +7,7 @@ use crate::quantity::Quantity;
 
 /// Pressure-stall information with some and optional full lines.
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
-#[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
+#[pyclass(frozen, get_all, module = "sakai._sakai")]
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct Pressure {
   /// Pressure during which at least one task was stalled.
@@ -18,7 +18,7 @@ pub(super) struct Pressure {
 
 /// Interrupt pressure with its single full line; requires Linux 6.1 and IRQ time accounting.
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
-#[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
+#[pyclass(frozen, get_all, module = "sakai._sakai")]
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct IrqPressure {
   /// Pressure while interrupts prevented tasks from running.
@@ -35,7 +35,7 @@ impl From<CorePressure> for Pressure {
 
 /// Pressure averages as ratios and cumulative stall time in nanoseconds.
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
-#[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
+#[pyclass(frozen, get_all, module = "sakai._sakai")]
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct PressureLine {
   /// Exponentially weighted ten-second pressure average, from zero to one.

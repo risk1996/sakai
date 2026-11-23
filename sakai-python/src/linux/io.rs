@@ -109,7 +109,7 @@ impl IoStat {
 
 /// Immutable cumulative counters for one block device; absent values are None.
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
-#[pyclass(frozen, skip_from_py_object, module = "sakai._sakai")]
+#[pyclass(frozen, module = "sakai._sakai")]
 #[derive(Debug, Clone, PartialEq, Default)]
 pub(super) struct IoDeviceStat {
   /// Cumulative bytes read, or None when omitted.
@@ -265,7 +265,7 @@ impl IoMax {
 
 /// Immutable read and write bandwidth and operation-rate limits for one device.
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
-#[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
+#[pyclass(frozen, get_all, module = "sakai._sakai")]
 #[derive(Clone)]
 pub(super) struct IoDeviceMax {
   /// Read bandwidth limit in bytes per second, or max.
@@ -352,7 +352,7 @@ impl IoCostQos {
 /// Ratios represent the kernel's percentages: 150% is 1.5. Latency thresholds
 /// use nanoseconds. Parameters describe configuration, not measured throughput.
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
-#[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
+#[pyclass(frozen, get_all, module = "sakai._sakai")]
 #[derive(Clone)]
 pub(super) struct IoDeviceCostQos {
   /// Whether weight-based I/O cost control is enabled for the device.
@@ -420,7 +420,7 @@ impl IoCostModel {
 ///
 /// Sequential and random IOPS describe 4 KiB I/O operations per second.
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
-#[pyclass(frozen, get_all, skip_from_py_object, module = "sakai._sakai")]
+#[pyclass(frozen, get_all, module = "sakai._sakai")]
 #[derive(Clone)]
 pub(super) struct IoDeviceCostModel {
   /// Parameter selection mode: auto or user.
