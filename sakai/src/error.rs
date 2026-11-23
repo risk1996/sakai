@@ -154,6 +154,19 @@ impl<E> ParseError<E> {
   }
 }
 
+/// A field cannot be represented exactly in its cgroup text format.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("field {field} cannot be represented exactly in cgroup text")]
+pub struct EncodeError {
+  pub(crate) field: &'static str,
+}
+
+impl EncodeError {
+  /// Returns the name of the field that could not be encoded.
+  #[must_use]
+  pub const fn field(&self) -> &'static str { self.field }
+}
+
 /// A numeric field is malformed or outside the target type's supported range.
 ///
 /// See [Linux cgroup file formats and availability](https://docs.kernel.org/admin-guide/cgroup-v2.html#interface-files).

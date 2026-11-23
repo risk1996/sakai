@@ -1,9 +1,9 @@
-use std::{collections::HashMap, str::FromStr};
+use std::{collections::HashMap, fmt::Write, str::FromStr};
 
 use super::CgroupController;
 use crate::{
   error::{ParseError, ParseValueError},
-  parse::{KeyedFields, ParseBoolean, ParseCgroup, ParseCount, ParseMicroseconds},
+  parse::{KeyedFields, ParseBoolean, ParseCgroup, ParseCount, ParseMicroseconds, cgroup_value},
   unit::{Count, Time},
 };
 
@@ -42,17 +42,10 @@ impl CgroupEvents {
   pub const fn frozen(&self) -> Option<bool> { self.frozen }
 }
 
-impl FromStr for CgroupEvents {
-  type Err = ParseError<ParseValueError>;
-
-  fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    let fields = KeyedFields::parse(contents, |_| "value")?;
-    Ok(Self {
-      populated: fields.required::<ParseBoolean, _>("populated")?,
-      frozen: fields.optional::<ParseBoolean, _>("frozen")?,
-    })
-  }
-}
+cgroup_value! { keyed CgroupEvents, |_| "value", {
+  populated: required ParseBoolean => "populated",
+  frozen: optional ParseBoolean => "frozen",
+} }
 
 /// A stored snapshot of local freezer accounting from `cgroup.stat.local`.
 ///
@@ -81,14 +74,9 @@ impl CgroupStatLocal {
   pub const fn frozen_time(&self) -> Time { self.frozen_time }
 }
 
-impl FromStr for CgroupStatLocal {
-  type Err = ParseError<ParseValueError>;
-
-  fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    let fields = KeyedFields::parse(contents, |_| "value")?;
-    Ok(Self { frozen_time: fields.required::<ParseMicroseconds, _>("frozen_usec")? })
-  }
-}
+cgroup_value! { keyed CgroupStatLocal, |_| "value", {
+  frozen_time: required ParseMicroseconds => "frozen_usec",
+} }
 
 /// A point-in-time snapshot of `cgroup.stat` object counts.
 ///
@@ -162,16 +150,43 @@ impl CgroupStat {
   }
 }
 
+const DESCENDANTS: &str = "nr_descendants";
+const DYING_DESCENDANTS: &str = "nr_dying_descendants";
+const SUBSYSTEMS: &str = "nr_subsys_";
+const DYING_SUBSYSTEMS: &str = "nr_dying_subsys_";
+
+impl CgroupStat {
+  /// Encodes the stored value as canonical cgroup text.
+  ///
+  /// # Errors
+  ///
+  /// Returns an error if a field cannot be represented exactly.
+  pub fn encode_cgroup(&self) -> Result<String, crate::error::EncodeError> {
+    let mut output = String::new();
+    crate::parse::encode_pair::<ParseCount, _>(&mut output, "\n", ' ', DESCENDANTS, &self.descendants)?;
+    crate::parse::encode_pair::<ParseCount, _>(&mut output, "\n", ' ', DYING_DESCENDANTS, &self.dying_descendants)?;
+    for (prefix, map) in [(SUBSYSTEMS, &self.subsystems), (DYING_SUBSYSTEMS, &self.dying_subsystems)] {
+      let mut counters: Vec<_> = map.iter().map(|(controller, count)| (controller.to_string(), count)).collect();
+      counters.sort_unstable_by(|(name, _), (other, _)| name.cmp(other));
+      for (name, count) in counters {
+        write!(output, "\n{prefix}{name} {}", count.value)
+          .map_err(|_error| crate::error::EncodeError { field: prefix })?;
+      }
+    }
+    Ok(output)
+  }
+}
+
 impl FromStr for CgroupStat {
   type Err = ParseError<ParseValueError>;
 
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
     let fields = KeyedFields::parse(contents, |_| "value")?;
     Ok(Self {
-      descendants: fields.required::<ParseCount, _>("nr_descendants")?,
-      dying_descendants: fields.required::<ParseCount, _>("nr_dying_descendants")?,
-      subsystems: Self::parse_subsystems(contents, &fields, "nr_subsys_")?,
-      dying_subsystems: Self::parse_subsystems(contents, &fields, "nr_dying_subsys_")?,
+      descendants: fields.required::<ParseCount, _>(DESCENDANTS)?,
+      dying_descendants: fields.required::<ParseCount, _>(DYING_DESCENDANTS)?,
+      subsystems: Self::parse_subsystems(contents, &fields, SUBSYSTEMS)?,
+      dying_subsystems: Self::parse_subsystems(contents, &fields, DYING_SUBSYSTEMS)?,
     })
   }
 }

@@ -1,12 +1,12 @@
-use std::{collections::BTreeMap, str::FromStr};
+use std::{collections::BTreeMap, fmt::Write};
 
 use uom::si::{frequency::hertz, information_rate::byte_per_second};
 
 use super::Device;
 use crate::{
-  error::{ParseError, ParseValueError},
+  error::ParseValueError,
   limit::MaxOr,
-  parse::{KeyedFields, ParseCgroup},
+  parse::{EncodeCgroup, ParseCgroup, cgroup_value},
   unit::{BytesPerSecond, OperationsPerSecond},
 };
 
@@ -89,24 +89,16 @@ impl IoDeviceMax {
   /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   #[must_use]
   pub const fn write_iops(&self) -> MaxOr<OperationsPerSecond> { self.write_iops }
-
-  fn from_fields(fields: KeyedFields<'_>) -> Result<Self, ParseError<ParseValueError>> {
-    Ok(Self {
-      read_bandwidth: fields.required::<ParseBandwidth, _>("rbps")?,
-      write_bandwidth: fields.required::<ParseBandwidth, _>("wbps")?,
-      read_iops: fields.required::<ParseIops, _>("riops")?,
-      write_iops: fields.required::<ParseIops, _>("wiops")?,
-    })
-  }
 }
 
-impl FromStr for IoMax {
-  type Err = ParseError<ParseValueError>;
+cgroup_value! { fields IoDeviceMax, {
+  read_bandwidth: required ParseBandwidth => "rbps",
+  write_bandwidth: required ParseBandwidth => "wbps",
+  read_iops: required ParseIops => "riops",
+  write_iops: required ParseIops => "wiops",
+} }
 
-  fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    Ok(Self { devices: Device::parse_lines(contents, IoDeviceMax::from_fields)? })
-  }
-}
+cgroup_value! { device_rows IoMax, devices: IoDeviceMax, Device::parse_lines }
 
 pub(super) struct ParseBandwidth;
 
@@ -122,6 +114,14 @@ impl ParseCgroup<ParseIops> for OperationsPerSecond {
   type Error = ParseValueError;
 
   fn parse_cgroup(value: &str) -> Result<Self, Self::Error> { Ok(Self::new::<hertz>(value.parse()?)) }
+}
+
+impl EncodeCgroup<ParseBandwidth> for BytesPerSecond {
+  fn encode_token(&self, output: &mut String) -> Option<()> { write!(output, "{}", self.get::<byte_per_second>()).ok() }
+}
+
+impl EncodeCgroup<ParseIops> for OperationsPerSecond {
+  fn encode_token(&self, output: &mut String) -> Option<()> { write!(output, "{}", self.get::<hertz>()).ok() }
 }
 
 #[cfg(test)]

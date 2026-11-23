@@ -2,7 +2,7 @@ use std::{collections::BTreeMap, str::FromStr};
 
 use crate::{
   error::{ParseError, ParseValueError},
-  parse::{ParseCgroup, ParseCount, Parser},
+  parse::{ParseBytes, ParseCgroup, ParseCount, ParsePages, Parser, encode_pair},
   unit::{Bytes, Count, Pages},
 };
 
@@ -54,6 +54,27 @@ impl MemoryStat {
       self.counts.insert(field, <Count as ParseCgroup<ParseCount>>::parse_field(raw, field.into(), value)?);
     }
     Ok(())
+  }
+}
+
+impl MemoryStat {
+  /// Encodes the stored value as canonical cgroup text.
+  ///
+  /// # Errors
+  ///
+  /// Returns an error if a field cannot be represented exactly.
+  pub fn encode_cgroup(&self) -> Result<String, crate::error::EncodeError> {
+    let mut output = String::new();
+    for (&key, value) in &self.bytes {
+      encode_pair::<ParseBytes, _>(&mut output, "\n", ' ', key.into(), value)?;
+    }
+    for (&key, value) in &self.pages {
+      encode_pair::<ParsePages, _>(&mut output, "\n", ' ', key.into(), value)?;
+    }
+    for (&key, value) in &self.counts {
+      encode_pair::<ParseCount, _>(&mut output, "\n", ' ', key.into(), value)?;
+    }
+    Ok(output)
   }
 }
 

@@ -3,7 +3,7 @@
 //! Device names identify RDMA/InfiniBand adapters rather than block devices.
 //! Resources remain charged to their owning cgroup after task migration.
 
-use std::{collections::BTreeMap, str::FromStr};
+use std::{collections::BTreeMap, fmt};
 
 #[cfg(target_os = "linux")]
 use super::Cgroup;
@@ -12,7 +12,7 @@ use crate::Error;
 use crate::{
   error::{ParseError, ParseValueError},
   limit::MaxOr,
-  parse::{KeyedFields, ParseCount},
+  parse::{EncodeCgroup, KeyedFields, ParseCgroup, ParseCount, cgroup_value, encode_pair},
   unit::Count,
 };
 
@@ -50,6 +50,39 @@ impl RdmaDevice {
   /// Inspects this record without performing I/O or resolving a device.
   #[must_use]
   pub const fn index(&self) -> Option<u32> { self.index }
+}
+
+const HANDLE_MAX: &str = "hca_handle.max";
+const HANDLE_ALLOC_FAIL: &str = "hca_handle.alloc_fail";
+const OBJECT_MAX: &str = "hca_object.max";
+const OBJECT_ALLOC_FAIL: &str = "hca_object.alloc_fail";
+const DEVICE_INDEX: &str = "index";
+
+impl fmt::Display for RdmaDevice {
+  fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    formatter.write_str(&self.name)?;
+    if let Some(index) = self.index {
+      write!(formatter, " {DEVICE_INDEX}={index}")?;
+    }
+    Ok(())
+  }
+}
+
+struct UsageCount;
+
+impl ParseCgroup<UsageCount> for Count {
+  type Error = ParseValueError;
+
+  fn parse_cgroup(value: &str) -> Result<Self, Self::Error> {
+    match <MaxOr<Count> as ParseCgroup<ParseCount>>::parse_cgroup(value)? {
+      | MaxOr::Value(count) => Ok(count),
+      | MaxOr::Max => Ok(Count { value: i32::MAX as u64, ..Default::default() }),
+    }
+  }
+}
+
+impl EncodeCgroup<UsageCount> for Count {
+  fn encode_token(&self, output: &mut String) -> Option<()> { EncodeCgroup::<ParseCount>::encode_token(self, output) }
 }
 
 /// A borrowed view of one cgroup's RDMA controller.
@@ -175,25 +208,14 @@ impl RdmaDeviceCurrent {
   /// Returns the stored number of HCA objects.
   #[must_use]
   pub const fn hca_object(&self) -> Count { self.hca_object }
-
-  fn from_fields(fields: KeyedFields<'_>) -> Result<Self, ParseError<ParseValueError>> {
-    let count = |field| {
-      fields.required::<ParseCount, MaxOr<Count>>(field).map(|value| match value {
-        | MaxOr::Value(count) => count,
-        | MaxOr::Max => Count { value: i32::MAX as u64, ..Default::default() },
-      })
-    };
-    Ok(Self { hca_handle: count("hca_handle")?, hca_object: count("hca_object")? })
-  }
 }
 
-impl FromStr for RdmaCurrent {
-  type Err = ParseError<ParseValueError>;
+cgroup_value! { fields RdmaDeviceCurrent, {
+  hca_handle: required UsageCount => "hca_handle",
+  hca_object: required UsageCount => "hca_object",
+} }
 
-  fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    Ok(Self { devices: parse_devices(contents, RdmaDeviceCurrent::from_fields)? })
-  }
-}
+cgroup_value! { device_rows RdmaCurrent, devices: RdmaDeviceCurrent, parse_devices }
 
 /// A per-device configuration snapshot from `rdma.max`, measured in counts.
 ///
@@ -235,22 +257,14 @@ impl RdmaDeviceMax {
   /// Returns the stored HCA object limit, or `max` for no limit here.
   #[must_use]
   pub const fn hca_object(&self) -> MaxOr<Count> { self.hca_object }
-
-  fn from_fields(fields: KeyedFields<'_>) -> Result<Self, ParseError<ParseValueError>> {
-    Ok(Self {
-      hca_handle: fields.required::<ParseCount, _>("hca_handle")?,
-      hca_object: fields.required::<ParseCount, _>("hca_object")?,
-    })
-  }
 }
 
-impl FromStr for RdmaMax {
-  type Err = ParseError<ParseValueError>;
+cgroup_value! { fields RdmaDeviceMax, {
+  hca_handle: required ParseCount => "hca_handle",
+  hca_object: required ParseCount => "hca_object",
+} }
 
-  fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    Ok(Self { devices: parse_devices(contents, RdmaDeviceMax::from_fields)? })
-  }
-}
+cgroup_value! { device_rows RdmaMax, devices: RdmaDeviceMax, parse_devices }
 
 /// A volatile snapshot of hierarchical or local per-device RDMA events.
 ///
@@ -295,15 +309,27 @@ impl RdmaDeviceEvents {
   #[must_use]
   pub const fn hca_object(&self) -> RdmaResourceEvents { self.hca_object }
 
-  fn from_fields(fields: KeyedFields<'_>) -> Result<Self, ParseError<ParseValueError>> {
+  fn encode_fields(&self, output: &mut String, prefix: &str, delimiter: char) -> Result<(), crate::error::EncodeError> {
+    for (key, value) in [
+      (HANDLE_MAX, &self.hca_handle.max),
+      (HANDLE_ALLOC_FAIL, &self.hca_handle.alloc_fail),
+      (OBJECT_MAX, &self.hca_object.max),
+      (OBJECT_ALLOC_FAIL, &self.hca_object.alloc_fail),
+    ] {
+      encode_pair::<ParseCount, _>(output, prefix, delimiter, key, value)?;
+    }
+    Ok(())
+  }
+
+  fn from_fields(fields: &KeyedFields<'_>) -> Result<Self, ParseError<ParseValueError>> {
     Ok(Self {
       hca_handle: RdmaResourceEvents {
-        max: fields.required::<ParseCount, _>("hca_handle.max")?,
-        alloc_fail: fields.required::<ParseCount, _>("hca_handle.alloc_fail")?,
+        max: fields.required::<ParseCount, _>(HANDLE_MAX)?,
+        alloc_fail: fields.required::<ParseCount, _>(HANDLE_ALLOC_FAIL)?,
       },
       hca_object: RdmaResourceEvents {
-        max: fields.required::<ParseCount, _>("hca_object.max")?,
-        alloc_fail: fields.required::<ParseCount, _>("hca_object.alloc_fail")?,
+        max: fields.required::<ParseCount, _>(OBJECT_MAX)?,
+        alloc_fail: fields.required::<ParseCount, _>(OBJECT_ALLOC_FAIL)?,
       },
     })
   }
@@ -335,13 +361,7 @@ impl RdmaResourceEvents {
   pub const fn alloc_fail(&self) -> Count { self.alloc_fail }
 }
 
-impl FromStr for RdmaEvents {
-  type Err = ParseError<ParseValueError>;
-
-  fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    Ok(Self { devices: parse_devices(contents, RdmaDeviceEvents::from_fields)? })
-  }
-}
+cgroup_value! { device_rows RdmaEvents, devices: RdmaDeviceEvents, parse_devices }
 
 fn parse_devices<T>(
   raw: &str,
@@ -361,8 +381,8 @@ fn parse_devices<T>(
       )?;
       let index = fields
         .iter()
-        .find_map(|(key, value)| (key == "index").then_some(value))
-        .map(|value| value.parse::<u32>().map_err(|error| ParseError::invalid(raw, "index", value, error.into())))
+        .find_map(|(key, value)| (key == DEVICE_INDEX).then_some(value))
+        .map(|value| value.parse::<u32>().map_err(|error| ParseError::invalid(raw, DEVICE_INDEX, value, error.into())))
         .transpose()?;
       Ok((RdmaDevice::new(device, index), parse(fields)?))
     })

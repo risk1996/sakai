@@ -1,11 +1,8 @@
-use std::str::FromStr;
-
 use uom::si::{ratio::ratio, time::microsecond};
 
 use crate::{
-  error::{ParseError, ParseValueError},
   limit::MaxOr,
-  parse::{ParseNonZeroMicroseconds, Parser},
+  parse::{ParseNonZeroMicroseconds, cgroup_value},
   unit::{NonZeroTime, Ratio},
 };
 
@@ -67,23 +64,20 @@ impl CpuMax {
   }
 }
 
-impl FromStr for CpuMax {
-  type Err = ParseError<ParseValueError>;
-
-  fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    Parser::parse(contents, |parser| {
-      Ok(Self {
-        quota: parser.next_field::<ParseNonZeroMicroseconds, _>("quota")?,
-        period: parser.next_field::<ParseNonZeroMicroseconds, _>("period")?,
-      })
-    })
+cgroup_value! {
+  positional CpuMax {
+    quota: ParseNonZeroMicroseconds,
+    period: ParseNonZeroMicroseconds,
   }
 }
 
 #[cfg(test)]
 mod tests {
   use assertables::{assert_in_delta, assert_ok};
-  use uom::si::{ratio::ratio, time::microsecond};
+  use uom::si::{
+    ratio::ratio,
+    time::{microsecond, nanosecond},
+  };
 
   use super::*;
   use crate::{
@@ -115,6 +109,32 @@ mod tests {
       ("0 100000", Err(Invalid("quota", "0"))),
       (" max forever\n", Err(Invalid("period", "forever"))),
     ]);
+  }
+
+  #[test]
+  fn encodes_cpu_max_in_kernel_units_and_field_order() {
+    for (input, expected) in [
+      (" \tmax\t100000\r\n", "max 100000"),
+      ("025000  +100000\n", "25000 100000"),
+      ("18446744073709551 1000", "18446744073709551 1000"),
+    ] {
+      let value = assert_ok!(input.parse::<CpuMax>());
+      let encoded = assert_ok!(value.encode_cgroup());
+      assert_eq!(encoded, expected);
+      assert_eq!(assert_ok!(encoded.parse::<CpuMax>()), value);
+    }
+  }
+
+  #[test]
+  fn rejects_sub_microsecond_remainders_in_both_fields() {
+    let exact = assert_ok!(NonZeroTime::try_new(Time::new::<microsecond>(1_000)));
+    let inexact = assert_ok!(NonZeroTime::try_new(Time::new::<nanosecond>(1_000_001)));
+    for (value, field) in [
+      (CpuMax { quota: MaxOr::Value(inexact), period: exact }, "quota"),
+      (CpuMax { quota: MaxOr::Max, period: inexact }, "period"),
+    ] {
+      assert_eq!(value.encode_cgroup().map_err(|error| error.field()), Err(field));
+    }
   }
 
   #[test]

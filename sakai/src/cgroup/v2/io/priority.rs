@@ -1,13 +1,16 @@
 use std::str::FromStr;
 
-use crate::error::{ParseError, ParseValueError};
+use crate::{
+  error::{ParseError, ParseValueError},
+  parse::cgroup_value,
+};
 
 /// A snapshot of the request-priority policy in `io.prio.class`.
 ///
 /// Requires `CONFIG_BLK_CGROUP_IOPRIO`. This controls I/O request priority,
 /// including supported page-cache writeback, rather than CPU priority.
 /// See the [Linux I/O priority controller source](https://github.com/torvalds/linux/blob/v6.5/block/blk-ioprio.c).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::Display, strum::VariantArray, strum::IntoStaticStr)]
 #[strum(serialize_all = "kebab-case")]
 #[non_exhaustive]
 pub enum IoPriorityClass {
@@ -29,6 +32,8 @@ pub enum IoPriorityClass {
   NoneToRt,
 }
 
+cgroup_value! { display IoPriorityClass }
+
 impl IoPriorityClass {
   /// The I/O priority policy interface filename, also present at the root.
   pub const FILE_NAME: &'static str = "io.prio.class";
@@ -43,14 +48,11 @@ impl FromStr for IoPriorityClass {
     if value.is_empty() {
       return Err(ParseError::missing(raw, "priority"));
     }
-    match value {
-      | "no-change" => Ok(Self::NoChange),
-      | "promote-to-rt" => Ok(Self::PromoteToRt),
-      | "restrict-to-be" => Ok(Self::RestrictToBe),
-      | "idle" => Ok(Self::Idle),
-      | "none-to-rt" => Ok(Self::NoneToRt),
-      | _ => Err(ParseError::invalid(raw, "priority", value, ParseValueError::OutOfRange)),
-    }
+    <Self as strum::VariantArray>::VARIANTS
+      .iter()
+      .copied()
+      .find(|variant| <&'static str>::from(*variant) == value)
+      .ok_or_else(|| ParseError::invalid(raw, "priority", value, ParseValueError::OutOfRange))
   }
 }
 

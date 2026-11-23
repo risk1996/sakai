@@ -1,15 +1,12 @@
 //! Swap accounting and limits in the memory controller.
 
-use std::str::FromStr;
-
 #[cfg(target_os = "linux")]
 use super::super::Cgroup;
 #[cfg(target_os = "linux")]
 use crate::error::Error;
 use crate::{
-  error::{ParseError, ParseValueError},
   limit::MaxOr,
-  parse::{KeyedFields, ParseCount},
+  parse::{ParseCount, cgroup_value},
   scalar::{Scalar, interface},
   unit::{Bytes, Count},
 };
@@ -146,24 +143,16 @@ impl SwapEvents {
   pub const fn fail(&self) -> Count { self.fail }
 }
 
-impl FromStr for SwapEvents {
-  type Err = ParseError<ParseValueError>;
-
-  fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    let fields = KeyedFields::parse(contents, |key| match key {
-      | "high" => "high",
-      | "max" => "max",
-      | "fail" => "fail",
-      | _ => "value",
-    })?;
-
-    Ok(Self {
-      high: fields.optional::<ParseCount, _>("high")?,
-      max: fields.required::<ParseCount, _>("max")?,
-      fail: fields.required::<ParseCount, _>("fail")?,
-    })
-  }
-}
+cgroup_value! { keyed SwapEvents, |key| match key {
+      "high" => "high",
+      "max" => "max",
+      "fail" => "fail",
+      _ => "value",
+    }, {
+  high: optional ParseCount => "high",
+  max: required ParseCount => "max",
+  fail: required ParseCount => "fail",
+} }
 
 #[cfg(test)]
 mod tests {

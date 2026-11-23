@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use crate::{
   error::{ParseError, ParseValueError},
-  parse::{KeyedFields, ParseCgroup, ParseMicroseconds},
+  parse::{EncodeCgroup, KeyedFields, ParseCgroup, ParseMicroseconds, cgroup_value},
   unit::{Count, Time},
 };
 
@@ -64,12 +64,23 @@ impl CpuStatLocal {
   pub const fn throttled(&self) -> Option<Time> { self.throttled }
 }
 
-impl FromStr for CpuStatLocal {
-  type Err = ParseError<ParseValueError>;
+cgroup_value! { keyed CpuStatLocal, CpuStatField::label, {
+  throttled: optional ParseMicroseconds => CpuStatField::ThrottledUsec,
+} }
 
-  fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    let fields = CpuStatField::fields(contents)?;
-    Ok(Self { throttled: fields.optional::<ParseMicroseconds, Time>("throttled_usec")? })
+impl CpuStat {
+  /// Encodes the stored snapshot as canonical cgroup text.
+  ///
+  /// # Errors
+  ///
+  /// Returns an error if a field cannot be represented exactly.
+  pub fn encode_cgroup(&self) -> Result<String, crate::error::EncodeError> {
+    let mut output = self.time.encode_cgroup()?;
+    if let Some(bandwidth) = &self.bandwidth {
+      output.push('\n');
+      output.push_str(&bandwidth.encode_cgroup()?);
+    }
+    Ok(output)
   }
 }
 
@@ -118,16 +129,6 @@ impl CpuTimeStat {
   /// `None` means the counter was not reported, rather than measured zero.
   #[must_use]
   pub const fn force_idle(&self) -> Option<Time> { self.force_idle }
-
-  fn from_fields(fields: &KeyedFields<'_>) -> Result<Self, ParseError<ParseValueError>> {
-    Ok(Self {
-      usage: fields.required::<ParseMicroseconds, _>(CpuStatField::UsageUsec)?,
-      user: fields.required::<ParseMicroseconds, _>(CpuStatField::UserUsec)?,
-      system: fields.required::<ParseMicroseconds, _>(CpuStatField::SystemUsec)?,
-      nice: fields.optional::<ParseMicroseconds, _>(CpuStatField::NiceUsec)?,
-      force_idle: fields.optional::<ParseMicroseconds, _>(CpuStatField::ForceIdleUsec)?,
-    })
-  }
 }
 
 /// CPU bandwidth counters from a cgroup's `cpu.stat` file.
@@ -176,21 +177,6 @@ impl CpuBandwidthStat {
   /// `None` means the kernel did not report burst counters.
   #[must_use]
   pub const fn burst(&self) -> Option<CpuBurstStat> { self.burst }
-
-  fn from_fields(fields: &KeyedFields<'_>) -> Result<Self, ParseError<ParseValueError>> {
-    let burst = if fields.contains_any(CpuStatField::bandwidth_burst_fields()) {
-      Some(CpuBurstStat::from_fields(fields)?)
-    } else {
-      None
-    };
-
-    Ok(Self {
-      nr_periods: fields.required::<ParseBandwidthCount, _>(CpuStatField::NrPeriods)?,
-      nr_throttled: fields.required::<ParseBandwidthCount, _>(CpuStatField::NrThrottled)?,
-      throttled: fields.required::<ParseMicroseconds, _>(CpuStatField::ThrottledUsec)?,
-      burst,
-    })
-  }
 }
 
 /// CPU burst counters from a cgroup's `cpu.stat` file.
@@ -216,16 +202,15 @@ impl CpuBurstStat {
   /// See [Linux CPU interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
   #[must_use]
   pub const fn burst(&self) -> Time { self.burst }
-
-  fn from_fields(fields: &KeyedFields<'_>) -> Result<Self, ParseError<ParseValueError>> {
-    Ok(Self {
-      nr_bursts: fields.required::<ParseBandwidthCount, _>(CpuStatField::NrBursts)?,
-      burst: fields.required::<ParseMicroseconds, _>(CpuStatField::BurstUsec)?,
-    })
-  }
 }
 
 struct ParseBandwidthCount;
+
+impl EncodeCgroup<ParseBandwidthCount> for Count {
+  fn encode_token(&self, output: &mut String) -> Option<()> {
+    EncodeCgroup::<crate::parse::ParseCount>::encode_token(self, output)
+  }
+}
 
 impl ParseCgroup<ParseBandwidthCount> for Count {
   type Error = ParseValueError;
@@ -257,23 +242,25 @@ impl FromStr for CpuStat {
   }
 }
 
-impl FromStr for CpuTimeStat {
-  type Err = ParseError<ParseValueError>;
+cgroup_value! { keyed CpuTimeStat, CpuStatField::label, {
+  usage: required ParseMicroseconds => CpuStatField::UsageUsec,
+  user: required ParseMicroseconds => CpuStatField::UserUsec,
+  system: required ParseMicroseconds => CpuStatField::SystemUsec,
+  nice: optional ParseMicroseconds => CpuStatField::NiceUsec,
+  force_idle: optional ParseMicroseconds => CpuStatField::ForceIdleUsec,
+} }
 
-  fn from_str(contents: &str) -> Result<Self, Self::Err> { Self::from_fields(&CpuStatField::fields(contents)?) }
-}
+cgroup_value! { keyed CpuBandwidthStat, CpuStatField::label, {
+  burst: group CpuBurstStat => CpuStatField::bandwidth_burst_fields(),
+  nr_periods: required ParseBandwidthCount => CpuStatField::NrPeriods,
+  nr_throttled: required ParseBandwidthCount => CpuStatField::NrThrottled,
+  throttled: required ParseMicroseconds => CpuStatField::ThrottledUsec,
+} }
 
-impl FromStr for CpuBandwidthStat {
-  type Err = ParseError<ParseValueError>;
-
-  fn from_str(contents: &str) -> Result<Self, Self::Err> { Self::from_fields(&CpuStatField::fields(contents)?) }
-}
-
-impl FromStr for CpuBurstStat {
-  type Err = ParseError<ParseValueError>;
-
-  fn from_str(contents: &str) -> Result<Self, Self::Err> { Self::from_fields(&CpuStatField::fields(contents)?) }
-}
+cgroup_value! { keyed CpuBurstStat, CpuStatField::label, {
+  nr_bursts: required ParseBandwidthCount => CpuStatField::NrBursts,
+  burst: required ParseMicroseconds => CpuStatField::BurstUsec,
+} }
 
 #[derive(
   Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, strum::EnumString, strum::Display, strum::IntoStaticStr,
@@ -294,9 +281,9 @@ enum CpuStatField {
 }
 
 impl CpuStatField {
-  fn fields(raw: &str) -> Result<KeyedFields<'_>, ParseError<ParseValueError>> {
-    KeyedFields::parse(raw, |key| Self::from_str(key).map(Into::into).unwrap_or("value"))
-  }
+  fn fields(raw: &str) -> Result<KeyedFields<'_>, ParseError<ParseValueError>> { KeyedFields::parse(raw, Self::label) }
+
+  fn label(key: &str) -> &'static str { Self::from_str(key).map(Into::into).unwrap_or("value") }
 
   fn bandwidth_fields() -> [Self; 5] {
     [Self::NrPeriods, Self::NrThrottled, Self::ThrottledUsec, Self::NrBursts, Self::BurstUsec]

@@ -57,6 +57,18 @@ fn retains_each_interface_contract() {
 }
 
 #[test]
+fn encodes_memory_max_as_decimal_bytes_or_max() {
+  for (input, expected) in
+    [(" \tmax\r\n", "max"), ("0\n", "0"), ("+0004096", "4096"), ("18446744073709551615", "18446744073709551615")]
+  {
+    let value = assert_ok!(input.parse::<MemoryMax>());
+    let encoded = assert_ok!(value.encode_cgroup());
+    assert_eq!(encoded, expected);
+    assert_eq!(assert_ok!(encoded.parse::<MemoryMax>()), value);
+  }
+}
+
+#[test]
 fn parses_scalar_encodings() {
   let count = |value| Count { value, ..Default::default() };
   let cases = [

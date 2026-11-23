@@ -12,6 +12,7 @@ use super::Cgroup;
 use crate::error::Error;
 use crate::{
   limit::MaxOr,
+  parse::cgroup_value,
   scalar::{Scalar, interface},
   unit::Count,
 };
@@ -90,6 +91,8 @@ pub enum CgroupType {
   #[strum(serialize = "threaded")]
   Threaded,
 }
+
+cgroup_value! { display CgroupType }
 
 impl CgroupType {
   /// The cgroup v2 `cgroup.type` interface filename.

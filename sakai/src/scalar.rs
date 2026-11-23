@@ -3,9 +3,9 @@
 use std::{any::type_name, fmt, marker::PhantomData, str::FromStr};
 
 use crate::{
-  error::{ParseError, ParseValueError},
+  error::{EncodeError, ParseError, ParseValueError},
   limit::MaxOr,
-  parse::{ParseBoolean, ParseBytes, ParseCgroup, ParseCount, ParseMicroseconds, ParsePercent, Parser},
+  parse::{EncodeCgroup, ParseBoolean, ParseBytes, ParseCgroup, ParseCount, ParseMicroseconds, ParsePercent, Parser},
   unit::{Bytes, Count, Ratio, Time},
 };
 
@@ -50,6 +50,8 @@ trait ScalarValue {
   type Encoding;
 }
 
+type ScalarEncoding<T> = <T as ScalarValue>::Encoding;
+
 impl ScalarValue for bool {
   type Encoding = ParseBoolean;
 }
@@ -71,12 +73,28 @@ impl<T: ScalarValue> ScalarValue for MaxOr<T> {
 
 impl<T, I: Interface> FromStr for Scalar<T, I>
 where
-  T: Copy + ScalarValue + ParseCgroup<T::Encoding, Error = ParseValueError>,
+  T: Copy + ScalarValue + ParseCgroup<ScalarEncoding<T>, Error = ParseValueError>,
 {
   type Err = ParseError<ParseValueError>;
 
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    Ok(Self::new(Parser::single::<T::Encoding, T>(contents, I::FIELD)?))
+    Ok(Self::new(Parser::single::<ScalarEncoding<T>, T>(contents, I::FIELD)?))
+  }
+}
+
+#[expect(private_bounds, reason = "encoding markers are internal to supported scalar types")]
+impl<T: Copy + ScalarValue + EncodeCgroup<ScalarEncoding<T>>, I: Interface> Scalar<T, I> {
+  /// Encodes the value as a canonical cgroup token, with no trailing newline.
+  /// See [Linux cgroup file formats](https://docs.kernel.org/admin-guide/cgroup-v2.html#format).
+  ///
+  /// # Errors
+  ///
+  /// Returns an error if the value cannot be represented exactly in the
+  /// interface's text format.
+  pub fn encode_cgroup(&self) -> Result<String, EncodeError> {
+    let mut output = String::new();
+    EncodeCgroup::<ScalarEncoding<T>>::encode_field(&self.value, &mut output, I::FIELD)?;
+    Ok(output)
   }
 }
 

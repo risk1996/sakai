@@ -1,12 +1,13 @@
 use std::{
   collections::BTreeMap,
+  fmt::Write,
   str::{FromStr, SplitAsciiWhitespace as Tokens},
 };
 
 use super::{MemoryStatByteField, MemoryStatCountField, MemoryStatPageField};
 use crate::{
   error::{ParseError, ParseValueError},
-  parse::{ParseBytes, ParseCgroup, ParseCount, ParsePages},
+  parse::{EncodeCgroup, ParseBytes, ParseCgroup, ParseCount, ParsePages},
   unit::{Bytes, Count, Pages},
 };
 
@@ -27,11 +28,29 @@ pub struct MemoryNumaStat {
   counts: BTreeMap<MemoryStatCountField, BTreeMap<u32, Count>>,
 }
 
+const NODE_PREFIX: char = 'N';
+
 impl MemoryNumaStat {
   /// The cgroup v2 `memory.numa_stat` interface filename.
   ///
   /// See [Linux `memory.numa_stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   pub const FILE_NAME: &'static str = "memory.numa_stat";
+
+  fn encode_nodes<Unit, T: EncodeCgroup<Unit>>(
+    output: &mut String,
+    field: &'static str,
+    nodes: &BTreeMap<u32, T>,
+  ) -> Result<(), crate::error::EncodeError> {
+    if !output.is_empty() {
+      output.push('\n');
+    }
+    output.push_str(field);
+    for (node, value) in nodes {
+      write!(output, " {NODE_PREFIX}{node}=").map_err(|_error| crate::error::EncodeError { field })?;
+      value.encode_field(output, field)?;
+    }
+    Ok(())
+  }
 
   /// Returns byte amounts by memory field and NUMA node ID.
   ///
@@ -67,7 +86,7 @@ impl MemoryNumaStat {
         let (node, value) =
           token.split_once('=').ok_or_else(|| ParseError::invalid(raw, "node", token, ParseValueError::OutOfRange))?;
         let id = node
-          .strip_prefix('N')
+          .strip_prefix(NODE_PREFIX)
           .ok_or_else(|| ParseError::invalid(raw, "node", token, ParseValueError::OutOfRange))?
           .parse::<u32>()
           .map_err(|error| ParseError::invalid(raw, "node", token, error.into()))?;
@@ -85,6 +104,27 @@ impl MemoryNumaStat {
       self.counts.insert(field, Self::parse_nodes::<ParseCount, Count>(raw, field.into(), tokens)?);
     }
     Ok(())
+  }
+}
+
+impl MemoryNumaStat {
+  /// Encodes the stored value as canonical cgroup text.
+  ///
+  /// # Errors
+  ///
+  /// Returns an error if a field cannot be represented exactly.
+  pub fn encode_cgroup(&self) -> Result<String, crate::error::EncodeError> {
+    let mut output = String::new();
+    for (&key, nodes) in &self.bytes {
+      Self::encode_nodes::<ParseBytes, _>(&mut output, key.into(), nodes)?;
+    }
+    for (&key, nodes) in &self.pages {
+      Self::encode_nodes::<ParsePages, _>(&mut output, key.into(), nodes)?;
+    }
+    for (&key, nodes) in &self.counts {
+      Self::encode_nodes::<ParseCount, _>(&mut output, key.into(), nodes)?;
+    }
+    Ok(output)
   }
 }
 

@@ -1,10 +1,10 @@
-use std::str::FromStr;
+use std::fmt::Write;
 
 use nutype::nutype;
 
 use crate::{
-  error::{ParseError, ParseValueError},
-  parse::{ParseCgroup, Parser},
+  error::ParseValueError,
+  parse::{EncodeCgroup, ParseCgroup, cgroup_value},
 };
 
 /// A CPU scheduling nice value from -20 (highest weight) through 19 (lowest weight).
@@ -30,13 +30,7 @@ impl Nice {
   pub const FILE_NAME: &'static str = "cpu.weight.nice";
 }
 
-impl FromStr for Nice {
-  type Err = ParseError<ParseValueError>;
-
-  fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    Parser::parse(contents, |parser| parser.next_field::<ParseNice, _>("nice"))
-  }
-}
+cgroup_value! { token Nice: ParseNice, "nice" }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct ParseNice;
@@ -46,6 +40,13 @@ impl ParseCgroup<ParseNice> for Nice {
 
   fn parse_cgroup(value: &str) -> Result<Self, Self::Error> {
     Self::try_new(value.parse::<i8>()?).map_err(|_error| ParseValueError::OutOfRange)
+  }
+}
+
+impl EncodeCgroup<ParseNice> for Nice {
+  fn encode_token(&self, output: &mut String) -> Option<()> {
+    let value = self.into_inner();
+    write!(output, "{value}").ok()
   }
 }
 
