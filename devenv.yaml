@@ -1,10 +1,5 @@
 # See https://devenv.sh/reference/yaml-options/
 inputs:
-  llm-agents:
-    url: github:numtide/llm-agents.nix
-    inputs:
-      nixpkgs:
-        follows: nixpkgs
   nixpkgs:
     url: github:NixOS/nixpkgs/nixpkgs-unstable
   rust-overlay:

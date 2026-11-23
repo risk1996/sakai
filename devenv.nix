@@ -24,7 +24,6 @@
   };
 
   packages = [
-    inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}.coderabbit-cli
     pkgs.actionlint
     pkgs.cargo-audit
     pkgs.cargo-auditable
@@ -52,8 +51,6 @@
   # Container tooling follows the resolved devenv toolchain and input URL.
   env.SAKAI_VMTEST_RUST_VERSION = config.languages.rust.toolchain.rustc.version;
   env.SAKAI_VMTEST_URL = (builtins.fromJSON (builtins.readFile ./devenv.lock)).nodes.vmtest.locked.url;
-  # Nix manages the CodeRabbit version through devenv.lock.
-  env.CODERABBIT_CLI_DISABLE_AUTO_UPDATE = "true";
 
   # Run together with `devenv test`, or individually with `devenv tasks run check:fmt`.
   tasks = {
@@ -102,8 +99,10 @@
   };
 
   # devenv.sh/profiles/
-  # namespaced profiles keep the Rust and Python toolchains isolated
+  # Profiles keep optional tools out of the default shell.
   profiles = {
+    review.module.packages = [ pkgs.codex ];
+
     python.module = { config, pkgs, ... }: {
       languages.python = {
         enable = true;
