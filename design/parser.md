@@ -2,9 +2,11 @@
 
 ## Status
 
-This note evaluates whether Sakai's cgroup text parsing is lightweight enough,
-whether parsing should be lazy, and whether a general-purpose library would make
-the implementation clearer or more declarative.
+The original parser-only research below evaluates whether Sakai's cgroup text
+parsing is lightweight enough, whether parsing should be lazy, and whether a
+general-purpose library would make the implementation clearer or more declarative.
+The [read and write follow-up](#read-and-write-follow-up) evaluates a shared
+declaration for the kernel text used by configuration writes.
 
 The recommendation is:
 
@@ -301,3 +303,237 @@ Revisit this decision when at least one of these conditions is observed:
 
 Until then, the standard-library parser is smaller, easier to audit, and better
 aligned with the textual kernel ABI than the evaluated alternatives.
+
+## Read and write follow-up
+
+Use one declaration for each text shape that can be shared in both directions.
+The declaration owns field order or key names and associates each field with
+its token codec. Generate the parser and encoder from that declaration.
+Associate the kernel filename and operation types with a separate interface
+descriptor. A writable interface can have a different command type from its
+snapshot type.
+
+For values representable in a shared shape, decoding the encoded value should
+recover the same value. The encoder can choose a canonical spelling while the
+decoder accepts extra ASCII whitespace and other compatible spellings. Errors
+for unrepresentable values belong in a fallible encoder. For example, the
+current `NonZeroTime` can represent a duration with a sub-microsecond remainder.
+Truncating that remainder changes the value, and returning a formatting error
+from `Display` makes `to_string()` panic. Only derive `Display` for wire types
+whose representation is guaranteed by construction. [Rust `ToString`
+documentation](https://doc.rust-lang.org/std/string/trait.ToString.html#panics)
+
+The text round trip applies in memory. The kernel can reject settings based on
+the cgroup's configuration, normalize values such as page-aligned memory
+limits, or treat a write as an action. [Linux v2 interface
+documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#interface-files)
+
+### The shared shape varies by interface
+
+| Interface | Snapshot | Command Sakai can support |
+| --- | --- | --- |
+| `memory.max` | One byte limit or `max` | Same scalar codec. |
+| `cpu.max` | Quota and period in microseconds | Same positional codec for a full replacement. Optionally add a quota-only command using the same quota codec. |
+| `cpu.stat` | Unordered keyed counters with optional groups | Read-only. Keep field-name decoding and group validation. |
+| `io.max` | Unordered device rows with all four known limits per row | One device and a nonempty subset of fields. Share the key and unit declaration. Omission leaves the setting alone, while `max` clears a limit. |
+| `cgroup.procs` | A list of process IDs | One process ID per write. The task ID codec can be shared. |
+| `cpu.pressure`, `io.pressure`, `memory.pressure` | Nested keyed PSI statistics | A trigger command with a threshold and window. The open descriptor owns the trigger. |
+
+[Linux v2 interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#interface-files)
+and [Linux PSI documentation](https://docs.kernel.org/accounting/psi.html#monitoring-for-pressure-thresholds)
+describe these read and write contracts.
+
+A value can also be used by several files. For example, `CpuList` is the
+snapshot type of both `cpuset.cpus` and `cpuset.cpus.effective`. Bind filenames
+and access to interface marker types so the writable interface can use the
+same value as the read-only one. Parameterized files such as
+`hugetlb.<hugepagesize>.max` can resolve the filename from a typed selector.
+
+### Option 1 — Generate both directions with a local schema macro
+
+Declare field names and token codecs once. The following sketches use
+`macro_rules!` at item scope, where the macro can generate the concrete impls.
+
+```rust,ignore
+pub struct CpuMax {
+  quota: MaxOr<NonZeroTime>,
+  period: NonZeroTime,
+}
+
+cgroup_value! {
+  positional CpuMax {
+    quota: Limit<NonZeroMicroseconds, MaxText>,
+    period: NonZeroMicroseconds,
+  }
+}
+```
+
+The positional macro expands over the same field list to construct the struct
+with `Parser::next_field` and encode its fields in that order. Start from the
+existing encoding markers and `ParseCgroup<Unit>`. Pair a token's parse and
+encode operations in the same codec, reusing the checked conversion and
+sharing its scale and sentinel constants. Keep the existing public `FromStr`
+error types and raw-input diagnostics. Have the formatter return a complete
+validated command before it reaches I/O.
+
+For nested keyed records, generate a field matcher and an emitter from one
+list. Use separate enclosing rules for full snapshots and sparse patches.
+
+```rust,ignore
+cgroup_value! {
+  keyed IoMaxFields {
+    "rbps" => read_bandwidth: Limit<BytesPerSecondToken, MaxText>,
+    "wbps" => write_bandwidth: Limit<BytesPerSecondToken, MaxText>,
+    "riops" => read_iops: Limit<OperationsPerSecondToken, MaxText>,
+    "wiops" => write_iops: Limit<OperationsPerSecondToken, MaxText>,
+  }
+}
+```
+
+The shared matcher can fill a builder with one slot per known field. The
+snapshot adapter requires all four fields before constructing `IoDeviceMax`
+and applies the existing unknown-key policy. The command adapter emits only
+the fields present in a validated device patch. Preserve the current parser's
+behavior during migration, including its duplicate policy. Today the
+`BTreeMap` collection in `KeyedFields` retains the last value for a duplicate
+key. Sakai can reject duplicates in newly introduced command input.
+
+The smallest viable macro covers scalar and positional values. Add the keyed
+arm when introducing the first per-device write. A procedural attribute
+could read field names directly from the struct if repeating them starts to
+cause friction. The declarative prototype shows that a proc-macro crate is
+optional.
+
+### Option 2 — Use `parse-display` for fixed textual records
+
+```rust,ignore
+#[derive(parse_display::FromStr, parse_display::Display)]
+#[display("{quota} {period}")]
+struct CpuMaxWire {
+  #[display(with = Quota)]
+  quota: MaxOr<WholeMicroseconds>,
+  #[display(with = Microseconds)]
+  period: WholeMicroseconds,
+}
+```
+
+Both derives consume the same template. A shared field adapter can implement
+`FromStrFormat` and `DisplayFormat`. With validated wire types, formatting is
+infallible. The prototype on 0.11.0 accepted canonical `cpu.max` text but
+rejected a tab separator, repeated spaces, or a terminal newline with the
+literal-space template. Whitespace normalization restored those inputs. An
+independent parse regex is also possible, at the cost of a second grammar.
+The derive returns the crate's parse error. Preserving Sakai's existing
+field-specific errors needs an adapter or a change to the public contract.
+Unordered keyed fields and conditional updates still need cgroup-specific
+logic. This is an option for a small family of fixed records if normalization
+and the error contract are acceptable. [`parse-display` derive
+documentation](https://docs.rs/parse-display/latest/parse_display/)
+
+### Option 3 — Derive both directions with Serde on wire records
+
+```rust,ignore
+#[derive(serde::Serialize, serde::Deserialize)]
+struct IoMaxPatchWire {
+  #[serde(rename = "rbps", default, skip_serializing_if = "Option::is_none")]
+  read_bandwidth: Option<BandwidthLimitWire>,
+  #[serde(rename = "wiops", default, skip_serializing_if = "Option::is_none")]
+  write_iops: Option<IopsLimitWire>,
+  // The remaining limits follow the same pattern.
+}
+```
+
+Derive shares key names and implements field dispatch. A cgroup
+deserializer would feed keyed input through `MapAccess` and positional input
+through `SeqAccess`. A cgroup serializer would control whitespace and
+punctuation and emit the text of one command. The token wrappers or field
+adapters still need checked units and sentinel semantics. Wire records let
+Sakai keep these choices independent of any Serde representation exposed
+to users for JSON or other formats.
+
+A two-field keyed prototype used `MapDeserializer` over borrowed tokens
+and a narrow serializer for `key=value` output. The derives handled
+reordered keys, ignored an extra key, rejected a duplicate known key, and
+omitted an absent field. The prototype needed token conversion and a format
+adapter for both directions even with only two fields. Serde also permits
+direction-specific names and hooks, so restricting the schema to shared
+declarations is a project convention. Revisit this option if enough keyed
+layouts can share the same format adapter. [Serde data model](https://serde.rs/data-model.html)
+and [field attributes](https://serde.rs/field-attrs.html)
+
+The ecosystem also has composable parser/printer pairs. For example,
+`id_effect_parse` 0.4.0 exposes a `codec::pair` function and a `Codec::map` with two
+conversion functions. Its primitive codec accepts independent parse and
+print functions, its printer is infallible, and its CC-BY-SA-4.0 license is
+outside the workspace allowlist. `binrw` and `deku` are examples of one
+declaration generating both directions for binary layouts. `nom`, `winnow`,
+and `pest` can still help with scanning but leave the printer to Sakai.
+[`id_effect_parse` codec source](https://docs.rs/crate/id_effect_parse/0.4.0/source/src/codec.rs),
+[`binrw`](https://docs.rs/binrw/latest/binrw/), and
+[`deku`](https://docs.rs/deku/latest/deku/)
+
+### Typed file access and Rust trait generation
+
+```rust,ignore
+trait CgroupFile {
+  const FILE_NAME: &'static str;
+  type Access: mode::Sealed;
+}
+
+struct CpuMaxFile;
+impl CgroupFile for CpuMaxFile {
+  const FILE_NAME: &'static str = CpuMax::FILE_NAME;
+  type Access = mode::ReadWrite<CpuMax, CpuMax>;
+}
+
+struct IoMaxFile;
+impl CgroupFile for IoMaxFile {
+  const FILE_NAME: &'static str = IoMax::FILE_NAME;
+  type Access = mode::ReadWrite<IoMax, IoMaxPatch>;
+}
+```
+
+Use sealed `ReadOnly<S>`, `WriteOnly<C>`, and `ReadWrite<S, C>` markers.
+Read helpers require a `Readable` bound with an associated snapshot type.
+Write helpers require a `Writable` bound with an associated command type.
+A mode enum constant can describe access for introspection, but the marker
+bounds enforce it at compile time. File availability and permissions are
+still checked by the kernel. Keep write I/O behind the controller API and
+use the existing directory-relative path handling. Send each fully encoded
+command in a single write and treat a short write as an error. PSI triggers
+and other descriptor-scoped commands can use dedicated methods.
+
+Rust's orphan rules reject blanket implementations such as
+`impl<T: CgroupValue> FromStr for T` and the equivalent `Display` impl.
+An item macro or derive can generate those impls per concrete type. A
+local wrapper such as `Wire<T>` can also carry blanket standard-trait
+impls where the value and error contracts fit. A `shape(self)` method
+requires a value before decoding can begin. A type-level declaration can
+construct that value from input and later project its fields by reference.
+The macro can do both from field names. [Rust trait coherence
+rules](https://doc.rust-lang.org/reference/items/implementations.html#trait-implementation-coherence)
+
+### Experiments and implementation order
+
+Temporary experiments on Rust 1.100.0 (macOS) passed six tests across the
+three options. The local macro covered whitespace and canonical output,
+`max` and numeric quota, integer overflow, missing and excess fields,
+unrepresentable nanoseconds, and unordered keyed fields and sparse updates.
+A cgroup v1 quota prototype reused the same microseconds codec with a
+`-1` sentinel. The kernel exposes the v1 period through a separate file,
+so the v2 `cpu.max` record itself stays version-specific. Compile-fail
+probes confirmed the orphan-rule errors and rejection of a write to a
+read-only descriptor. These were text and type-checking experiments,
+without live kernel writes. [Linux v1 CPU bandwidth
+documentation](https://docs.kernel.org/scheduler/sched-bwc.html#management)
+
+Start with option 1 for a full `cpu.max` replacement and a scalar such as
+`memory.max`. Reuse fixtures to check the existing parser behavior.
+Test the shared codec's canonical bytes against kernel examples as well
+as its value round trip. A round-trip test alone can pass if both generated
+implementations agree on the same wrong field order, unit, or key spelling.
+Use Linux integration tests to check accepted writes and readback in a
+delegated cgroup. Add `io.max` when the write API needs sparse patches,
+including tests for omitted versus explicitly cleared fields and for
+group or device validation. Keep complex read-only parsers on their existing
+scanners until they have a concrete reason to use a shared declaration.
