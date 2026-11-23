@@ -182,12 +182,12 @@ raise `InterfaceMissingError`. See [Linux HugeTLB interfaces](https://docs.kerne
 `group.rdma()` reads `.current()` and `.peak()` as immutable `RdmaCurrent`
 snapshots with read-only `.devices` mappings keyed by `(name, index)` tuples.
 The index is an unsigned device identifier, or `None` when the kernel omits it;
-`None` differs from zero. Linux 7.3 release candidates add an index for names
+`None` differs from zero. Linux 7.3 add an index for names
 shared across network namespaces; older kernels and unique names omit it.
 For example, `snapshot.devices[("mlx4_0", None)]` accesses a name-only record,
 while `snapshot.devices[("rxe0", 5)]` selects an indexed record. Name collisions,
 renames and index reuse can change keys between snapshots. See the
-[Linux 7.3-rc1 implementation](https://github.com/torvalds/linux/blob/v7.3-rc1/kernel/cgroup/rdma.c).
+[Linux 7.3 implementation](https://github.com/torvalds/linux/blob/v7.3/kernel/cgroup/rdma.c).
 Each device exposes `.hca_handle` and `.hca_object` resource count quantities.
 `.max()` has the same device keys and `MaxOr[Count]` resource limits. Device pools
 may disappear when resources are released; an empty map is valid. `.events()`
@@ -204,7 +204,7 @@ read-only `.regions` mappings keyed by driver-defined device-memory region names
 Capacity values are byte quantities; current and peak values are `MaxOr[Bytes]` because
 the kernel also prints `max` at its page-counter sentinel. For usage this token
 represents that sentinel, rather than an unlimited configured limit. Peak
-requires Linux 7.3 release candidates; current exists since Linux 6.14.
+requires Linux 7.3; current exists since Linux 6.14.
 `.min()`, `.low()`, and `.max()` return `DmemLimits`, whose `.regions` values are
 `MaxOr[Bytes]` bytes. Min and low describe hard and best-effort protection; max is
 the hard allocation limit. This controller requires Linux 6.14, its kernel

@@ -22,7 +22,7 @@ pub(super) struct CpuReader {
 #[cfg_attr(not(feature = "stubs"), pyo3_stub_gen_derive::remove_gen_stub)]
 #[pymethods]
 impl CpuReader {
-  /// Read hierarchical CPU usage and optional bandwidth counters.
+  /// Read hierarchical CPU usage and optional counters for this cgroup's own bandwidth limit.
   fn stat(&self, py: Python<'_>) -> PyResult<CpuStat> {
     PythonError::read(py, &self.owner, |owner| owner.cpu().stat()).map(Into::into)
   }
@@ -91,7 +91,7 @@ impl From<CoreCpuStat> for CpuStat {
   }
 }
 
-/// Local CPU statistics, distinct from hierarchical cpu.stat.
+/// Throttling of this cgroup's own runqueues, including inherited bandwidth limits.
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, get_all, module = "sakai._sakai")]
 #[derive(Debug, Clone, PartialEq)]
@@ -135,7 +135,7 @@ impl From<CoreCpuTimeStat> for CpuTimeStat {
   }
 }
 
-/// CPU bandwidth periods, throttling, and optional burst counters.
+/// Fair-class bandwidth counters for this cgroup's own limit.
 ///
 /// The kernel's signed 32-bit event counters are exposed as unsigned counts;
 /// they wrap after 2^32 events, so snapshots need not stay monotonic forever.
@@ -180,6 +180,10 @@ impl From<CoreCpuBurstStat> for CpuBurstStat {
 }
 
 /// This cgroup's CPU quota and period, independent of ancestor limits.
+///
+/// The fair-class scheduler enforces the quota. A BPF scheduler can also
+/// apply it through its bandwidth callback. See
+/// https://www.kernel.org/doc/html/v7.3/admin-guide/cgroup-v2.html#cpu-interface-files.
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass(frozen, get_all, module = "sakai._sakai")]
 #[derive(Clone)]

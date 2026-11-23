@@ -21,9 +21,9 @@ type DeviceKey = (String, Option<u32>);
 /// originally owned the resource, even after a task migrates. All resources
 /// are integer counts of HCA handles or objects, never byte amounts.
 /// Mapping keys are (name, index) tuples. None means the index was omitted,
-/// distinct from zero. Linux 7.3 release candidates add indices for duplicate
+/// distinct from zero. Linux 7.3 add indices for duplicate
 /// names across network namespaces; older kernels and unique names omit them.
-/// See https://github.com/torvalds/linux/blob/v7.3-rc1/kernel/cgroup/rdma.c.
+/// See https://github.com/torvalds/linux/blob/v7.3/kernel/cgroup/rdma.c.
 ///
 /// Missing files, including root exemptions, disabled controllers, kernel
 /// configuration omissions, and older kernels, raise InterfaceMissingError.
@@ -99,10 +99,10 @@ impl RdmaReader {
 /// Immutable snapshot of hierarchical RDMA current or peak resource counts.
 ///
 /// Keys are (name, index) tuples identifying RDMA adapters. None means the
-/// index was omitted, distinct from zero. Linux 7.3 release candidates emit an
+/// index was omitted, distinct from zero. Linux 7.3 emit an
 /// index for names shared across network namespaces; older kernels and unique
 /// names omit it. Name collisions, renames and index reuse can change keys
-/// between snapshots. See https://github.com/torvalds/linux/blob/v7.3-rc1/kernel/cgroup/rdma.c.
+/// between snapshots. See https://github.com/torvalds/linux/blob/v7.3/kernel/cgroup/rdma.c.
 /// An empty devices map means no devices were reported. Current usage is volatile; peaks record independent high
 /// water marks since cgroup creation, available since Linux 7.2. Device
 /// removal removes its history. Properties inspect this stored snapshot and

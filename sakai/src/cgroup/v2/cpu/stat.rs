@@ -131,7 +131,10 @@ impl CpuTimeStat {
 }
 
 /// CPU bandwidth counters from a cgroup's `cpu.stat` file.
-/// These are non-hierarchical: ancestor-imposed throttling is excluded.
+///
+/// These describe fair-class bandwidth enforcement by this cgroup's own
+/// limit. Use [`CpuStatLocal`] for runqueue throttling that can also include
+/// ancestor limits.
 /// The kernel's period, throttling, and burst event counters are 32-bit and
 /// wrap; signed decimal output after the sign bit is set is exposed as the
 /// corresponding unsigned count. Do not assume snapshots are monotonic forever.

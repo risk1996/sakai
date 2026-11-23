@@ -8,9 +8,10 @@ use crate::{
 ///
 /// Unused quota can be saved for later bursts up to this allowance, measured
 /// in kernel microseconds and exposed as [`Time`]. A zero duration disables
-/// bursting. This is CPU time, rather than a frequency or a wall-clock rate.
+/// bursting. The fair-class scheduler uses this allowance. A BPF scheduler
+/// can also apply it through its bandwidth callback.
 ///
-/// See [Linux `cpu.max.burst` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
+/// See [Linux `cpu.max.burst` interface](https://www.kernel.org/doc/html/v7.3/admin-guide/cgroup-v2.html#cpu-interface-files).
 ///
 /// Since Linux 5.16; see the [upstream Linux 5.16 source](https://github.com/torvalds/linux/blob/v5.16/Documentation/admin-guide/cgroup-v2.rst).
 /// Older kernels return [`crate::Error::FileMissing`] when this interface is read.

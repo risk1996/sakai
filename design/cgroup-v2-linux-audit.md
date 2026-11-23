@@ -6,12 +6,21 @@ tables and output routines. Introduction versions were checked against adjacent
 release-tagged sources, rather than inferred from current documentation.
 Linux 5.15 remains the oldest kernel in the existing test matrix.
 
+The Linux 7.3.6 follow-up compared the [7.3 release diff](https://cdn.kernel.org/pub/linux/kernel/v7.x/patch-7.3.xz)
+and [stable updates](https://cdn.kernel.org/pub/linux/kernel/v7.x/patch-7.3.6.xz).
+The stable release retains the `dmem.peak` and RDMA formats that Sakai
+already supports. The [7.3 CPU guide](https://www.kernel.org/doc/html/v7.3/admin-guide/cgroup-v2.html#cpu-interface-files)
+clarifies scheduler-dependent enforcement of CPU configuration and the scope
+of `cpu.stat` and `cpu.stat.local`. Linux 7.3.6 disallows a local non-isolated
+partition root under an isolated parent. The existing parser preserves the
+new invalid-state reason as text. See the [7.3.6 changelog](https://cdn.kernel.org/pub/linux/kernel/v7.x/ChangeLog-7.3.6).
+
 ## Corrected semantics
 
 | Interface | Finding and correction | Upstream evidence |
 | --- | --- | --- |
 | `memory.min`, `memory.low` | Both accept and print `max`. Rust now preserves `MaxOr<Bytes>`; Python returns `MaxOr[int]`. | [memory output routines](https://github.com/torvalds/linux/blob/v6.18/mm/memcontrol.c) |
-| `dmem.current`, `dmem.peak` | Their shared output routine prints `max` at `PAGE_COUNTER_MAX`. Preserve the sentinel without guessing a byte value from the reader's architecture. Usage `max` describes this kernel sentinel, rather than an unlimited configured limit. | [DMEM output routines](https://github.com/torvalds/linux/blob/v7.3-rc1/kernel/cgroup/dmem.c) |
+| `dmem.current`, `dmem.peak` | Their shared output routine prints `max` at `PAGE_COUNTER_MAX`. Preserve the sentinel without guessing a byte value from the reader's architecture. Usage `max` describes this kernel sentinel, rather than an unlimited configured limit. | [DMEM output routines](https://github.com/torvalds/linux/blob/v7.3/kernel/cgroup/dmem.c) |
 | CPU bandwidth counters | Kernel signed 32-bit counters can print negative values after overflow. Decode their unsigned 32-bit bit pattern into `Count`; document wraparound after 2^32 events. | [CPU counter storage](https://github.com/torvalds/linux/blob/v6.13/kernel/sched/sched.h), [CPU output](https://github.com/torvalds/linux/blob/v6.13/kernel/sched/core.c) |
 | `irq.pressure` | IRQ PSI has only a `full` line, so it needs a separate snapshot/parser. Added read-only Rust and Python readers. | [Linux 6.1 PSI](https://github.com/torvalds/linux/blob/v6.1/kernel/sched/psi.c) |
 | `cgroup.procs`, `cgroup.threads` | Preserve order, duplicates, empty lists, and zero for tasks invisible in the reader's PID namespace. Do not confuse observed list lengths with hierarchical task counts. | [core membership output](https://github.com/torvalds/linux/blob/v6.18/kernel/cgroup/cgroup.c), [PID namespace conversion](https://github.com/torvalds/linux/blob/v6.18/include/linux/pid.h) |
@@ -37,7 +46,7 @@ remain ignored because their units cannot be inferred safely.
 | `io.cost.qos`, `io.cost.model`, `io.prio.class` | Available before the 5.15 baseline |
 | `cpu.stat` `core_sched.force_idle_usec` | Linux 6.0, with core scheduling |
 | `cpu.stat` `nice_usec` | Linux 6.13 |
-| `dmem.peak` | Linux 7.3 release candidates; not present in 7.2 |
+| `dmem.peak`, RDMA indices for duplicate names | Linux 7.3 |
 
 Public interface rustdoc links to the corresponding versioned sources.
 Configuration, controller enablement, root exemptions, runtime accounting,

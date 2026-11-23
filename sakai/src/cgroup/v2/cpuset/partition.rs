@@ -124,6 +124,10 @@ mod tests {
         Ok(CpusetPartition::RootInvalid { reason: Some("Parent is not a partition root".into()) }),
       ),
       (
+        "root invalid (Root partition is not allowed with isolated parent)\n",
+        Ok(CpusetPartition::RootInvalid { reason: Some("Root partition is not allowed with isolated parent".into()) }),
+      ),
+      (
         "isolated invalid (future reason (detail))",
         Ok(CpusetPartition::IsolatedInvalid { reason: Some("future reason (detail)".into()) }),
       ),
