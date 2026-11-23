@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, str::FromStr};
+use std::{collections::BTreeMap, fmt::Write};
 
 use nutype::nutype;
 use uom::si::ratio::percent;
@@ -8,8 +8,8 @@ use super::{
   max::{ParseBandwidth, ParseIops},
 };
 use crate::{
-  error::{ParseError, ParseValueError},
-  parse::{KeyedFields, ParseBoolean, ParseCgroup, ParseMicroseconds, ParsePercent},
+  error::ParseValueError,
+  parse::{EncodeCgroup, ParseBoolean, ParseCgroup, ParseMicroseconds, ParsePercent, cgroup_value},
   unit::{BytesPerSecond, OperationsPerSecond, Ratio, Time},
 };
 
@@ -123,28 +123,20 @@ impl IoDeviceCostQos {
   /// Maximum I/O issue-rate scaling, from 0.01 to 100 (1% to 10,000%).
   #[must_use]
   pub const fn max_scaling(&self) -> Ratio { self.max_scaling }
-
-  fn from_fields(fields: KeyedFields<'_>) -> Result<Self, ParseError<ParseValueError>> {
-    Ok(Self {
-      enabled: fields.required::<ParseBoolean, _>("enable")?,
-      control: fields.required::<IoCostControl, _>("ctrl")?,
-      read_percentile: fields.required::<ParsePercent, _>("rpct")?,
-      read_latency: fields.required::<ParseMicroseconds, _>("rlat")?,
-      write_percentile: fields.required::<ParsePercent, _>("wpct")?,
-      write_latency: fields.required::<ParseMicroseconds, _>("wlat")?,
-      min_scaling: fields.required::<ParseScalingPercent, _>("min")?,
-      max_scaling: fields.required::<ParseScalingPercent, _>("max")?,
-    })
-  }
 }
 
-impl FromStr for IoCostQos {
-  type Err = ParseError<ParseValueError>;
+cgroup_value! { fields IoDeviceCostQos, {
+  enabled: required ParseBoolean => "enable",
+  control: required IoCostControl => "ctrl",
+  read_percentile: required ParsePercent => "rpct",
+  read_latency: required ParseMicroseconds => "rlat",
+  write_percentile: required ParsePercent => "wpct",
+  write_latency: required ParseMicroseconds => "wlat",
+  min_scaling: required ParseScalingPercent => "min",
+  max_scaling: required ParseScalingPercent => "max",
+} }
 
-  fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    Ok(Self { devices: Device::parse_lines(contents, IoDeviceCostQos::from_fields)? })
-  }
-}
+cgroup_value! { device_rows IoCostQos, devices: IoDeviceCostQos, Device::parse_lines }
 
 struct ParseScalingPercent;
 
@@ -228,26 +220,32 @@ impl IoDeviceCostModel {
   /// Maximum random 4 KiB write operations per second used by the model.
   #[must_use]
   pub const fn write_random_iops(&self) -> OperationsPerSecond { self.write_random_iops }
-
-  fn from_fields(fields: KeyedFields<'_>) -> Result<Self, ParseError<ParseValueError>> {
-    Ok(Self {
-      control: fields.required::<IoCostControl, _>("ctrl")?,
-      model: fields.required::<IoCostModelName, _>("model")?,
-      read_bandwidth: fields.required::<ParseBandwidth, _>("rbps")?,
-      read_sequential_iops: fields.required::<ParseIops, _>("rseqiops")?,
-      read_random_iops: fields.required::<ParseIops, _>("rrandiops")?,
-      write_bandwidth: fields.required::<ParseBandwidth, _>("wbps")?,
-      write_sequential_iops: fields.required::<ParseIops, _>("wseqiops")?,
-      write_random_iops: fields.required::<ParseIops, _>("wrandiops")?,
-    })
-  }
 }
 
-impl FromStr for IoCostModel {
-  type Err = ParseError<ParseValueError>;
+cgroup_value! { fields IoDeviceCostModel, {
+  control: required IoCostControl => "ctrl",
+  model: required IoCostModelName => "model",
+  read_bandwidth: required ParseBandwidth => "rbps",
+  read_sequential_iops: required ParseIops => "rseqiops",
+  read_random_iops: required ParseIops => "rrandiops",
+  write_bandwidth: required ParseBandwidth => "wbps",
+  write_sequential_iops: required ParseIops => "wseqiops",
+  write_random_iops: required ParseIops => "wrandiops",
+} }
 
-  fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    Ok(Self { devices: Device::parse_lines(contents, IoDeviceCostModel::from_fields)? })
+cgroup_value! { device_rows IoCostModel, devices: IoDeviceCostModel, Device::parse_lines }
+
+impl EncodeCgroup<IoCostControl> for IoCostControl {
+  fn encode_token(&self, output: &mut String) -> Option<()> { write!(output, "{self}").ok() }
+}
+
+impl EncodeCgroup<IoCostModelName> for IoCostModelName {
+  fn encode_token(&self, output: &mut String) -> Option<()> { write!(output, "{self}").ok() }
+}
+
+impl EncodeCgroup<ParseScalingPercent> for Ratio {
+  fn encode_token(&self, output: &mut String) -> Option<()> {
+    crate::parse::encode_percent(self, output, |value| ScalingPercent::try_new(value).is_ok())
   }
 }
 

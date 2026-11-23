@@ -4,16 +4,15 @@
 //! Every value is measured in bytes, independently of device or system page size.
 //! Since Linux 6.14; see the [versioned Linux interfaces](https://www.kernel.org/doc/html/v6.14/admin-guide/cgroup-v2.html#dmem).
 
-use std::{collections::BTreeMap, str::FromStr};
+use std::collections::BTreeMap;
 
 #[cfg(target_os = "linux")]
 use super::Cgroup;
 #[cfg(target_os = "linux")]
 use crate::Error;
 use crate::{
-  error::{ParseError, ParseValueError},
   limit::MaxOr,
-  parse::{KeyedFields, ParseBytes, ParseCgroup},
+  parse::{ParseBytes, cgroup_value},
   unit::Bytes,
 };
 
@@ -109,11 +108,7 @@ impl DmemCapacity {
   pub const fn regions(&self) -> &BTreeMap<String, Bytes> { &self.regions }
 }
 
-impl FromStr for DmemCapacity {
-  type Err = ParseError<ParseValueError>;
-
-  fn from_str(contents: &str) -> Result<Self, Self::Err> { Ok(Self { regions: parse_regions(contents)? }) }
-}
+cgroup_value! { map DmemCapacity, regions: ParseBytes, "bytes" }
 
 /// A volatile snapshot of device-memory usage for this cgroup and descendants.
 ///
@@ -142,11 +137,7 @@ impl DmemCurrent {
   pub const fn regions(&self) -> &BTreeMap<String, MaxOr<Bytes>> { &self.regions }
 }
 
-impl FromStr for DmemCurrent {
-  type Err = ParseError<ParseValueError>;
-
-  fn from_str(contents: &str) -> Result<Self, Self::Err> { Ok(Self { regions: parse_regions(contents)? }) }
-}
+cgroup_value! { map DmemCurrent, regions: ParseBytes, "bytes" }
 
 /// Historical maximum device-memory usage by region for this cgroup and descendants.
 ///
@@ -173,11 +164,7 @@ impl DmemPeak {
   pub const fn regions(&self) -> &BTreeMap<String, MaxOr<Bytes>> { &self.regions }
 }
 
-impl FromStr for DmemPeak {
-  type Err = ParseError<ParseValueError>;
-
-  fn from_str(contents: &str) -> Result<Self, Self::Err> { Ok(Self { regions: parse_regions(contents)? }) }
-}
+cgroup_value! { map DmemPeak, regions: ParseBytes, "bytes" }
 
 /// A configuration snapshot from `dmem.max`, `dmem.min`, or `dmem.low`.
 ///
@@ -210,17 +197,7 @@ impl DmemLimits {
   pub const fn regions(&self) -> &BTreeMap<String, MaxOr<Bytes>> { &self.regions }
 }
 
-impl FromStr for DmemLimits {
-  type Err = ParseError<ParseValueError>;
-
-  fn from_str(contents: &str) -> Result<Self, Self::Err> { Ok(Self { regions: parse_regions(contents)? }) }
-}
-
-fn parse_regions<T>(contents: &str) -> Result<BTreeMap<String, T>, ParseError<ParseValueError>>
-where
-  T: ParseCgroup<ParseBytes, Error = ParseValueError>, {
-  KeyedFields::parse(contents, |_| "bytes")?.parse_values::<ParseBytes, T>("bytes")
-}
+cgroup_value! { map DmemLimits, regions: ParseBytes, "bytes" }
 
 #[cfg(test)]
 mod tests {

@@ -3,7 +3,7 @@
 //! HugeTLB pages are distinct from transparent huge pages. Each supported page
 //! size has its own interfaces; reads do not allocate pages or reservations.
 
-use std::{collections::BTreeMap, fmt, str::FromStr};
+use std::{collections::BTreeMap, fmt, fmt::Write, str::FromStr};
 
 use nutype::nutype;
 use uom::si::information::byte;
@@ -15,7 +15,7 @@ use crate::Error;
 use crate::{
   error::{ParseError, ParseValueError},
   limit::MaxOr,
-  parse::{KeyedFields, ParseBytes, ParseCgroup, ParseCount, Parser},
+  parse::{EncodeCgroup, KeyedFields, ParseBytes, ParseCgroup, ParseCount, cgroup_value},
   unit::{Bytes, Count},
 };
 
@@ -43,6 +43,8 @@ use crate::{
   derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, AsRef)
 )]
 pub struct PageSize(Bytes);
+
+cgroup_value! { display PageSize }
 
 impl PageSize {
   const GIBIBYTE: u64 = 1 << 30;
@@ -201,13 +203,7 @@ macro_rules! scalar {
       pub const fn value(&self) -> $value { self.value }
     }
 
-    impl FromStr for $name {
-      type Err = ParseError<ParseValueError>;
-
-      fn from_str(contents: &str) -> Result<Self, Self::Err> {
-        Ok(Self { value: Parser::single::<ParseBytes, _>(contents, $field)? })
-      }
-    }
+    cgroup_value! { scalar $name, value: ParseBytes, $field }
   };
 }
 
@@ -264,14 +260,7 @@ impl HugetlbEvents {
   pub const fn max(&self) -> Count { self.max }
 }
 
-impl FromStr for HugetlbEvents {
-  type Err = ParseError<ParseValueError>;
-
-  fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    let fields = KeyedFields::parse(contents, |_| "value")?;
-    Ok(Self { max: fields.required::<ParseCount, _>("max")? })
-  }
-}
+cgroup_value! { keyed HugetlbEvents, |_| "value", { max: required ParseCount => "max" } }
 
 /// Hierarchical in-use HugeTLB bytes and NUMA distribution for one page size.
 ///
@@ -302,6 +291,25 @@ impl HugetlbNumaStat {
   pub const fn nodes(&self) -> &BTreeMap<u32, Bytes> { &self.nodes }
 }
 
+const NUMA_TOTAL: &str = "total";
+
+impl HugetlbNumaStat {
+  /// Encodes the stored value as canonical cgroup text.
+  ///
+  /// # Errors
+  ///
+  /// Returns an error if a field cannot be represented exactly.
+  pub fn encode_cgroup(&self) -> Result<String, crate::error::EncodeError> {
+    let mut output = String::new();
+    crate::parse::encode_pair::<ParseBytes, _>(&mut output, " ", '=', NUMA_TOTAL, &self.total)?;
+    for (node, value) in &self.nodes {
+      write!(output, " N{node}=").map_err(|_error| crate::error::EncodeError { field: "node" })?;
+      EncodeCgroup::<ParseBytes>::encode_field(value, &mut output, "usage")?;
+    }
+    Ok(output)
+  }
+}
+
 impl FromStr for HugetlbNumaStat {
   type Err = ParseError<ParseValueError>;
 
@@ -312,7 +320,7 @@ impl FromStr for HugetlbNumaStat {
         token.split_once('=').ok_or_else(|| ParseError::invalid(contents, "value", token, ParseValueError::OutOfRange))
       }),
     )?;
-    let total = fields.required::<ParseBytes, _>("total")?;
+    let total = fields.required::<ParseBytes, _>(NUMA_TOTAL)?;
     let nodes = fields
       .iter()
       .filter_map(|(key, value)| key.strip_prefix('N').map(|node| (key, node, value)))

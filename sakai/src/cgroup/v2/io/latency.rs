@@ -36,12 +36,33 @@ impl IoLatency {
   pub const fn devices(&self) -> &BTreeMap<Device, NonZeroTime> { &self.devices }
 }
 
+const TARGET: &str = "target";
+
+impl IoLatency {
+  /// Encodes the stored value as canonical cgroup text.
+  ///
+  /// # Errors
+  ///
+  /// Returns an error if a field cannot be represented exactly.
+  pub fn encode_cgroup(&self) -> Result<String, crate::error::EncodeError> {
+    let mut output = String::new();
+    for (device, target) in &self.devices {
+      if !output.is_empty() {
+        output.push('\n');
+      }
+      output.push_str(&device.to_string());
+      crate::parse::encode_pair::<ParseNonZeroMicroseconds, _>(&mut output, " ", '=', TARGET, target)?;
+    }
+    Ok(output)
+  }
+}
+
 impl FromStr for IoLatency {
   type Err = ParseError<ParseValueError>;
 
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
     Ok(Self {
-      devices: Device::parse_lines(contents, |fields| fields.required::<ParseNonZeroMicroseconds, _>("target"))?,
+      devices: Device::parse_lines(contents, |fields| fields.required::<ParseNonZeroMicroseconds, _>(TARGET))?,
     })
   }
 }

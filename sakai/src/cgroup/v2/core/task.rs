@@ -1,7 +1,13 @@
+use std::fmt::Write;
+
 use nutype::nutype;
 
 #[cfg(any(target_os = "linux", test))]
-use crate::error::{ParseError, ParseValueError};
+use crate::error::ParseError;
+use crate::{
+  error::ParseValueError,
+  parse::{EncodeCgroup, ParseCgroup, cgroup_value},
+};
 
 /// A process or thread ID reported in the reader's PID namespace.
 ///
@@ -27,14 +33,26 @@ impl TaskId {
     contents
       .lines()
       .filter(|line| !line.trim().is_empty())
-      .map(|line| {
-        let raw = line.trim();
-        let id = raw.parse::<i32>().map_err(|error| ParseError::invalid(contents, "task_id", raw, error.into()))?;
-        Self::try_new(id).map_err(|_error| ParseError::invalid(contents, "task_id", raw, ParseValueError::OutOfRange))
-      })
+      .map(|line| <Self as ParseCgroup<Self>>::parse_field(contents, TASK_ID, line.trim()))
       .collect()
   }
 }
+
+const TASK_ID: &str = "task_id";
+
+impl ParseCgroup<Self> for TaskId {
+  type Error = ParseValueError;
+
+  fn parse_cgroup(value: &str) -> Result<Self, Self::Error> {
+    Self::try_new(value.parse::<i32>()?).map_err(|_error| ParseValueError::OutOfRange)
+  }
+}
+
+impl EncodeCgroup<Self> for TaskId {
+  fn encode_token(&self, output: &mut String) -> Option<()> { write!(output, "{}", self.as_ref()).ok() }
+}
+
+cgroup_value! { token TaskId: TaskId, TASK_ID }
 
 #[cfg(test)]
 mod tests {

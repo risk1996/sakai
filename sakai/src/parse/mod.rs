@@ -10,7 +10,7 @@ use crate::{
 };
 
 mod codec;
-pub(crate) use codec::{EncodeCgroup, cgroup_value};
+pub(crate) use codec::{EncodeCgroup, cgroup_value, encode_pair};
 
 const MAX_TOKEN: &str = "max";
 
@@ -162,6 +162,10 @@ impl ParseCgroup<ParseBoolean> for bool {
   }
 }
 
+impl EncodeCgroup<ParseBoolean> for bool {
+  fn encode_token(&self, output: &mut String) -> Option<()> { write!(output, "{}", u8::from(*self)).ok() }
+}
+
 /// A zero-sized marker for cgroup event counts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct ParseCount;
@@ -172,6 +176,10 @@ impl ParseCgroup<ParseCount> for Count {
   fn parse_cgroup(value: &str) -> Result<Self, Self::Error> { Ok(Self { value: value.parse()?, ..Default::default() }) }
 }
 
+impl EncodeCgroup<ParseCount> for Count {
+  fn encode_token(&self, output: &mut String) -> Option<()> { write!(output, "{}", self.value).ok() }
+}
+
 /// A zero-sized marker for cgroup page quantities.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct ParsePages;
@@ -180,6 +188,10 @@ impl ParseCgroup<ParsePages> for Pages {
   type Error = ParseValueError;
 
   fn parse_cgroup(value: &str) -> Result<Self, Self::Error> { Ok(Self { value: value.parse()?, ..Default::default() }) }
+}
+
+impl EncodeCgroup<ParsePages> for Pages {
+  fn encode_token(&self, output: &mut String) -> Option<()> { write!(output, "{}", self.value).ok() }
 }
 
 /// A zero-sized marker for cgroup memory amounts encoded in bytes.
@@ -214,6 +226,29 @@ impl ParseCgroup<ParsePercent> for Ratio {
   }
 }
 
+impl EncodeCgroup<ParsePercent> for Ratio {
+  fn encode_token(&self, output: &mut String) -> Option<()> {
+    encode_percent(self, output, |value| Percent::try_new(value).is_ok())
+  }
+}
+
+pub(crate) fn encode_percent(value: &Ratio, output: &mut String, valid: impl Fn(f64) -> bool) -> Option<()> {
+  let candidate = value.get::<percent>();
+  // Unit conversion rounds. Try neighboring decimal values and check the decoded bits.
+  let exact = [candidate, candidate.next_down(), candidate.next_up()]
+    .into_iter()
+    .find(|&candidate| valid(candidate) && Ratio::new::<percent>(candidate).value.to_bits() == value.value.to_bits())?;
+  write!(output, "{exact}").ok()
+}
+
+pub(crate) fn encode_scaled_time(value: &Time, output: &mut String, scale: u64) -> Option<()> {
+  let nanoseconds = value.get::<nanosecond>();
+  if nanoseconds.checked_rem(scale)? != 0 {
+    return None;
+  }
+  write!(output, "{}", nanoseconds.checked_div(scale)?).ok()
+}
+
 /// A zero-sized marker for cgroup values encoded in microseconds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct ParseMicroseconds;
@@ -234,6 +269,12 @@ impl ParseCgroup<ParseMicroseconds> for Time {
   }
 }
 
+impl EncodeCgroup<ParseMicroseconds> for Time {
+  fn encode_token(&self, output: &mut String) -> Option<()> {
+    encode_scaled_time(self, output, ParseMicroseconds::NANOSECONDS_PER_MICROSECOND)
+  }
+}
+
 /// A zero-sized marker for nonzero cgroup values encoded in microseconds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct ParseNonZeroMicroseconds;
@@ -249,12 +290,7 @@ impl ParseCgroup<ParseNonZeroMicroseconds> for NonZeroTime {
 
 impl EncodeCgroup<ParseNonZeroMicroseconds> for NonZeroTime {
   fn encode_token(&self, output: &mut String) -> Option<()> {
-    let nanoseconds = self.as_ref().get::<nanosecond>();
-    let scale = ParseMicroseconds::NANOSECONDS_PER_MICROSECOND;
-    if nanoseconds % scale != 0 {
-      return None;
-    }
-    write!(output, "{}", nanoseconds / scale).ok()
+    EncodeCgroup::<ParseMicroseconds>::encode_token(self.as_ref(), output)
   }
 }
 

@@ -31,18 +31,18 @@ for snapshots and commands. [Linux cgroup v2 interface documentation](https://do
 
 ## Decision Outcome
 
-Use a crate-local `cgroup_value!` macro where a declaration must drive both
-struct construction and field projection. The positional arm generates
-`FromStr` and `encode_cgroup()` from the same field list. A scalar
-already has one field and one encoding marker in `Scalar`, so its two
-directions can reuse that definition directly.
+Use a crate-local `cgroup_value!` macro where a declaration drives both
+struct construction and field projection. Positional records, keyed fields,
+and homogeneous maps declare their fields and token encodings once. Scalars
+reuse the encoding marker already selected by `Scalar`. Formats with
+interface-specific validation compose those codecs in ordinary Rust.
 
-Start with the full two-field `cpu.max` record and byte-limit scalars such
-as `memory.max`. Reuse the existing ASCII whitespace parser and return
-canonical text without a trailing newline. A fallible encoder reports
-values that cannot be represented exactly, such as a period with a
-sub-microsecond remainder. Text encoding is independent of file access and
-kernel validation.
+Reuse the existing parsers and emit canonical text without a trailing newline.
+Encoding preserves the typed snapshot, including optional fields, and reports
+values that cannot be represented exactly. For example, a duration with a
+sub-microsecond remainder cannot be encoded in whole microseconds. An
+`io.stat` row containing only unknown counters has no retained fields to
+encode. Text encoding is independent of file access and kernel validation.
 
 ### Consequences
 

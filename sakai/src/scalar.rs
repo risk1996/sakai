@@ -82,17 +82,18 @@ where
   }
 }
 
-impl<I: Interface> Scalar<MaxOr<Bytes>, I> {
-  /// Encodes the limit as decimal bytes or `max`, with no trailing newline.
-  /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
+#[expect(private_bounds, reason = "encoding markers are internal to supported scalar types")]
+impl<T: Copy + ScalarValue + EncodeCgroup<ScalarEncoding<T>>, I: Interface> Scalar<T, I> {
+  /// Encodes the value as a canonical cgroup token, with no trailing newline.
+  /// See [Linux cgroup file formats](https://docs.kernel.org/admin-guide/cgroup-v2.html#format).
   ///
   /// # Errors
   ///
-  /// Byte limits are always representable. The return type matches other
-  /// cgroup encoders whose values can fail exact unit conversion.
+  /// Returns an error if the value cannot be represented exactly in the
+  /// interface's text format.
   pub fn encode_cgroup(&self) -> Result<String, EncodeError> {
     let mut output = String::new();
-    EncodeCgroup::<ScalarEncoding<MaxOr<Bytes>>>::encode_field(&self.value, &mut output, I::FIELD)?;
+    EncodeCgroup::<ScalarEncoding<T>>::encode_field(&self.value, &mut output, I::FIELD)?;
     Ok(output)
   }
 }

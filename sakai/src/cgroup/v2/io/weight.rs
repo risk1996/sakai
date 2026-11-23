@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, str::FromStr};
+use std::{collections::BTreeMap, fmt::Write, str::FromStr};
 
 use nutype::nutype;
 
@@ -52,15 +52,34 @@ impl IoWeight {
   pub const fn devices(&self) -> &BTreeMap<Device, Weight> { &self.devices }
 }
 
+const DEFAULT_WEIGHT_KEY: &str = "default";
+
+impl IoWeight {
+  /// Encodes the stored value as canonical cgroup text.
+  ///
+  /// # Errors
+  ///
+  /// Returns an error if a field cannot be represented exactly.
+  pub fn encode_cgroup(&self) -> Result<String, crate::error::EncodeError> {
+    let mut output = String::new();
+    let error = |_error| crate::error::EncodeError { field: "weight" };
+    write!(output, "{DEFAULT_WEIGHT_KEY} {}", self.default.as_ref()).map_err(error)?;
+    for (device, weight) in &self.devices {
+      write!(output, "\n{device} {}", weight.as_ref()).map_err(error)?;
+    }
+    Ok(output)
+  }
+}
+
 impl FromStr for IoWeight {
   type Err = ParseError<ParseValueError>;
 
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
     let fields = KeyedFields::parse(contents, |_| "weight")?;
-    let default = fields.required::<ParseWeight, _>("default")?;
+    let default = fields.required::<ParseWeight, _>(DEFAULT_WEIGHT_KEY)?;
     let devices = fields
       .iter()
-      .filter(|(key, _)| *key != "default")
+      .filter(|(key, _)| *key != DEFAULT_WEIGHT_KEY)
       .map(|(key, value)| Ok((Device::parse(contents, key)?, Weight::parse_field(contents, "weight", value)?)))
       .collect::<Result<_, Self::Err>>()?;
     Ok(Self { default, devices })

@@ -1,15 +1,12 @@
 //! Process-number accounting and limits. Kernel PID counts include threads.
 
-use std::str::FromStr;
-
 #[cfg(target_os = "linux")]
 use super::Cgroup;
 #[cfg(target_os = "linux")]
 use crate::error::Error;
 use crate::{
-  error::{ParseError, ParseValueError},
   limit::MaxOr,
-  parse::{KeyedFields, ParseCount},
+  parse::{ParseCount, cgroup_value},
   scalar::{Scalar, interface},
   unit::Count,
 };
@@ -128,14 +125,9 @@ impl PidsEvents {
   pub const fn max(&self) -> Count { self.max }
 }
 
-impl FromStr for PidsEvents {
-  type Err = ParseError<ParseValueError>;
-
-  fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    let fields = KeyedFields::parse(contents, |_| "value")?;
-    Ok(Self { max: fields.required::<ParseCount, _>("max")? })
-  }
-}
+cgroup_value! { keyed PidsEvents, |_| "value", {
+  max: required ParseCount => "max",
+} }
 
 #[cfg(test)]
 mod tests {

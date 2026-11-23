@@ -1,10 +1,10 @@
-use std::str::FromStr;
+use std::fmt::Write;
 
 use nutype::nutype;
 
 use crate::{
-  error::{ParseError, ParseValueError},
-  parse::{ParseCgroup, Parser},
+  error::ParseValueError,
+  parse::{EncodeCgroup, ParseCgroup, cgroup_value},
 };
 
 /// A relative CPU scheduling weight from 1 through 10,000, with a default of 100.
@@ -46,13 +46,7 @@ impl CpuWeight {
   pub const FILE_NAME: &'static str = "cpu.weight";
 }
 
-impl FromStr for CpuWeight {
-  type Err = ParseError<ParseValueError>;
-
-  fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    Parser::parse(contents, |parser| parser.next_field::<ParseCpuWeight, _>("weight"))
-  }
-}
+cgroup_value! { token CpuWeight: ParseCpuWeight, "weight" }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct ParseCpuWeight;
@@ -65,6 +59,16 @@ impl ParseCgroup<ParseCpuWeight> for CpuWeight {
       | 0 => Ok(Self::Idle),
       | value => Weight::try_new(value).map(Self::Shares).map_err(|_error| ParseValueError::OutOfRange),
     }
+  }
+}
+
+impl EncodeCgroup<ParseCpuWeight> for CpuWeight {
+  fn encode_token(&self, output: &mut String) -> Option<()> {
+    let value = match self {
+      | Self::Idle => 0,
+      | Self::Shares(weight) => weight.into_inner(),
+    };
+    write!(output, "{value}").ok()
   }
 }
 

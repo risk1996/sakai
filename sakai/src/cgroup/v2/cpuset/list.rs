@@ -1,4 +1,4 @@
-use std::{ops::RangeInclusive, str::FromStr};
+use std::{fmt::Write, ops::RangeInclusive, str::FromStr};
 
 use crate::error::{ParseError, ParseValueError};
 
@@ -8,20 +8,23 @@ struct IdList {
   ranges: Vec<RangeInclusive<u32>>,
 }
 
+const RANGE_SEPARATOR: char = '-';
+const LIST_SEPARATOR: char = ',';
+
 impl IdList {
   fn parse(raw: &str, field: &'static str) -> Result<Self, ParseError<ParseValueError>> {
     let value = raw.trim();
     let ranges = match value.is_empty() {
       | true => Vec::new(),
       | false => value
-        .split(',')
+        .split(LIST_SEPARATOR)
         .map(|part| {
           let invalid = |source| ParseError::invalid(raw, field, part, source);
           let number = |text: &str| match !text.is_empty() && text.bytes().all(|byte| byte.is_ascii_digit()) {
             | true => text.parse::<u32>().map_err(|error| invalid(error.into())),
             | false => Err(invalid(ParseValueError::OutOfRange)),
           };
-          let (start, end) = match part.split_once('-') {
+          let (start, end) = match part.split_once(RANGE_SEPARATOR) {
             | Some((start, end)) => (number(start)?, number(end)?),
             | None => {
               let id = number(part)?;
@@ -74,6 +77,29 @@ macro_rules! placement_list {
       /// Tests membership in the stored snapshot without kernel I/O.
       #[must_use]
       pub fn contains(&self, id: u32) -> bool { self.list.ranges.iter().any(|range| range.contains(&id)) }
+    }
+
+    impl $name {
+      /// Encodes the stored IDs as a comma-separated list of IDs and ranges.
+      ///
+      /// # Errors
+      ///
+      /// All stored ID ranges are representable.
+      pub fn encode_cgroup(&self) -> Result<String, crate::error::EncodeError> {
+        let mut output = String::new();
+        for range in &self.list.ranges {
+          if !output.is_empty() {
+            output.push(LIST_SEPARATOR);
+          }
+          if range.start() == range.end() {
+            write!(output, "{}", range.start()).map_err(|_error| crate::error::EncodeError { field: $field })?;
+          } else {
+            write!(output, "{}{RANGE_SEPARATOR}{}", range.start(), range.end())
+              .map_err(|_error| crate::error::EncodeError { field: $field })?;
+          }
+        }
+        Ok(output)
+      }
     }
 
     impl FromStr for $name {

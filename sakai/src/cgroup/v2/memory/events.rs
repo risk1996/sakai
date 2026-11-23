@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use crate::{
   error::{ParseError, ParseValueError},
-  parse::{KeyedFields, ParseCount},
+  parse::{ParseCount, cgroup_value},
   unit::Count,
 };
 
@@ -22,6 +22,13 @@ impl MemoryEvents {
   ///
   /// See [Linux `memory.events` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   pub const FILE_NAME: &'static str = "memory.events";
+
+  /// Encodes the stored counters as canonical cgroup text.
+  ///
+  /// # Errors
+  ///
+  /// Returns an error if a field cannot be represented exactly.
+  pub fn encode_cgroup(&self) -> Result<String, crate::error::EncodeError> { self.counts.encode_cgroup() }
 
   /// Returns the event counts, measured as numbers of occurrences.
   ///
@@ -52,6 +59,13 @@ impl MemoryEventsLocal {
   ///
   /// See [Linux `memory.events.local` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   pub const FILE_NAME: &'static str = "memory.events.local";
+
+  /// Encodes the stored counters as canonical cgroup text.
+  ///
+  /// # Errors
+  ///
+  /// Returns an error if a field cannot be represented exactly.
+  pub fn encode_cgroup(&self) -> Result<String, crate::error::EncodeError> { self.counts.encode_cgroup() }
 
   /// Returns the local event counts, measured as numbers of occurrences.
   ///
@@ -133,23 +147,15 @@ impl MemoryEventCounts {
   pub const fn sock_throttled(&self) -> Option<Count> { self.sock_throttled }
 }
 
-impl FromStr for MemoryEventCounts {
-  type Err = ParseError<ParseValueError>;
-
-  fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    let fields = KeyedFields::parse(contents, |_| "value")?;
-
-    Ok(Self {
-      low: fields.required::<ParseCount, _>("low")?,
-      high: fields.required::<ParseCount, _>("high")?,
-      max: fields.required::<ParseCount, _>("max")?,
-      oom: fields.required::<ParseCount, _>("oom")?,
-      oom_kill: fields.required::<ParseCount, _>("oom_kill")?,
-      oom_group_kill: fields.optional::<ParseCount, _>("oom_group_kill")?,
-      sock_throttled: fields.optional::<ParseCount, _>("sock_throttled")?,
-    })
-  }
-}
+cgroup_value! { keyed MemoryEventCounts, |_| "value", {
+  low: required ParseCount => "low",
+  high: required ParseCount => "high",
+  max: required ParseCount => "max",
+  oom: required ParseCount => "oom",
+  oom_kill: required ParseCount => "oom_kill",
+  oom_group_kill: optional ParseCount => "oom_group_kill",
+  sock_throttled: optional ParseCount => "sock_throttled",
+} }
 
 #[cfg(test)]
 mod tests {

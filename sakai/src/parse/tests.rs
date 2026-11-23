@@ -4,7 +4,70 @@ use assertables::{assert_err, assert_ok};
 use uom::si::information::byte;
 
 use super::*;
-use crate::error::FieldKind;
+use crate::{
+  Pressure,
+  error::FieldKind,
+  v2::{
+    core::{CgroupEvents, CgroupStat, TaskId},
+    cpu::{CpuMaxBurst, CpuStat, CpuUclampMax, CpuWeight, Nice},
+    cpuset::{CpuList, CpusetPartition},
+    dmem::DmemLimits,
+    hugetlb::{HugetlbMax, HugetlbNumaStat},
+    io::{IoCostModel, IoCostQos, IoLatency, IoMax, IoStat, IoWeight},
+    memory::{MemoryEvents, MemoryNumaStat, MemoryStat},
+    misc::MiscEvents,
+    pids::PidsMax,
+    rdma::{RdmaCurrent, RdmaEvents, RdmaMax},
+  },
+};
+
+#[test]
+fn cgroup_codecs_round_trip_representative_snapshots() {
+  macro_rules! round_trip {
+    ($ty:ty, $input:expr) => {{
+      let value = assert_ok!($input.parse::<$ty>());
+      let encoded = assert_ok!(value.encode_cgroup());
+      assert_eq!(assert_ok!(encoded.parse::<$ty>()), value, "{}", stringify!($ty));
+      encoded
+    }};
+  }
+
+  assert_eq!(round_trip!(CpuMaxBurst, " +025000\n"), "25000");
+  assert_eq!(round_trip!(CpuUclampMax, "12.34\n"), "12.34");
+  assert_eq!(round_trip!(CpuWeight, "0000\n"), "0");
+  assert_eq!(round_trip!(Nice, "+05 "), "5");
+  assert_eq!(round_trip!(PidsMax, " max\n"), "max");
+  assert_eq!(round_trip!(TaskId, "00042\n"), "42");
+  assert_eq!(round_trip!(CgroupEvents, "frozen 0\npopulated 1"), "populated 1\nfrozen 0");
+  assert_eq!(round_trip!(CpuList, "00-0002,004-004\n"), "0-2,4");
+  assert_eq!(round_trip!(CpusetPartition, "root invalid (no cpu)\n"), "root invalid (no cpu)");
+  assert_eq!(round_trip!(HugetlbMax, "max\n"), "max");
+  assert_eq!(round_trip!(HugetlbNumaStat, "N1=0 total=4096 N0=4096"), "total=4096 N0=4096 N1=0");
+  assert_eq!(round_trip!(DmemLimits, "a max\nb 4096\n"), "a max\nb 4096");
+  assert_eq!(round_trip!(MiscEvents, "sev.max 1\n"), "sev.max 1");
+  assert_eq!(round_trip!(MemoryStat, "file 2\nanon 1"), "anon 1\nfile 2");
+  assert_eq!(round_trip!(MemoryNumaStat, "file N0=5\nanon N2=4 N0=1"), "anon N0=1 N2=4\nfile N0=5");
+  assert_eq!(
+    round_trip!(CgroupStat, "nr_dying_descendants 0\nnr_descendants 1\nnr_subsys_cpu 1"),
+    "nr_descendants 1\nnr_dying_descendants 0\nnr_subsys_cpu 1"
+  );
+  assert_eq!(
+    round_trip!(MemoryEvents, "oom 0\nmax 0\nhigh 0\nlow 0\noom_kill 1"),
+    "low 0\nhigh 0\nmax 0\noom 0\noom_kill 1"
+  );
+  round_trip!(CpuStat, "system_usec 5\nuser_usec 5\nusage_usec 10\nnr_periods -1\nnr_throttled 1\nthrottled_usec 3");
+  assert_eq!(round_trip!(IoMax, "8:0 wiops=1 rbps=max riops=2 wbps=max"), "8:0 rbps=max wbps=max riops=2 wiops=1");
+  round_trip!(IoLatency, include_str!("../cgroup/v2/fixtures/p3/io.latency"));
+  round_trip!(IoWeight, include_str!("../cgroup/v2/fixtures/p3/io.weight"));
+  round_trip!(IoStat, include_str!("../cgroup/v2/fixtures/p3/io.stat"));
+  round_trip!(IoCostQos, "8:1 enable=1 ctrl=auto rpct=95.00 rlat=123 wpct=90.00 wlat=200 min=50.00 max=150.00");
+  round_trip!(IoCostModel, "8:1 ctrl=auto model=linear rbps=1 rseqiops=2 rrandiops=3 wbps=4 wseqiops=5 wrandiops=6");
+  round_trip!(Pressure, include_str!("../cgroup/v2/fixtures/p3/io.pressure"));
+  round_trip!(RdmaCurrent, include_str!("../cgroup/v2/fixtures/p6/rdma.current"));
+  round_trip!(RdmaEvents, include_str!("../cgroup/v2/fixtures/p6/rdma.events"));
+  round_trip!(RdmaMax, include_str!("../cgroup/v2/fixtures/p6/rdma.max"));
+  assert_eq!(assert_err!(assert_ok!("8:0 future=1".parse::<IoStat>()).encode_cgroup()).field(), "value");
+}
 
 /// Parser cases assert values and structured errors without repeating diagnostics.
 pub(crate) struct Cases<T>(PhantomData<T>);

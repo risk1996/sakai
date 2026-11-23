@@ -1,13 +1,13 @@
-use std::{collections::BTreeMap, str::FromStr};
+use std::{collections::BTreeMap, fmt::Write};
 
 use nutype::nutype;
 use uom::si::{ratio::percent, time::nanosecond};
 
 use super::Device;
 use crate::{
-  error::{ParseError, ParseValueError},
+  error::ParseValueError,
   limit::MaxOr,
-  parse::{KeyedFields, ParseBytes, ParseCgroup, ParseCount, ParseMicroseconds},
+  parse::{EncodeCgroup, ParseBytes, ParseCgroup, ParseCount, ParseMicroseconds, cgroup_value},
   unit::{Bytes, Count, Ratio, Time},
 };
 
@@ -187,29 +187,6 @@ impl IoDeviceStat {
   /// See the [Linux cost statistics source](https://github.com/torvalds/linux/blob/v5.10/block/blk-iocost.c).
   #[must_use]
   pub const fn cost_vrate(&self) -> Option<Ratio> { self.cost_vrate }
-
-  fn from_fields(fields: KeyedFields<'_>) -> Result<Self, ParseError<ParseValueError>> {
-    Ok(Self {
-      read_bytes: fields.optional::<ParseBytes, _>("rbytes")?,
-      write_bytes: fields.optional::<ParseBytes, _>("wbytes")?,
-      discard_bytes: fields.optional::<ParseBytes, _>("dbytes")?,
-      read_operations: fields.optional::<ParseCount, _>("rios")?,
-      write_operations: fields.optional::<ParseCount, _>("wios")?,
-      discard_operations: fields.optional::<ParseCount, _>("dios")?,
-      delay_usage: fields.optional::<DelayUsage, _>("use_delay")?,
-      delay: fields.optional::<ParseNanoseconds, _>("delay_nsec")?,
-      depth: fields.optional::<ParseCount, _>("depth")?,
-      average_latency: fields.optional::<ParseMicroseconds, _>("avg_lat")?,
-      latency_window: fields.optional::<ParseMilliseconds, _>("win")?,
-      missed: fields.optional::<ParseCount, _>("missed")?,
-      total: fields.optional::<ParseCount, _>("total")?,
-      cost_usage: fields.optional::<ParseMicroseconds, _>("cost.usage")?,
-      cost_wait: fields.optional::<ParseMicroseconds, _>("cost.wait")?,
-      cost_indebt: fields.optional::<ParseMicroseconds, _>("cost.indebt")?,
-      cost_indelay: fields.optional::<ParseMicroseconds, _>("cost.indelay")?,
-      cost_vrate: fields.optional::<ParseCostPercent, _>("cost.vrate")?,
-    })
-  }
 }
 
 /// The kernel's signed `use_delay` debug indicator.
@@ -252,23 +229,59 @@ impl ParseCgroup<ParseNanoseconds> for Time {
   fn parse_cgroup(value: &str) -> Result<Self, Self::Error> { Ok(Self::new::<nanosecond>(value.parse()?)) }
 }
 
+const NANOSECONDS_PER_MILLISECOND: u64 = 1_000_000;
+
 struct ParseMilliseconds;
 
 impl ParseCgroup<ParseMilliseconds> for Time {
   type Error = ParseValueError;
 
   fn parse_cgroup(value: &str) -> Result<Self, Self::Error> {
-    const NANOSECONDS_PER_MILLISECOND: u64 = 1_000_000;
     let nanos = value.parse::<u64>()?.checked_mul(NANOSECONDS_PER_MILLISECOND).ok_or(ParseValueError::OutOfRange)?;
     Ok(Self::new::<nanosecond>(nanos))
   }
 }
 
-impl FromStr for IoStat {
-  type Err = ParseError<ParseValueError>;
+cgroup_value! { fields IoDeviceStat, {
+  read_bytes: optional ParseBytes => "rbytes",
+  write_bytes: optional ParseBytes => "wbytes",
+  discard_bytes: optional ParseBytes => "dbytes",
+  read_operations: optional ParseCount => "rios",
+  write_operations: optional ParseCount => "wios",
+  discard_operations: optional ParseCount => "dios",
+  delay_usage: optional DelayUsage => "use_delay",
+  delay: optional ParseNanoseconds => "delay_nsec",
+  depth: optional ParseCount => "depth",
+  average_latency: optional ParseMicroseconds => "avg_lat",
+  latency_window: optional ParseMilliseconds => "win",
+  missed: optional ParseCount => "missed",
+  total: optional ParseCount => "total",
+  cost_usage: optional ParseMicroseconds => "cost.usage",
+  cost_wait: optional ParseMicroseconds => "cost.wait",
+  cost_indebt: optional ParseMicroseconds => "cost.indebt",
+  cost_indelay: optional ParseMicroseconds => "cost.indelay",
+  cost_vrate: optional ParseCostPercent => "cost.vrate",
+} }
 
-  fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    Ok(Self { devices: Device::parse_lines(contents, IoDeviceStat::from_fields)? })
+cgroup_value! { device_rows IoStat, devices: IoDeviceStat, Device::parse_lines }
+
+impl EncodeCgroup<DelayUsage> for DelayUsage {
+  fn encode_token(&self, output: &mut String) -> Option<()> { write!(output, "{}", self.as_ref()).ok() }
+}
+
+impl EncodeCgroup<ParseNanoseconds> for Time {
+  fn encode_token(&self, output: &mut String) -> Option<()> { write!(output, "{}", self.get::<nanosecond>()).ok() }
+}
+
+impl EncodeCgroup<ParseMilliseconds> for Time {
+  fn encode_token(&self, output: &mut String) -> Option<()> {
+    crate::parse::encode_scaled_time(self, output, NANOSECONDS_PER_MILLISECOND)
+  }
+}
+
+impl EncodeCgroup<ParseCostPercent> for Ratio {
+  fn encode_token(&self, output: &mut String) -> Option<()> {
+    crate::parse::encode_percent(self, output, |value| CostPercent::try_new(value).is_ok())
   }
 }
 

@@ -74,6 +74,36 @@ impl CpusetPartition {
   }
 }
 
+const MEMBER: &str = "member";
+const ROOT: &str = "root";
+const ISOLATED: &str = "isolated";
+const INVALID: &str = " invalid";
+
+impl CpusetPartition {
+  /// Encodes the stored partition state and any diagnostic reason.
+  ///
+  /// # Errors
+  ///
+  /// Returns an error if the reason is blank or spans multiple lines.
+  pub fn encode_cgroup(&self) -> Result<String, crate::error::EncodeError> {
+    let (state, invalid, reason) = match self {
+      | Self::Member => (MEMBER, false, None),
+      | Self::Root => (ROOT, false, None),
+      | Self::Isolated => (ISOLATED, false, None),
+      | Self::RootInvalid { reason } => (ROOT, true, reason.as_deref()),
+      | Self::IsolatedInvalid { reason } => (ISOLATED, true, reason.as_deref()),
+    };
+    match reason {
+      | Some(reason) if Self::valid_reason(reason) => Ok(format!("{state}{INVALID} ({reason})")),
+      | Some(_) => Err(crate::error::EncodeError { field: "partition" }),
+      | None if invalid => Ok(format!("{state}{INVALID}")),
+      | None => Ok(state.to_owned()),
+    }
+  }
+
+  fn valid_reason(reason: &str) -> bool { !reason.trim().is_empty() && !reason.contains(['\n', '\r']) }
+}
+
 impl FromStr for CpusetPartition {
   type Err = ParseError<ParseValueError>;
 
@@ -82,20 +112,26 @@ impl FromStr for CpusetPartition {
     let invalid = || ParseError::invalid(raw, "partition", value, ParseValueError::OutOfRange);
     match value {
       | "" => Err(ParseError::missing(raw, "partition")),
-      | "member" => Ok(Self::Member),
-      | "root" => Ok(Self::Root),
-      | "isolated" => Ok(Self::Isolated),
-      | "root invalid" => Ok(Self::RootInvalid { reason: None }),
-      | "isolated invalid" => Ok(Self::IsolatedInvalid { reason: None }),
+      | MEMBER => Ok(Self::Member),
+      | ROOT => Ok(Self::Root),
+      | ISOLATED => Ok(Self::Isolated),
       | _ => {
-        let (state, reason) = value.split_once(" invalid (").ok_or_else(invalid)?;
-        let reason = reason
-          .strip_suffix(')')
-          .filter(|reason| !reason.trim().is_empty() && !reason.contains(['\n', '\r']))
-          .ok_or_else(invalid)?;
+        let (state, suffix) = value.split_once(INVALID).ok_or_else(invalid)?;
+        let reason = if suffix.is_empty() {
+          None
+        } else {
+          Some(
+            suffix
+              .strip_prefix(" (")
+              .and_then(|reason| reason.strip_suffix(')'))
+              .filter(|reason| Self::valid_reason(reason))
+              .ok_or_else(invalid)?
+              .into(),
+          )
+        };
         match state {
-          | "root" => Ok(Self::RootInvalid { reason: Some(reason.into()) }),
-          | "isolated" => Ok(Self::IsolatedInvalid { reason: Some(reason.into()) }),
+          | ROOT => Ok(Self::RootInvalid { reason }),
+          | ISOLATED => Ok(Self::IsolatedInvalid { reason }),
           | _ => Err(invalid()),
         }
       },

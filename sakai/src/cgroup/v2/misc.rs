@@ -5,7 +5,7 @@
 //! mean no resources were reported; absence of a resource is distinct from zero.
 //! See [Linux misc interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#misc).
 
-use std::{collections::BTreeMap, str::FromStr};
+use std::{collections::BTreeMap, fmt::Write, str::FromStr};
 
 #[cfg(target_os = "linux")]
 use super::Cgroup;
@@ -14,7 +14,7 @@ use crate::Error;
 use crate::{
   error::{ParseError, ParseValueError},
   limit::MaxOr,
-  parse::{KeyedFields, ParseCgroup, ParseCount},
+  parse::{KeyedFields, ParseCgroup, ParseCount, cgroup_value},
   unit::Count,
 };
 
@@ -96,13 +96,7 @@ impl MiscCapacity {
   pub fn resources(&self) -> &BTreeMap<String, Count> { &self.resources }
 }
 
-impl FromStr for MiscCapacity {
-  type Err = ParseError<ParseValueError>;
-
-  fn from_str(raw: &str) -> Result<Self, Self::Err> {
-    Ok(Self { resources: KeyedFields::parse(raw, |_| "value")?.parse_values::<ParseCount, _>("value")? })
-  }
-}
+cgroup_value! { map MiscCapacity, resources: ParseCount, "value" }
 
 /// Current hierarchical miscellaneous resource usage.
 ///
@@ -128,13 +122,7 @@ impl MiscCurrent {
   pub fn resources(&self) -> &BTreeMap<String, Count> { &self.resources }
 }
 
-impl FromStr for MiscCurrent {
-  type Err = ParseError<ParseValueError>;
-
-  fn from_str(raw: &str) -> Result<Self, Self::Err> {
-    Ok(Self { resources: KeyedFields::parse(raw, |_| "value")?.parse_values::<ParseCount, _>("value")? })
-  }
-}
+cgroup_value! { map MiscCurrent, resources: ParseCount, "value" }
 
 /// Historical maximum hierarchical miscellaneous resource usage.
 ///
@@ -161,13 +149,7 @@ impl MiscPeak {
   pub fn resources(&self) -> &BTreeMap<String, Count> { &self.resources }
 }
 
-impl FromStr for MiscPeak {
-  type Err = ParseError<ParseValueError>;
-
-  fn from_str(raw: &str) -> Result<Self, Self::Err> {
-    Ok(Self { resources: KeyedFields::parse(raw, |_| "value")?.parse_values::<ParseCount, _>("value")? })
-  }
-}
+cgroup_value! { map MiscPeak, resources: ParseCount, "value" }
 
 /// Configured hierarchical miscellaneous resource limits.
 ///
@@ -193,13 +175,7 @@ impl MiscMax {
   pub fn resources(&self) -> &BTreeMap<String, MaxOr<Count>> { &self.resources }
 }
 
-impl FromStr for MiscMax {
-  type Err = ParseError<ParseValueError>;
-
-  fn from_str(raw: &str) -> Result<Self, Self::Err> {
-    Ok(Self { resources: KeyedFields::parse(raw, |_| "value")?.parse_values::<ParseCount, _>("value")? })
-  }
-}
+cgroup_value! { map MiscMax, resources: ParseCount, "value" }
 
 /// Resource limit or platform-capacity failures from `misc.events` or `misc.events.local`.
 ///
@@ -233,6 +209,27 @@ impl MiscEvents {
   pub fn resources(&self) -> &BTreeMap<String, Count> { &self.resources }
 }
 
+const EVENT_SUFFIX: &str = ".max";
+
+impl MiscEvents {
+  /// Encodes the stored value as canonical cgroup text.
+  ///
+  /// # Errors
+  ///
+  /// Returns an error if a field cannot be represented exactly.
+  pub fn encode_cgroup(&self) -> Result<String, crate::error::EncodeError> {
+    let mut output = String::new();
+    for (name, value) in &self.resources {
+      if !output.is_empty() {
+        output.push('\n');
+      }
+      write!(output, "{name}{EVENT_SUFFIX} {}", value.value)
+        .map_err(|_error| crate::error::EncodeError { field: "max" })?;
+    }
+    Ok(output)
+  }
+}
+
 impl FromStr for MiscEvents {
   type Err = ParseError<ParseValueError>;
 
@@ -240,7 +237,7 @@ impl FromStr for MiscEvents {
     let fields = KeyedFields::parse(raw, |_| "value")?;
     let resources = fields
       .iter()
-      .filter_map(|(key, value)| key.strip_suffix(".max").map(|name| (name, value)))
+      .filter_map(|(key, value)| key.strip_suffix(EVENT_SUFFIX).map(|name| (name, value)))
       .map(|(name, value)| {
         if name.is_empty() {
           return Err(ParseError::invalid(raw, "resource", ".max", ParseValueError::OutOfRange));

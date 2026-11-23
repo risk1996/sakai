@@ -2,7 +2,7 @@ use std::{collections::BTreeMap, str::FromStr};
 
 use crate::{
   error::{ParseError, ParseValueError},
-  parse::{KeyedFields, ParseMicroseconds, ParsePercent},
+  parse::{KeyedFields, ParseMicroseconds, ParsePercent, cgroup_value},
   unit::{Ratio, Time},
 };
 
@@ -93,14 +93,30 @@ impl PressureLine {
   /// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
   #[must_use]
   pub const fn total(&self) -> Time { self.total }
+}
 
-  fn from_fields(fields: &KeyedFields<'_>) -> Result<Self, ParseError<ParseValueError>> {
-    Ok(Self {
-      avg10: fields.required::<ParsePercent, _>(PressureField::Avg10)?,
-      avg60: fields.required::<ParsePercent, _>(PressureField::Avg60)?,
-      avg300: fields.required::<ParsePercent, _>(PressureField::Avg300)?,
-      total: fields.required::<ParseMicroseconds, _>(PressureField::Total)?,
-    })
+cgroup_value! { fields PressureLine, {
+  avg10: required ParsePercent => PressureField::Avg10,
+  avg60: required ParsePercent => PressureField::Avg60,
+  avg300: required ParsePercent => PressureField::Avg300,
+  total: required ParseMicroseconds => PressureField::Total,
+} }
+
+impl Pressure {
+  /// Encodes the stored snapshot as canonical cgroup text.
+  ///
+  /// # Errors
+  ///
+  /// Returns an error if a field cannot be represented exactly.
+  pub fn encode_cgroup(&self) -> Result<String, crate::error::EncodeError> {
+    let mut output = PressureKind::Some.to_string();
+    self.some.encode_fields(&mut output, " ", '=')?;
+    if let Some(full) = &self.full {
+      output.push('\n');
+      output.push_str(&PressureKind::Full.to_string());
+      full.encode_fields(&mut output, " ", '=')?;
+    }
+    Ok(output)
   }
 }
 
@@ -148,6 +164,19 @@ impl IrqPressure {
   pub const fn full(&self) -> PressureLine { self.full }
 }
 
+impl IrqPressure {
+  /// Encodes the stored snapshot as canonical cgroup text.
+  ///
+  /// # Errors
+  ///
+  /// Returns an error if a field cannot be represented exactly.
+  pub fn encode_cgroup(&self) -> Result<String, crate::error::EncodeError> {
+    let mut output = PressureKind::Full.to_string();
+    self.full.encode_fields(&mut output, " ", '=')?;
+    Ok(output)
+  }
+}
+
 impl FromStr for IrqPressure {
   type Err = ParseError<ParseValueError>;
 
@@ -166,7 +195,7 @@ fn parse_lines(contents: &str) -> Result<BTreeMap<PressureKind, PressureLine>, P
     .collect()
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, strum::EnumString)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, strum::EnumString, strum::Display)]
 #[strum(serialize_all = "lowercase")]
 enum PressureKind {
   Some,

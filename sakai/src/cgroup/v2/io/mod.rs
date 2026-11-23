@@ -18,7 +18,7 @@ use super::Cgroup;
 use crate::{Error, Pressure};
 use crate::{
   error::{ParseError, ParseValueError},
-  parse::KeyedFields,
+  parse::{KeyedFields, cgroup_value},
 };
 
 mod cost;
@@ -118,6 +118,10 @@ pub struct Device {
   minor: u32,
 }
 
+cgroup_value! { display Device }
+
+const DEVICE_SEPARATOR: char = ':';
+
 impl Device {
   /// Constructs a device key without resolving it to a currently present device.
   ///
@@ -138,8 +142,9 @@ impl Device {
   pub const fn minor(&self) -> u32 { self.minor }
 
   fn parse(raw: &str, value: &str) -> Result<Self, ParseError<ParseValueError>> {
-    let (major, minor) =
-      value.split_once(':').ok_or_else(|| ParseError::invalid(raw, "device", value, ParseValueError::OutOfRange))?;
+    let (major, minor) = value
+      .split_once(DEVICE_SEPARATOR)
+      .ok_or_else(|| ParseError::invalid(raw, "device", value, ParseValueError::OutOfRange))?;
     let parse =
       |part: &str| part.parse::<u32>().map_err(|error| ParseError::invalid(raw, "device", value, error.into()));
     Ok(Self::new(parse(major)?, parse(minor)?))
@@ -169,6 +174,12 @@ impl Device {
         Ok((device, parse(fields)?))
       })
       .collect()
+  }
+}
+
+impl std::fmt::Display for Device {
+  fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(formatter, "{}{DEVICE_SEPARATOR}{}", self.major, self.minor)
   }
 }
 
