@@ -30,6 +30,9 @@ macro_rules! quantities {
       $($(#[$doc:meta])* $getter:ident -> $result:ty = $convert:expr;)*
     }
   )*) => {
+    #[cfg(all(feature = "stubs", target_os = "linux"))]
+    pub(crate) const QUANTITY_CLASS_NAMES: &[&str] = &[$(stringify!($name)),*];
+
     pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
       $(module.add_class::<$name>()?;)*
       Ok(())

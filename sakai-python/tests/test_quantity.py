@@ -4,10 +4,34 @@ import unittest
 from math import isclose
 from typing import assert_type
 
-from sakai import Bytes, Cgroup, Count, InterfaceMissingError, MaxOr, Pages, Time
+from sakai import (
+  Bytes,
+  BytesPerSecond,
+  Cgroup,
+  Count,
+  InterfaceMissingError,
+  MaxOr,
+  OperationsPerSecond,
+  Pages,
+  Ratio,
+  Time,
+)
 
 
 class QuantityTest(unittest.TestCase):
+  def test_quantities_are_created_by_readers(self) -> None:
+    for quantity in (
+      Bytes,
+      BytesPerSecond,
+      Count,
+      OperationsPerSecond,
+      Pages,
+      Ratio,
+      Time,
+    ):
+      with self.subTest(quantity=quantity.__name__):
+        self.assertRaises(TypeError, quantity)
+
   def test_duration_and_memory_conversions(self) -> None:
     group = Cgroup.current()
     usage = assert_type(group.cpu().stat().time.usage, Time)

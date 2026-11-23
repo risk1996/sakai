@@ -99,10 +99,19 @@ pub fn generate_stubs() -> pyo3_stub_gen::Result<()> {
     }
   }
   // pyo3-stub-gen has no generic class metadata yet.
-  let stub = module.format_with_config(false).replace(
+  let mut stub = module.format_with_config(false).replace(
     "@typing.final\nclass MaxOr:",
     "_ValueT = typing.TypeVar(\"_ValueT\", covariant=True)\n\n@typing.final\nclass MaxOr(typing.Generic[_ValueT]):",
   );
+  // Native quantities are returned by readers and have no Python constructor.
+  for name in crate::quantity::QUANTITY_CLASS_NAMES {
+    let header = format!("class {name}:\n");
+    let start = stub.find(&header).ok_or_else(|| std::io::Error::other(format!("missing quantity class {name}")))?;
+    stub.insert_str(
+      start + header.len(),
+      "    def __new__(cls, _unconstructible: typing.Never, /) -> typing.Self: ...\n",
+    );
+  }
   let package = Path::new(env!("CARGO_MANIFEST_DIR")).join("python/sakai");
   fs::write(package.join("_sakai.pyi"), stub)?;
   // Derive public re-exports from the same class metadata.
