@@ -87,7 +87,7 @@ jobs:
         if: steps.registry.outputs.needs_publish == 'true'
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
-        run: devenv shell -- rtk secretspec run --provider env --profile publish-crates --reason "Publish the approved Sakai release" -- cargo publish --package sakai --locked --config 'registry.global-credential-providers=["cargo:token"]'
+        run: devenv shell -- rtk cargo publish --package sakai --locked --config 'registry.global-credential-providers=["cargo:token"]'
       - name: Verify the registry archive matches the checked candidate
         run: devenv shell -- rtk cargo xtask release verify-registry
 
