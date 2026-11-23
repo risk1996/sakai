@@ -17,7 +17,9 @@ ignore = [
   "RUSTSEC-2025-0090", # unic-emoji-char
   "RUSTSEC-2025-0098", # unic-ucd-version
   "RUSTSEC-2025-0100", # unic-ucd-ident
-  "RUSTSEC-2026-0543", # chrono, required only by the opt-in stub generator
+  # chrono is required only by the opt-in stub generator. Revisit this exception
+  # on the next pyo3-stub-gen upgrade or when a fixed chrono release is available.
+  "RUSTSEC-2026-0543",
 ]
 
 [licenses]
