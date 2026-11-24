@@ -124,7 +124,7 @@ impl Rdma<'_> {
   ///
   /// # Errors
   /// See the shared [interface-write errors](crate::v2#interface-write-errors).
-  pub fn set_max(&self, device: &RdmaDevice, value: &RdmaDeviceMax) -> Result<(), Error> {
+  pub fn set_device_max(&self, device: &RdmaDevice, value: &RdmaDeviceMax) -> Result<(), Error> {
     let command = super::file::check_token(device.name(), "device").and_then(|()| {
       let mut command = device.to_string();
       value.encode_fields(&mut command, " ", '=')?;
