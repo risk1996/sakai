@@ -4,10 +4,9 @@
 //! [Linux cgroup v2 guide](https://docs.kernel.org/admin-guide/cgroup-v2.html).
 //!
 //! Import [`CgroupFile`] to access an interface's `FILE_NAME`.
-//! Each interface also declares a mode from [`mode`]. The
-//! mode describes the operations exposed by Sakai. For example, pressure
-//! snapshots are readable, and installing a PSI trigger would require a
-//! separate descriptor-scoped API.
+//! [`ReadableFile`] and [`WritableFile`] describe the operations exposed by Sakai.
+//! Pressure snapshots implement [`ReadableFile`]. Installing a PSI trigger
+//! would require a separate descriptor-scoped API.
 //!
 //! On Linux, the typed operations are also available directly on the handle.
 //!
@@ -47,9 +46,7 @@
 
 #[cfg(target_os = "linux")]
 pub use handle::Cgroup;
-pub use interface::{
-  AccessMode, CgroupFile, FileCommand, FileValue, ReadMode, ReadableFile, WritableFile, WriteMode, mode,
-};
+pub use interface::{CgroupFile, ReadableFile, WritableFile};
 #[cfg(target_os = "linux")]
 pub use path::{CgroupPath, CgroupPathError};
 

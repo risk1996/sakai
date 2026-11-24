@@ -59,7 +59,7 @@ macro_rules! placement_list {
       pub ranges: Vec<RangeInclusive<u32>>,
     }
 
-    cgroup_file!(file $name, $file, ReadWrite);
+    cgroup_file!(file $name, $file);
     cgroup_file!(read $name => $name);
     cgroup_file!(write $name, 'a => &'a $name, |value: &$name| placement_command(value.encode_cgroup()));
 

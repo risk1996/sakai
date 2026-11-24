@@ -38,7 +38,7 @@ pub enum CpusetPartition {
   },
 }
 
-cgroup_file!(file CpusetPartition, "cpuset.cpus.partition", ReadWrite);
+cgroup_file!(file CpusetPartition, "cpuset.cpus.partition");
 cgroup_file!(read CpusetPartition => CpusetPartition);
 cgroup_file!(write CpusetPartition, 'a => &'a CpusetPartition, |value: &CpusetPartition| Ok(value.state().to_owned()));
 

@@ -65,7 +65,7 @@ pub enum CpuWeight {
 }
 
 cgroup_value! { token CpuWeight: ParseCpuWeight, "weight" }
-cgroup_file!(file CpuWeight, "cpu.weight", ReadWrite);
+cgroup_file!(file CpuWeight, "cpu.weight");
 cgroup_file!(read CpuWeight => CpuWeight);
 cgroup_file!(write CpuWeight, 'a => Weight, |weight| CpuWeight::Shares(weight).encode_cgroup());
 

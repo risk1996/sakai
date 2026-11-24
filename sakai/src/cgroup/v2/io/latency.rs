@@ -28,7 +28,7 @@ pub struct IoLatency {
   pub devices: BTreeMap<Device, NonZeroTime>,
 }
 
-cgroup_file!(file IoLatency, "io.latency", ReadWrite);
+cgroup_file!(file IoLatency, "io.latency");
 cgroup_file!(read IoLatency => IoLatency);
 cgroup_file!(write IoLatency, 'a => (Device, Option<NonZeroTime>), encode_target);
 

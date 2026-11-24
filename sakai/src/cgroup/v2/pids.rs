@@ -63,7 +63,7 @@ cgroup_file!(PidsEvents, "pids.events", Read);
 cgroup_file!(alias
   /// Local PID controller events outside the hierarchy root.
   /// Since Linux 6.11. See the [Linux 6.11 source](https://github.com/torvalds/linux/blob/v6.11/kernel/cgroup/pids.c).
-  PidsEventsLocal, "pids.events.local", Read, PidsEvents
+  PidsEventsLocal, "pids.events.local" => PidsEvents
 );
 
 #[cfg(test)]

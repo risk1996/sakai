@@ -47,7 +47,7 @@ pub struct IoMax {
 }
 
 cgroup_value! { device_rows IoMax, devices: IoDeviceMax, Device::parse_lines }
-cgroup_file!(file IoMax, "io.max", ReadWrite);
+cgroup_file!(file IoMax, "io.max");
 cgroup_file!(read IoMax => IoMax);
 cgroup_file!(write IoMax, 'a => IoMaxCommand<'a>, |command| match command {
   | IoMaxCommand::Set(device, limits) => {

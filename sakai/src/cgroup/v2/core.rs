@@ -8,6 +8,7 @@ mod task;
 
 use super::interface::cgroup_file;
 use crate::{
+  error::{ParseError, ParseValueError},
   limit::MaxOr,
   parse::cgroup_value,
   scalar::{Scalar, interface},
@@ -46,14 +47,6 @@ pub type CgroupMaxDescendants = Scalar<MaxOr<Count>, interface::CgroupMaxDescend
 /// and [Linux PSI control](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
 pub type CgroupPressure = Scalar<bool, interface::CgroupPressure>;
 
-#[derive(Debug, thiserror::Error)]
-#[error("cgroup content {raw:?} has an invalid cgroup type: {source}")]
-struct CgroupTypeParseError {
-  raw: String,
-  #[source]
-  source: strum::ParseError,
-}
-
 /// A cgroup's topology state, as read from `cgroup.type` on non-root cgroups.
 /// The typed write command `()` requests conversion to a threaded cgroup.
 ///
@@ -91,9 +84,10 @@ pub enum CgroupType {
 }
 
 cgroup_value! { display CgroupType }
-cgroup_file!(file CgroupType, "cgroup.type", ReadWrite);
+cgroup_file!(file CgroupType, "cgroup.type");
 cgroup_file!(read CgroupType => CgroupType, |contents: &str| {
-  Ok(contents.trim().parse().map_err(|source| CgroupTypeParseError { raw: contents.into(), source })?)
+  let value = contents.trim();
+  value.parse().map_err(|source| ParseError::invalid(contents, "cgroup.type", value, ParseValueError::from(source)))
 });
 cgroup_file!(write CgroupType, 'a => (), |()| CgroupType::Threaded.encode_cgroup());
 
@@ -158,12 +152,12 @@ pub enum CgroupController {
 cgroup_file!(alias
   /// The cgroup's available controllers.
   /// See [Linux `cgroup.controllers` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
-  CgroupControllers, "cgroup.controllers", Read, Vec<CgroupController>, decode_controllers
+  CgroupControllers, "cgroup.controllers" => Vec<CgroupController>, decode_controllers
 );
 cgroup_file!(alias
   /// Controllers enabled for children and their enable or disable actions.
   /// See [Linux `cgroup.subtree_control` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
-  CgroupSubtreeControl, "cgroup.subtree_control", ReadWrite, Vec<CgroupController>, decode_controllers
+  CgroupSubtreeControl, "cgroup.subtree_control" => Vec<CgroupController>, decode_controllers
 );
 cgroup_file!(write CgroupSubtreeControl, 'a => &'a [SubtreeControl], encode_subtree_control);
 
@@ -190,13 +184,13 @@ pub enum MigrationTarget {
 cgroup_file!(alias
   /// Process membership and migration.
   /// See [Linux `cgroup.procs` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
-  CgroupProcs, "cgroup.procs", ReadWrite, Vec<TaskId>, decode_tasks
+  CgroupProcs, "cgroup.procs" => Vec<TaskId>, TaskId::parse_list
 );
 cgroup_file!(write CgroupProcs, 'a => MigrationTarget, MigrationTarget::command);
 cgroup_file!(alias
   /// Thread membership and migration.
   /// See [Linux `cgroup.threads` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
-  CgroupThreads, "cgroup.threads", ReadWrite, Vec<TaskId>, decode_tasks
+  CgroupThreads, "cgroup.threads" => Vec<TaskId>, TaskId::parse_list
 );
 cgroup_file!(write CgroupThreads, 'a => MigrationTarget, MigrationTarget::command);
 
@@ -210,7 +204,7 @@ impl MigrationTarget {
   }
 }
 
-fn decode_controllers(contents: &str) -> Result<Vec<CgroupController>, Box<dyn std::error::Error + Send + Sync>> {
+fn decode_controllers(contents: &str) -> Result<Vec<CgroupController>, ParseError<ParseValueError>> {
   Ok(contents.split_ascii_whitespace().map(CgroupController::from).collect())
 }
 
@@ -233,10 +227,6 @@ fn encode_subtree_control(actions: &[SubtreeControl]) -> Result<String, crate::e
     return Err(crate::error::EncodeError { field: "controllers" });
   }
   Ok(command)
-}
-
-fn decode_tasks(contents: &str) -> Result<Vec<TaskId>, Box<dyn std::error::Error + Send + Sync>> {
-  Ok(TaskId::parse_list(contents)?)
 }
 
 #[cfg(test)]
