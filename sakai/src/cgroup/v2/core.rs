@@ -6,11 +6,7 @@ pub use task::TaskId;
 mod state;
 mod task;
 
-#[cfg(target_os = "linux")]
-use super::Cgroup;
 use super::interface::cgroup_file;
-#[cfg(target_os = "linux")]
-use crate::error::Error;
 use crate::{
   limit::MaxOr,
   parse::cgroup_value,
@@ -201,189 +197,6 @@ impl MigrationTarget {
   }
 }
 
-/// A borrowed view of one open cgroup's core interfaces.
-///
-/// Each read returns a fresh snapshot; separate reads are not atomic together.
-///
-/// See [Linux core cgroup interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
-#[cfg(target_os = "linux")]
-#[derive(Debug, Clone, Copy)]
-pub struct Core<'a> {
-  pub(crate) cgroup: &'a Cgroup,
-}
-
-#[cfg(target_os = "linux")]
-impl Core<'_> {
-  /// Reads process IDs in the reader's PID namespace, preserving order and duplicates.
-  ///
-  /// Contains this cgroup's processes, excluding descendants and zombies.
-  /// A threaded domain reports the processes of its entire threaded subtree.
-  /// IDs are volatile and may be recycled while reading; the list is not an
-  /// atomic membership snapshot. Zero entries represent tasks invisible in
-  /// the reader's PID namespace. See [`TaskId`].
-  ///
-  /// # Errors
-  ///
-  /// Reading from a threaded cgroup returns [`Error::NotSupported`]. See also
-  /// the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn procs(&self) -> Result<Vec<TaskId>, Error> { self.cgroup.read_value::<CgroupProcs>() }
-
-  /// Reads this cgroup's thread IDs in the reader's PID namespace.
-  ///
-  /// Excludes descendants. Preserves kernel order and possible duplicates;
-  /// an empty list means no threads were reported. Zero entries represent
-  /// tasks invisible in the reader's PID namespace. IDs can be
-  /// recycled while reading. Available at the hierarchy root too. See [`TaskId`].
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn threads(&self) -> Result<Vec<TaskId>, Error> { self.cgroup.read_value::<CgroupThreads>() }
-
-  /// Volatile populated and frozen lifecycle state; root cgroups lack this file.
-  ///
-  /// Reads a fresh [`CgroupEvents`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn events(&self) -> Result<CgroupEvents, Error> { self.cgroup.read_value::<CgroupEvents>() }
-
-  /// Volatile descendant and subsystem counts, including at the hierarchy root.
-  ///
-  /// Reads a fresh [`CgroupStat`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn stat(&self) -> Result<CgroupStat, Error> { self.cgroup.read_value::<CgroupStat>() }
-
-  /// Reads cumulative local freezing time, including ancestor-imposed freezing.
-  ///
-  /// Since Linux 6.18; non-root only. See [`CgroupStatLocal`].
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn stat_local(&self) -> Result<CgroupStatLocal, Error> { self.cgroup.read_value::<CgroupStatLocal>() }
-
-  /// Reads this cgroup's own freeze request, excluding ancestor requests.
-  ///
-  /// This reports configuration, not completed freezing. See [`CgroupFreeze`].
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn freeze(&self) -> Result<CgroupFreeze, Error> { self.cgroup.read_value::<CgroupFreeze>() }
-
-  /// Requests freeze or thaw. Read events to observe completion.
-  /// See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
-  ///
-  /// # Errors
-  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
-  pub fn set_freeze(&self, value: bool) -> Result<(), Error> { self.cgroup.write_value::<CgroupFreeze>(value) }
-
-  /// Reads the configured descendant depth limit, including at the root.
-  ///
-  /// See [`CgroupMaxDepth`] for units and ancestor restrictions.
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn max_depth(&self) -> Result<CgroupMaxDepth, Error> { self.cgroup.read_value::<CgroupMaxDepth>() }
-
-  /// Sets the maximum descendant depth or removes the limit with `max`.
-  /// See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
-  ///
-  /// # Errors
-  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
-  pub fn set_max_depth(&self, value: MaxOr<Count>) -> Result<(), Error> {
-    self.cgroup.write_value::<CgroupMaxDepth>(value)
-  }
-
-  /// Reads the configured descendant cgroup count limit, including at the root.
-  ///
-  /// See [`CgroupMaxDescendants`] for units and ancestor restrictions.
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn max_descendants(&self) -> Result<CgroupMaxDescendants, Error> {
-    self.cgroup.read_value::<CgroupMaxDescendants>()
-  }
-
-  /// Sets the maximum descendant count or removes the limit with `max`.
-  /// See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
-  ///
-  /// # Errors
-  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
-  pub fn set_max_descendants(&self, value: MaxOr<Count>) -> Result<(), Error> {
-    self.cgroup.write_value::<CgroupMaxDescendants>(value)
-  }
-
-  /// Reads the local pressure accounting enable flag, including at the root.
-  ///
-  /// Since Linux 6.1; see [`CgroupPressure`] for configuration requirements.
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn pressure_enabled(&self) -> Result<CgroupPressure, Error> { self.cgroup.read_value::<CgroupPressure>() }
-
-  /// Sets local pressure accounting. At the root, this is the system-wide switch.
-  /// See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
-  ///
-  /// # Errors
-  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
-  pub fn set_pressure_enabled(&self, value: bool) -> Result<(), Error> {
-    self.cgroup.write_value::<CgroupPressure>(value)
-  }
-
-  /// Configuration snapshot; the hierarchy root may lack this file.
-  ///
-  /// Reads a fresh [`CgroupType`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn kind(&self) -> Result<CgroupType, Error> { self.cgroup.read_value::<CgroupType>() }
-
-  /// Configuration snapshot of controllers available to enable for children.
-  ///
-  /// See [Linux core cgroup interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn controllers(&self) -> Result<Vec<CgroupController>, Error> { self.cgroup.read_value::<CgroupControllers>() }
-
-  /// Configuration snapshot of controllers enabled for children.
-  ///
-  /// See [Linux core cgroup interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn subtree_control(&self) -> Result<Vec<CgroupController>, Error> {
-    self.cgroup.read_value::<CgroupSubtreeControl>()
-  }
-
-  /// Applies the controller actions in one kernel batch.
-  ///
-  /// If a controller appears more than once, the last action for it wins.
-  /// See [Linux subtree control](https://docs.kernel.org/admin-guide/cgroup-v2.html#controlling-controllers).
-  ///
-  /// # Errors
-  /// The batch must contain at least one action. See the shared
-  /// [interface-write errors](crate::v2#interface-write-errors).
-  pub fn set_subtree_control(&self, actions: &[SubtreeControl]) -> Result<(), Error> {
-    self.cgroup.write_value::<CgroupSubtreeControl>(actions)
-  }
-
-  /// Moves one process and its threads into this cgroup.
-  /// See [Linux process migration](https://docs.kernel.org/admin-guide/cgroup-v2.html#organizing-processes-and-threads).
-  ///
-  /// # Errors
-  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
-  pub fn move_process(&self, target: MigrationTarget) -> Result<(), Error> {
-    self.cgroup.write_value::<CgroupProcs>(target)
-  }
-
-  /// Moves one thread into this cgroup within its threaded domain.
-  /// See [Linux thread migration](https://docs.kernel.org/admin-guide/cgroup-v2.html#organizing-processes-and-threads).
-  ///
-  /// # Errors
-  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
-  pub fn move_thread(&self, target: MigrationTarget) -> Result<(), Error> {
-    self.cgroup.write_value::<CgroupThreads>(target)
-  }
-
-  /// Converts this cgroup into a member of a threaded subtree.
-  /// See [Linux threaded cgroups](https://docs.kernel.org/admin-guide/cgroup-v2.html#threads).
-  ///
-  /// # Errors
-  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
-  pub fn set_threaded(&self) -> Result<(), Error> { self.cgroup.write_value::<CgroupType>(()) }
-}
-
 cgroup_file!(read CgroupType => CgroupType, |contents: &str| {
   Ok(contents.trim().parse().map_err(|source| CgroupTypeParseError { raw: contents.into(), source })?)
 });
@@ -444,6 +257,8 @@ mod tests {
   use assertables::{assert_err, assert_ok};
 
   use super::{CgroupController::*, *};
+  #[cfg(target_os = "linux")]
+  use crate::Cgroup;
 
   #[test]
   fn parses_configuration_flags_and_descendant_limits() {
@@ -465,17 +280,25 @@ mod tests {
   #[test]
   fn reads_configuration_and_task_lists_without_changing_files() {
     let cgroup = Cgroup::fixture("fixtures/p6_core_complete");
-    let reader = cgroup.core();
-    assert_eq!(assert_ok!(reader.procs()), [42, 0, 7, 42].map(|id| assert_ok!(TaskId::try_new(id))).to_vec());
-    assert_eq!(assert_ok!(reader.threads()), [42, 43, 7].map(|id| assert_ok!(TaskId::try_new(id))).to_vec());
-    assert_eq!(assert_ok!(reader.freeze()), CgroupFreeze::new(false));
-    assert_eq!(assert_ok!(reader.pressure_enabled()), CgroupPressure::new(true));
-    assert_eq!(assert_ok!(reader.max_depth()), CgroupMaxDepth::new(MaxOr::Max));
     assert_eq!(
-      assert_ok!(reader.max_descendants()),
+      assert_ok!(cgroup.read_value::<CgroupProcs>()),
+      [42, 0, 7, 42].map(|id| assert_ok!(TaskId::try_new(id))).to_vec()
+    );
+    assert_eq!(
+      assert_ok!(cgroup.read_value::<CgroupThreads>()),
+      [42, 43, 7].map(|id| assert_ok!(TaskId::try_new(id))).to_vec()
+    );
+    assert_eq!(assert_ok!(cgroup.read_value::<CgroupFreeze>()), CgroupFreeze::new(false));
+    assert_eq!(assert_ok!(cgroup.read_value::<CgroupPressure>()), CgroupPressure::new(true));
+    assert_eq!(assert_ok!(cgroup.read_value::<CgroupMaxDepth>()), CgroupMaxDepth::new(MaxOr::Max));
+    assert_eq!(
+      assert_ok!(cgroup.read_value::<CgroupMaxDescendants>()),
       CgroupMaxDescendants::new(MaxOr::Value(Count { value: 3, ..Default::default() }))
     );
-    assert_eq!(assert_ok!(reader.stat_local()), assert_ok!("frozen_usec 123456".parse::<CgroupStatLocal>()));
+    assert_eq!(
+      assert_ok!(cgroup.read_value::<CgroupStatLocal>()),
+      assert_ok!("frozen_usec 123456".parse::<CgroupStatLocal>())
+    );
     for (name, expected) in [
       (CgroupFreeze::FILE_NAME, "0\n"),
       (CgroupPressure::FILE_NAME, "1\n"),

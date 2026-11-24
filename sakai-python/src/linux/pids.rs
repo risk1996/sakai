@@ -27,7 +27,8 @@ pub(super) struct PidsReader {
 impl PidsReader {
   /// Read the volatile hierarchical task count, which can exceed pids.max.
   fn current(&self, py: Python<'_>) -> PyResult<Quantity<sakai::Count>> {
-    PythonError::read(py, &self.owner, |owner| owner.pids().current()).map(|value| value.value().into())
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::pids::PidsCurrent>)
+      .map(|value| value.value().into())
   }
 
   /// Read the historical hierarchical task-count peak, including threads.
@@ -37,18 +38,20 @@ impl PidsReader {
   /// See https://github.com/torvalds/linux/blob/v6.1/kernel/cgroup/pids.c and
   /// PidsReader for read errors.
   fn peak(&self, py: Python<'_>) -> PyResult<Quantity<sakai::Count>> {
-    PythonError::read(py, &self.owner, |owner| owner.pids().peak()).map(|value| value.value().into())
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::pids::PidsPeak>)
+      .map(|value| value.value().into())
   }
 
   /// Read the configured task limit as MaxOr[Count]; zero is a valid limit.
   #[gen_stub(override_return_type(type_repr = "MaxOr[Count]"))]
   fn max(&self, py: Python<'_>) -> PyResult<MaxOr> {
-    PythonError::read(py, &self.owner, |owner| owner.pids().max()).map(|value| MaxOr::from_count(value.value()))
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::pids::PidsMax>)
+      .map(|value| MaxOr::from_count(value.value()))
   }
 
   /// Read hierarchical limit events; older kernels or pids_localevents report local events.
   fn events(&self, py: Python<'_>) -> PyResult<PidsEvents> {
-    PythonError::read(py, &self.owner, |owner| owner.pids().events()).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<CorePidsEvents>).map(Into::into)
   }
 
   /// Read local process-limit events, available since Linux 6.11.
@@ -58,7 +61,7 @@ impl PidsReader {
   /// including ancestor-limit hits. See PidsReader for errors and
   /// https://github.com/torvalds/linux/blob/v6.11/kernel/cgroup/pids.c.
   fn events_local(&self, py: Python<'_>) -> PyResult<PidsEvents> {
-    PythonError::read(py, &self.owner, |owner| owner.pids().events_local()).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::pids::PidsEventsLocal>).map(Into::into)
   }
 }
 

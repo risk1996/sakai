@@ -122,7 +122,7 @@ impl Cgroup {
   /// InterfaceMissingError; other failures follow the reader exception policy.
   /// See https://docs.kernel.org/accounting/psi.html.
   fn irq_pressure(&self, py: Python<'_>) -> PyResult<super::pressure::IrqPressure> {
-    PythonError::read(py, &self.owner, sakai::Cgroup::irq_pressure).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::IrqPressure>).map(Into::into)
   }
 
   /// Open a read-only poll monitor for a supported event interface.

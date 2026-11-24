@@ -1,85 +1,11 @@
 //! Swap accounting and limits in the memory controller.
 
-#[cfg(target_os = "linux")]
-use super::super::Cgroup;
-#[cfg(target_os = "linux")]
-use crate::error::Error;
 use crate::{
   limit::MaxOr,
   parse::{ParseCount, cgroup_value},
   scalar::{Scalar, interface},
   unit::{Bytes, Count},
 };
-
-/// A borrowed view of one cgroup's swap interfaces.
-///
-/// Each method reads a fresh snapshot. Root cgroups and kernels without a
-/// given interface return [`crate::Error::FileMissing`].
-///
-/// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-#[cfg(target_os = "linux")]
-#[derive(Debug, Clone, Copy)]
-pub struct Swap<'a> {
-  pub(crate) cgroup: &'a Cgroup,
-}
-
-#[cfg(target_os = "linux")]
-impl Swap<'_> {
-  /// Current swap usage of this cgroup and its descendants, in bytes.
-  ///
-  /// Reads a fresh [`SwapCurrent`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn current(&self) -> Result<SwapCurrent, Error> { self.cgroup.read_value::<SwapCurrent>() }
-
-  /// Peak swap usage since cgroup creation for this fresh descriptor.
-  ///
-  /// Reads a fresh [`SwapPeak`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-  ///
-  /// Since Linux 6.5; see the [upstream Linux 6.5 source](https://github.com/torvalds/linux/blob/v6.5/Documentation/admin-guide/cgroup-v2.rst).
-  /// Older kernels return [`crate::Error::FileMissing`] when this interface is read.
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn peak(&self) -> Result<SwapPeak, Error> { self.cgroup.read_value::<SwapPeak>() }
-
-  /// Hard swap limit configured for this cgroup.
-  ///
-  /// Reads a fresh [`SwapMax`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn max(&self) -> Result<SwapMax, Error> { self.cgroup.read_value::<SwapMax>() }
-
-  /// Sets the swap limit in bytes or removes it with `max`.
-  /// See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-  ///
-  /// # Errors
-  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
-  pub fn set_max(&self, value: MaxOr<Bytes>) -> Result<(), Error> { self.cgroup.write_value::<SwapMax>(value) }
-
-  /// Swap throttling limit configured for this cgroup.
-  ///
-  /// Reads a fresh [`SwapHigh`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn high(&self) -> Result<SwapHigh, Error> { self.cgroup.read_value::<SwapHigh>() }
-
-  /// Sets the swap throttling threshold in bytes or removes it with `max`.
-  /// See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-  ///
-  /// # Errors
-  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
-  pub fn set_high(&self, value: MaxOr<Bytes>) -> Result<(), Error> { self.cgroup.write_value::<SwapHigh>(value) }
-
-  /// Swap high, max, and allocation failure counters.
-  ///
-  /// Includes descendant events unless the cgroup2 mount uses `memory_localevents`.
-  /// With that option, only events originating in this cgroup are reported.
-  ///
-  /// Reads a fresh [`SwapEvents`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn events(&self) -> Result<SwapEvents, Error> { self.cgroup.read_value::<SwapEvents>() }
-}
 
 /// Hierarchical swap usage reported by `memory.swap.current`.
 ///

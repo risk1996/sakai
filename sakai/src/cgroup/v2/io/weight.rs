@@ -91,27 +91,6 @@ impl FromStr for IoWeight {
   }
 }
 
-#[cfg(target_os = "linux")]
-impl super::Io<'_> {
-  /// Sets the default scheduling weight for devices without an override.
-  /// See [Linux I/O weight](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
-  ///
-  /// # Errors
-  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
-  pub fn set_weight(&self, weight: Weight) -> Result<(), crate::Error> {
-    self.cgroup.write_value::<IoWeight>(IoWeightCommand::Default(weight))
-  }
-
-  /// Sets the scheduling weight for one device. Pass `None` to remove its override.
-  /// See [Linux I/O weight](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
-  ///
-  /// # Errors
-  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
-  pub fn set_device_weight(&self, device: Device, weight: Option<Weight>) -> Result<(), crate::Error> {
-    self.cgroup.write_value::<IoWeight>(IoWeightCommand::Device(device, weight))
-  }
-}
-
 struct ParseWeight;
 
 impl ParseCgroup<ParseWeight> for Weight {

@@ -15,12 +15,12 @@ Release tags and publishing approvals are described in
 [the release runbook](design/releases.md).
 
 ```rust,no_run
-use sakai::{Cgroup, Error};
+use sakai::{Cgroup, Error, v2::cpu::{CpuMax, CpuStat}};
 
 fn main() -> Result<(), Error> {
   let cgroup = Cgroup::from_current_process()?;
-  let stat = cgroup.cpu().stat()?;
-  let quota = cgroup.cpu().max()?;
+  let stat = cgroup.read_value::<CpuStat>()?;
+  let quota = cgroup.read_value::<CpuMax>()?;
   println!("usage: {:?}, quota: {:?}", stat.time().usage(), quota);
   Ok(())
 }
@@ -39,18 +39,17 @@ values. Multiple reads are not an atomic snapshot.
 limit. `cpu.stat.local` describes local runqueue throttling, including ancestor
 limits. Unknown CPU stat counters are ignored.
 
-`cgroup.pids()` reads the current hierarchical task count, configured limit,
-and process-limit events. Counts include threads; current usage can exceed
-the limit after migration or a limit reduction. `cgroup.core().events()` reads
+`PidsCurrent`, `PidsMax`, and `PidsEvents` select the hierarchical task count,
+configured limit, and process-limit events. Counts include threads; current usage can exceed
+the limit after migration or a limit reduction. `CgroupEvents` reports
 populated and completed frozen state, preserving a missing older-kernel frozen
-field as `None`. `cgroup.core().stat()` reads descendant counts and maps of live
+field as `None`. `CgroupStat` reports descendant counts and maps of live
 and dying subsystem counts keyed by controller. Older kernels may omit those
 maps; absent counters do not imply zero. These states and counts are volatile.
 The interfaces follow the [kernel cgroup v2 documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html).
 
-`cgroup.io()` reads per-device byte and operation counters (`stat`), shared PSI
-(`pressure`), default and per-device weights (`weight`), bandwidth and IOPS
-limits (`max`), and optional latency protection targets (`latency`). Device maps
+The `v2::io` module exposes file types for per-device counters, PSI, weights,
+bandwidth and IOPS limits, and optional latency targets. Device maps
 use `v2::io::Device` major/minor keys and can be empty. Missing stat counters
 remain `None`, including older-kernel discard counters and debug-only rows;
 unknown nested keys are ignored. Configuration values are snapshots too.
@@ -60,9 +59,8 @@ targets are omitted by the kernel. Weight, maximum, and latency files are absent
 at the root; older kernels can also omit root I/O statistics. PSI reads never
 write triggers.
 
-`cgroup.cpuset()` reads configured and effective CPU and NUMA memory-node lists
-(`cpus`, `cpus_effective`, `mems`, `mems_effective`) and partition state
-(`partition`). `CpuList` and `MemoryNodeList` keep inclusive `u32` ID ranges
+The `v2::cpuset` module exposes file types for configured and effective CPU and
+NUMA memory-node lists and partition state. `CpuList` and `MemoryNodeList` keep inclusive `u32` ID ranges
 compact, expose lazy `ids()` iteration and `contains()`, and distinguish CPU IDs
 from node IDs. Empty configured lists mean inheritance; empty effective lists
 mean no resources granted. Effective placement changes with hotplug and ancestor
@@ -75,7 +73,7 @@ never change affinity or migrate memory. See the
 
 Core readers also expose requested freeze state, subtree depth/descendant limits,
 process and thread membership, PSI accounting configuration, and local freeze
-time. `Cgroup::irq_pressure()` reads the separate full-only IRQ PSI format.
+time. `IrqPressure` selects the separate full-only IRQ PSI format.
 Newer kernel counters and configuration remain optional.
 
 Memory protections (`memory.min`, `memory.low`) accept `max` as well as byte
@@ -83,8 +81,8 @@ amounts, so their Rust snapshots use `MaxOr<Bytes>` and Python uses
 `MaxOr[Bytes]`.
 This preserves valid kernel output instead of rejecting unlimited protection.
 
-The remaining cgroup v2 controllers are available through `Cgroup::hugetlb()`,
-`rdma()`, `dmem()`, and `misc()`, with equivalent Python readers. Huge-page
+HugeTLB, RDMA, device-memory, and miscellaneous resources each have file types
+in their corresponding Rust modules and equivalent Python readers. Huge-page
 filenames use validated `v2::hugetlb::PageSize` values; memory quantities stay
 bytes, while RDMA and miscellaneous resources use typed counts. Hardware-defined
 resource names remain map keys; RDMA maps use `v2::rdma::RdmaDevice` keys
@@ -106,11 +104,11 @@ fn observe(cgroup: &Cgroup) -> Result<(), Error> {
   let mut events = cgroup.poll_events(EventInterface::MemoryEvents)?;
   let mut limits = cgroup.watch_configuration(ConfigurationInterface::MemoryMax)?;
   if events.wait(Some(Duration::from_secs(1)))? {
-    println!("{:?}", cgroup.memory().events()?);
+    println!("{:?}", cgroup.read_value::<sakai::v2::memory::MemoryEvents>()?);
   }
   if let Some(change) = limits.wait(Some(Duration::from_secs(1)))? {
     if change.modified() || change.overflowed() {
-      println!("{:?}", cgroup.memory().max()?);
+      println!("{:?}", cgroup.read_value::<sakai::v2::memory::MemoryMax>()?);
     }
   }
   Ok(())

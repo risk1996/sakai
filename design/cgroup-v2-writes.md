@@ -7,7 +7,7 @@ and the [codec ADR](../adr/shared-cgroup-text-codecs.md). Use the local codec
 branch as the base if it has changes that the write implementation needs and
 those changes are still unpublished.
 
-The controller views borrow an open [`Cgroup`](../sakai/src/cgroup/v2/handle.rs).
+The typed operations use an open [`Cgroup`](../sakai/src/cgroup/v2/handle.rs).
 Reads open an interface relative to that directory descriptor, collect its
 contents, and parse them. The [text codecs](../sakai/src/parse/codec.rs) turn
 typed values into canonical strings and can reject inexact encodings. They
@@ -22,32 +22,30 @@ Each interface declares a filename and sealed access mode through
 take a typed page-size key using `read_file` or `write_file`. File declarations
 can use different types for the read snapshot and write command.
 
-Controller views expose a named setter for each setting. A value with multiple
-fields can be read, edited directly, and passed back to its setter. One setter
-call submits one command for the interface.
+A value with multiple fields can be read, edited directly, and passed back
+to `write_value`. Each write submits one command for the interface.
 
 ```rust,ignore
-let cpu = cgroup.cpu();
-let mut limit = cpu.max()?;
+let mut limit = cgroup.read_value::<sakai::v2::cpu::CpuMax>()?;
 limit.quota = MaxOr::Value(NonZeroTime::try_new(Time::new::<microsecond>(30_000))?);
 limit.period = NonZeroTime::try_new(Time::new::<microsecond>(50_000))?;
-cpu.set_max(&limit)?;
+cgroup.write_value::<sakai::v2::cpu::CpuMax>(&limit)?;
 ```
 
-`Cpu::set_max` replaces both fields. Encoding checks whole-microsecond precision
+`write_value::<CpuMax>` replaces both fields. Encoding checks whole-microsecond precision
 using the same codec as the reader. The kernel validates scheduler constraints
 and the current hierarchy. A concurrent writer can change the setting between
-the initial read and the write. Use `Cpu::set_quota` for a quota-only update.
+the initial read and the write. Use `write_value::<CpuQuota>` for a quota-only update.
 
-Scalar setters such as `Memory::set_max` take the typed field directly, such as
+Scalar writes such as `write_value::<MemoryMax>` take the typed field directly, such as
 `MaxOr<Bytes>`. Lowering a live memory limit can initiate reclaim or OOM
 handling. Readback can reflect page-granularity normalization.
 [Linux CPU and memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#interface-files)
 
 Keyed files accept a command for one device, resource, or region. For example,
-`Io::set_device_max` replaces one device's four limits and
-`Io::update_device_max` updates only the fields supplied. For changes spanning multiple files or distinct
-rows, each setter can succeed or fail independently.
+`IoMaxCommand::Set` replaces one device's four limits and
+`IoMaxCommand::Update` changes only the fields supplied. For changes spanning
+multiple files or distinct rows, each write can succeed or fail independently.
 
 ## Transport and errors
 

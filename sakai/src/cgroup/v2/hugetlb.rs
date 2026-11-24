@@ -8,10 +8,6 @@ use std::{collections::BTreeMap, fmt, fmt::Write, str::FromStr};
 use nutype::nutype;
 use uom::si::information::byte;
 
-#[cfg(target_os = "linux")]
-use super::Cgroup;
-#[cfg(target_os = "linux")]
-use crate::Error;
 use crate::{
   error::{ParseError, ParseValueError},
   limit::MaxOr,
@@ -89,107 +85,6 @@ impl FromStr for PageSize {
       return Err(invalid());
     }
     Ok(size)
-  }
-}
-
-/// A borrowed HugeTLB controller reader for one pinned cgroup.
-///
-/// Each method opens a fresh read-only descriptor for the requested page size.
-/// Separate reads are not atomic together. These files exist only on non-root
-/// cgroups with the controller enabled and a supported HugeTLB page size.
-/// Missing files return [`crate::Error::FileMissing`], including unsupported
-/// sizes, kernel configuration omissions, and older kernels.
-///
-/// See [Linux HugeTLB interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#hugetlb).
-#[cfg(target_os = "linux")]
-#[derive(Debug, Clone, Copy)]
-pub struct Hugetlb<'a> {
-  pub(crate) cgroup: &'a Cgroup,
-}
-
-#[cfg(target_os = "linux")]
-impl Hugetlb<'_> {
-  /// Reads current hierarchical faulted HugeTLB usage in bytes for this size.
-  ///
-  /// See [Linux HugeTLB usage](https://docs.kernel.org/admin-guide/cgroup-v2.html#hugetlb).
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn current(&self, size: &PageSize) -> Result<HugetlbCurrent, Error> {
-    self.cgroup.read_file::<HugetlbCurrent>(size)
-  }
-
-  /// Reads the configured HugeTLB fault limit in bytes, or `max`.
-  ///
-  /// Ancestor limits still apply when this cgroup reports `max`.
-  /// See [Linux HugeTLB limits](https://docs.kernel.org/admin-guide/cgroup-v2.html#hugetlb).
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn max(&self, size: &PageSize) -> Result<HugetlbMax, Error> { self.cgroup.read_file::<HugetlbMax>(size) }
-
-  /// Sets the HugeTLB fault limit in bytes or removes it with `max`.
-  /// See [Linux HugeTLB interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#hugetlb).
-  ///
-  /// # Errors
-  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
-  pub fn set_max(&self, size: &PageSize, value: MaxOr<Bytes>) -> Result<(), Error> {
-    self.cgroup.write_file::<HugetlbMax>(size, value)
-  }
-
-  /// Reads hierarchical reserved and unreserved-faulted HugeTLB bytes.
-  ///
-  /// Reservations are charged before faulting; faulted pages without a prior
-  /// reservation are also charged. This is not a count of unused reservations.
-  /// See [Linux reservation accounting](https://docs.kernel.org/admin-guide/cgroup-v1/hugetlb.html).
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn reserved_current(&self, size: &PageSize) -> Result<HugetlbReservedCurrent, Error> {
-    self.cgroup.read_file::<HugetlbReservedCurrent>(size)
-  }
-
-  /// Reads the reservation-accounting limit in bytes, or `max`.
-  ///
-  /// This limit applies to reservations and faults without prior reservations.
-  /// Ancestor limits still apply when this cgroup reports `max`.
-  /// See [Linux reservation accounting](https://docs.kernel.org/admin-guide/cgroup-v1/hugetlb.html).
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn reserved_max(&self, size: &PageSize) -> Result<HugetlbReservedMax, Error> {
-    self.cgroup.read_file::<HugetlbReservedMax>(size)
-  }
-
-  /// Sets the HugeTLB reservation limit in bytes or removes it with `max`.
-  /// See [Linux HugeTLB interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#hugetlb).
-  ///
-  /// # Errors
-  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
-  pub fn set_reserved_max(&self, size: &PageSize, value: MaxOr<Bytes>) -> Result<(), Error> {
-    self.cgroup.write_file::<HugetlbReservedMax>(size, value)
-  }
-
-  /// Reads cumulative hierarchical allocation failures caused by HugeTLB limits.
-  ///
-  /// See [Linux HugeTLB events](https://docs.kernel.org/admin-guide/cgroup-v2.html#hugetlb).
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn events(&self, size: &PageSize) -> Result<HugetlbEvents, Error> { self.cgroup.read_file::<HugetlbEvents>(size) }
-
-  /// Reads cumulative allocation failures originating in this cgroup alone.
-  ///
-  /// See [Linux HugeTLB events](https://docs.kernel.org/admin-guide/cgroup-v2.html#hugetlb).
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn events_local(&self, size: &PageSize) -> Result<HugetlbEvents, Error> {
-    self.cgroup.read_file::<HugetlbEventsLocal>(size)
-  }
-
-  /// Reads hierarchical in-use HugeTLB bytes by NUMA node, including the total.
-  ///
-  /// Since Linux 5.17; older kernels return [`crate::Error::FileMissing`]. See
-  /// [Linux 5.17 implementation](https://github.com/torvalds/linux/blob/v5.17/mm/hugetlb_cgroup.c).
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn numa_stat(&self, size: &PageSize) -> Result<HugetlbNumaStat, Error> {
-    self.cgroup.read_file::<HugetlbNumaStat>(size)
   }
 }
 
@@ -387,6 +282,8 @@ mod tests {
     Cases,
     Failure::{Excess, Invalid, Missing},
   };
+  #[cfg(target_os = "linux")]
+  use crate::{Cgroup, Error};
 
   #[test]
   fn validates_page_sizes_and_canonical_kernel_labels() {
@@ -505,36 +402,38 @@ mod tests {
       ("p6_hugetlb_older", 0, MaxOr::Max, 0, 0, 0),
     ] {
       let cgroup = Cgroup::fixture(&format!("fixtures/{fixture}"));
-      let reader = cgroup.hugetlb();
-      assert_eq!(assert_ok!(reader.current(&size)), HugetlbCurrent { value: Bytes::new::<byte>(current) });
-      assert_eq!(assert_ok!(reader.max(&size)), HugetlbMax { value: max });
-      assert_eq!(assert_ok!(reader.reserved_current(&size)), HugetlbReservedCurrent {
+      assert_eq!(assert_ok!(cgroup.read_file::<HugetlbCurrent>(&size)), HugetlbCurrent {
+        value: Bytes::new::<byte>(current)
+      });
+      assert_eq!(assert_ok!(cgroup.read_file::<HugetlbMax>(&size)), HugetlbMax { value: max });
+      assert_eq!(assert_ok!(cgroup.read_file::<HugetlbReservedCurrent>(&size)), HugetlbReservedCurrent {
         value: Bytes::new::<byte>(reserved_current)
       });
-      assert_eq!(assert_ok!(reader.reserved_max(&size)), HugetlbReservedMax { value: MaxOr::Max });
-      assert_eq!(assert_ok!(reader.events(&size)), HugetlbEvents {
+      assert_eq!(assert_ok!(cgroup.read_file::<HugetlbReservedMax>(&size)), HugetlbReservedMax { value: MaxOr::Max });
+      assert_eq!(assert_ok!(cgroup.read_file::<HugetlbEvents>(&size)), HugetlbEvents {
         max: Count { value: events, ..Default::default() }
       });
-      assert_eq!(assert_ok!(reader.events_local(&size)), HugetlbEvents {
+      assert_eq!(assert_ok!(cgroup.read_file::<HugetlbEventsLocal>(&size)), HugetlbEvents {
         max: Count { value: local_events, ..Default::default() }
       });
       match fixture {
-        | "p6_hugetlb" => cgroup.check_fixture(&size.file_name("numa_stat"), false, || reader.numa_stat(&size)),
+        | "p6_hugetlb" => {
+          cgroup.check_fixture(&size.file_name("numa_stat"), false, || cgroup.read_file::<HugetlbNumaStat>(&size))
+        },
         | _ => assert!(
-          matches!(reader.numa_stat(&size), Err(Error::FileMissing { path }) if path == cgroup.path().join(size.file_name("numa_stat")))
+          matches!(cgroup.read_file::<HugetlbNumaStat>(&size), Err(Error::FileMissing { path }) if path == cgroup.path().join(size.file_name("numa_stat")))
         ),
       }
     }
     let root = Cgroup::fixture("");
-    let reader = root.hugetlb();
     for (suffix, result) in [
-      ("current", reader.current(&size).map(|_| ())),
-      ("max", reader.max(&size).map(|_| ())),
-      ("rsvd.current", reader.reserved_current(&size).map(|_| ())),
-      ("rsvd.max", reader.reserved_max(&size).map(|_| ())),
-      ("events", reader.events(&size).map(|_| ())),
-      ("events.local", reader.events_local(&size).map(|_| ())),
-      ("numa_stat", reader.numa_stat(&size).map(|_| ())),
+      ("current", root.read_file::<HugetlbCurrent>(&size).map(|_| ())),
+      ("max", root.read_file::<HugetlbMax>(&size).map(|_| ())),
+      ("rsvd.current", root.read_file::<HugetlbReservedCurrent>(&size).map(|_| ())),
+      ("rsvd.max", root.read_file::<HugetlbReservedMax>(&size).map(|_| ())),
+      ("events", root.read_file::<HugetlbEvents>(&size).map(|_| ())),
+      ("events.local", root.read_file::<HugetlbEventsLocal>(&size).map(|_| ())),
+      ("numa_stat", root.read_file::<HugetlbNumaStat>(&size).map(|_| ())),
     ] {
       assert!(matches!(result, Err(Error::FileMissing { path }) if path == root.path().join(size.file_name(suffix))));
     }

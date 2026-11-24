@@ -5,10 +5,6 @@
 
 use std::{collections::BTreeMap, fmt};
 
-#[cfg(target_os = "linux")]
-use super::Cgroup;
-#[cfg(target_os = "linux")]
-use crate::Error;
 use crate::{
   error::{ParseError, ParseValueError},
   limit::MaxOr,
@@ -85,87 +81,6 @@ impl ParseCgroup<UsageCount> for Count {
 
 impl EncodeCgroup<UsageCount> for Count {
   fn encode_token(&self, output: &mut String) -> Option<()> { EncodeCgroup::<ParseCount>::encode_token(self, output) }
-}
-
-/// A borrowed view of one cgroup's RDMA controller.
-///
-/// Each read returns a fresh snapshot. Separate reads are not atomic
-/// together. Interfaces are absent on the hierarchy root and when the RDMA
-/// controller is disabled or unavailable in the kernel configuration.
-///
-/// See [Linux RDMA interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#rdma-interface-files).
-#[cfg(target_os = "linux")]
-#[derive(Debug, Clone, Copy)]
-pub struct Rdma<'a> {
-  pub(crate) cgroup: &'a Cgroup,
-}
-
-#[cfg(target_os = "linux")]
-impl Rdma<'_> {
-  /// Reads hierarchical HCA handle and object usage, measured in counts.
-  ///
-  /// Returns a fresh [`RdmaCurrent`] snapshot keyed by [`RdmaDevice`]. See
-  /// [Linux RDMA interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#rdma-interface-files).
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn current(&self) -> Result<RdmaCurrent, Error> { self.cgroup.read_value::<RdmaCurrent>() }
-
-  /// Reads per-device HCA handle and object limits, measured in counts.
-  ///
-  /// Returns a fresh [`RdmaMax`] configuration snapshot. `max` means no
-  /// configured limit here; ancestor limits still apply. See
-  /// [Linux RDMA interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#rdma-interface-files).
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn max(&self) -> Result<RdmaMax, Error> { self.cgroup.read_value::<RdmaMax>() }
-
-  /// Sets both resource limits for one RDMA device in one write.
-  /// See [Linux RDMA interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#rdma-interface-files).
-  ///
-  /// # Errors
-  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
-  pub fn set_device_max(&self, device: &RdmaDevice, value: &RdmaDeviceMax) -> Result<(), Error> {
-    self.cgroup.write_value::<RdmaMax>((device, value))
-  }
-
-  /// Reads historical hierarchical HCA resource high-water marks in counts.
-  ///
-  /// Since Linux 7.2; see the
-  /// [release-tagged implementation](https://github.com/torvalds/linux/blob/v7.2/kernel/cgroup/rdma.c).
-  /// Each resource's peak is independent; the two peaks need not have occurred
-  /// together. Returns a fresh [`RdmaCurrent`] snapshot without resetting peaks.
-  ///
-  /// # Errors
-  ///
-  /// Older kernels return [`Error::FileMissing`]. See the shared
-  /// [interface-read errors](crate::v2#interface-read-errors) for other failures.
-  pub fn peak(&self) -> Result<RdmaCurrent, Error> { self.cgroup.read_value::<RdmaPeak>() }
-
-  /// Reads hierarchical per-device RDMA allocation-failure event counts.
-  ///
-  /// Since Linux 7.2; see the
-  /// [release-tagged implementation](https://github.com/torvalds/linux/blob/v7.2/kernel/cgroup/rdma.c).
-  /// Returns a fresh [`RdmaEvents`] snapshot including descendants' events.
-  ///
-  /// # Errors
-  ///
-  /// Older kernels return [`Error::FileMissing`]. See the shared
-  /// [interface-read errors](crate::v2#interface-read-errors) for other failures.
-  pub fn events(&self) -> Result<RdmaEvents, Error> { self.cgroup.read_value::<RdmaEvents>() }
-
-  /// Reads local per-device RDMA allocation-failure event counts.
-  ///
-  /// Since Linux 7.2; see the
-  /// [release-tagged implementation](https://github.com/torvalds/linux/blob/v7.2/kernel/cgroup/rdma.c).
-  /// Returns a fresh [`RdmaEvents`] snapshot. Local `max` counts failures
-  /// against this cgroup's own limit, including descendant requests; local
-  /// `alloc_fail` counts requests originating here, including ancestor limits.
-  ///
-  /// # Errors
-  ///
-  /// Older kernels return [`Error::FileMissing`]. See the shared
-  /// [interface-read errors](crate::v2#interface-read-errors) for other failures.
-  pub fn events_local(&self) -> Result<RdmaEvents, Error> { self.cgroup.read_value::<RdmaEventsLocal>() }
 }
 
 /// A volatile snapshot of hierarchical RDMA resource usage or peak usage.
@@ -437,6 +352,8 @@ mod tests {
     Cases,
     Failure::{Invalid, Missing},
   };
+  #[cfg(target_os = "linux")]
+  use crate::{Cgroup, Error};
 
   fn count(value: u64) -> Count { Count { value, ..Default::default() } }
 
@@ -652,7 +569,6 @@ mod tests {
   fn reads_rdma_fixtures_and_older_kernel_missing_files_without_writes() {
     for fixture in ["p6", "p6_rdma_index", "p6_older"] {
       let cgroup = Cgroup::fixture(&format!("fixtures/{fixture}"));
-      let rdma = cgroup.rdma();
       let path = cgroup.path();
       // Also catch accidental writes to a different interface in this cgroup.
       let snapshot = || {
@@ -666,30 +582,32 @@ mod tests {
         .map(|name| std::fs::read_to_string(path.join(name)).ok())
       };
       let before = snapshot();
-      cgroup.check_fixture(RdmaCurrent::FILE_NAME, false, || rdma.current());
-      cgroup.check_fixture(RdmaMax::FILE_NAME, false, || rdma.max());
+      cgroup.check_fixture(RdmaCurrent::FILE_NAME, false, || cgroup.read_value::<crate::v2::rdma::RdmaCurrent>());
+      cgroup.check_fixture(RdmaMax::FILE_NAME, false, || cgroup.read_value::<crate::v2::rdma::RdmaMax>());
       match fixture {
         | "p6_older" => {
           for (name, read) in [
-            (RdmaCurrent::PEAK_FILE_NAME, rdma.peak().map(|_| ())),
-            (RdmaEvents::FILE_NAME, rdma.events().map(|_| ())),
-            (RdmaEvents::LOCAL_FILE_NAME, rdma.events_local().map(|_| ())),
+            (RdmaCurrent::PEAK_FILE_NAME, cgroup.read_value::<crate::v2::rdma::RdmaPeak>().map(|_| ())),
+            (RdmaEvents::FILE_NAME, cgroup.read_value::<crate::v2::rdma::RdmaEvents>().map(|_| ())),
+            (RdmaEvents::LOCAL_FILE_NAME, cgroup.read_value::<crate::v2::rdma::RdmaEventsLocal>().map(|_| ())),
           ] {
             assert!(matches!(read, Err(Error::FileMissing { path: missing }) if missing == path.join(name)));
           }
         },
         | _ => {
-          cgroup.check_fixture(RdmaCurrent::PEAK_FILE_NAME, false, || rdma.peak());
-          cgroup.check_fixture(RdmaEvents::FILE_NAME, false, || rdma.events());
-          cgroup.check_fixture(RdmaEvents::LOCAL_FILE_NAME, false, || rdma.events_local());
+          cgroup.check_fixture(RdmaCurrent::PEAK_FILE_NAME, false, || cgroup.read_value::<crate::v2::rdma::RdmaPeak>());
+          cgroup.check_fixture(RdmaEvents::FILE_NAME, false, || cgroup.read_value::<crate::v2::rdma::RdmaEvents>());
+          cgroup.check_fixture(RdmaEvents::LOCAL_FILE_NAME, false, || {
+            cgroup.read_value::<crate::v2::rdma::RdmaEventsLocal>()
+          });
         },
       }
       assert_eq!(snapshot(), before);
     }
     let cgroup = Cgroup::fixture("");
     for (name, read) in [
-      (RdmaCurrent::FILE_NAME, cgroup.rdma().current().map(|_| ())),
-      (RdmaMax::FILE_NAME, cgroup.rdma().max().map(|_| ())),
+      (RdmaCurrent::FILE_NAME, cgroup.read_value::<crate::v2::rdma::RdmaCurrent>().map(|_| ())),
+      (RdmaMax::FILE_NAME, cgroup.read_value::<crate::v2::rdma::RdmaMax>().map(|_| ())),
     ] {
       assert!(matches!(read, Err(Error::FileMissing { path: missing }) if missing == cgroup.path().join(name)));
     }

@@ -1,75 +1,11 @@
 //! Process-number accounting and limits. Kernel PID counts include threads.
 
-#[cfg(target_os = "linux")]
-use super::Cgroup;
-#[cfg(target_os = "linux")]
-use crate::error::Error;
 use crate::{
   limit::MaxOr,
   parse::{ParseCount, cgroup_value},
   scalar::{Scalar, interface},
   unit::Count,
 };
-
-/// A borrowed view of one cgroup's process-number controller.
-///
-/// Each read is a fresh snapshot; separate reads are not atomic together.
-/// Missing interfaces, including disabled controllers and root exemptions,
-/// return [`crate::Error::FileMissing`].
-///
-/// See [Linux pid interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#pid).
-#[cfg(target_os = "linux")]
-#[derive(Debug, Clone, Copy)]
-pub struct Pids<'a> {
-  pub(crate) cgroup: &'a Cgroup,
-}
-
-#[cfg(target_os = "linux")]
-impl Pids<'_> {
-  /// Current hierarchical task count, which can exceed the configured maximum.
-  ///
-  /// Reads a fresh [`PidsCurrent`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#pid).
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn current(&self) -> Result<PidsCurrent, Error> { self.cgroup.read_value::<PidsCurrent>() }
-
-  /// Reads the historical hierarchical task-count peak, including threads.
-  ///
-  /// Since Linux 6.1; see [`PidsPeak`]. Reading does not reset the peak.
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn peak(&self) -> Result<PidsPeak, Error> { self.cgroup.read_value::<PidsPeak>() }
-
-  /// Configured task limit in counts, or `max` for no limit at this cgroup.
-  ///
-  /// Reads a fresh [`PidsMax`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#pid).
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn max(&self) -> Result<PidsMax, Error> { self.cgroup.read_value::<PidsMax>() }
-
-  /// Sets the task count limit or removes it with `max`.
-  /// See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#pid).
-  ///
-  /// # Errors
-  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
-  pub fn set_max(&self, value: MaxOr<Count>) -> Result<(), Error> { self.cgroup.write_value::<PidsMax>(value) }
-
-  /// Hierarchical process-limit event counts.
-  ///
-  /// Reads a fresh [`PidsEvents`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#pid).
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn events(&self) -> Result<PidsEvents, Error> { self.cgroup.read_value::<PidsEvents>() }
-
-  /// Reads local process-limit failures; available since Linux 6.11.
-  ///
-  /// Normally counts failures at this cgroup's own limit, including descendant
-  /// requests. With `pids_localevents`, it counts fork failures originating in
-  /// this cgroup, including ancestor-limit failures. See [`PidsEvents`].
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn events_local(&self) -> Result<PidsEvents, Error> { self.cgroup.read_value::<PidsEventsLocal>() }
-}
 
 /// Current number of tasks in this cgroup and its descendants.
 ///
@@ -154,6 +90,8 @@ mod tests {
     Cases,
     Failure::{Excess, Invalid, Missing},
   };
+  #[cfg(target_os = "linux")]
+  use crate::{Cgroup, Error};
 
   #[test]
   fn parses_lifetime_task_count_peaks_without_narrowing() {
@@ -171,12 +109,17 @@ mod tests {
   #[test]
   fn reads_peaks_local_events_and_missing_optional_interfaces() {
     let cgroup = Cgroup::fixture("fixtures/p6_core_complete");
-    assert_eq!(assert_ok!(cgroup.pids().peak()), PidsPeak::new(Count { value: 15, ..Default::default() }));
-    assert_eq!(assert_ok!(cgroup.pids().events_local()), PidsEvents { max: Count { value: 2, ..Default::default() } });
+    assert_eq!(
+      assert_ok!(cgroup.read_value::<crate::v2::pids::PidsPeak>()),
+      PidsPeak::new(Count { value: 15, ..Default::default() })
+    );
+    assert_eq!(assert_ok!(cgroup.read_value::<crate::v2::pids::PidsEventsLocal>()), PidsEvents {
+      max: Count { value: 2, ..Default::default() }
+    });
     let cgroup = Cgroup::fixture("fixtures/p6_misc_older");
     for (file, result) in [
-      (PidsPeak::FILE_NAME, cgroup.pids().peak().map(|_| ())),
-      (PidsEvents::LOCAL_FILE_NAME, cgroup.pids().events_local().map(|_| ())),
+      (PidsPeak::FILE_NAME, cgroup.read_value::<crate::v2::pids::PidsPeak>().map(|_| ())),
+      (PidsEvents::LOCAL_FILE_NAME, cgroup.read_value::<crate::v2::pids::PidsEventsLocal>().map(|_| ())),
     ] {
       assert!(matches!(result, Err(Error::FileMissing { path }) if path == cgroup.path().join(file)));
     }

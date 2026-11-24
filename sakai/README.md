@@ -17,8 +17,8 @@ sakai = "0.1.0-alpha.1"
 #[cfg(target_os = "linux")]
 fn main() -> Result<(), sakai::Error> {
   let cgroup = sakai::Cgroup::from_current_process()?;
-  let stat = cgroup.cpu().stat()?;
-  let quota = cgroup.cpu().max()?;
+  let stat = cgroup.read_value::<sakai::v2::cpu::CpuStat>()?;
+  let quota = cgroup.read_value::<sakai::v2::cpu::CpuMax>()?;
   println!("usage: {:?}, quota: {:?}", stat.time().usage(), quota);
   Ok(())
 }
@@ -47,7 +47,7 @@ enable controllers, change placement, or write pressure triggers.
 
 ## Change a cgroup configuration on Linux
 
-Edit the returned value and pass it to the controller setter. For example,
+Edit the returned value and pass it to `write_value`. For example,
 this replaces both `cpu.max` fields in a cgroup you can write to.
 
 ```rust,no_run
@@ -56,17 +56,16 @@ fn set_cpu_bandwidth(cgroup: &sakai::Cgroup) -> Result<(), Box<dyn std::error::E
   use sakai::{MaxOr, NonZeroTime, Time};
   use uom::si::time::microsecond;
 
-  let cpu = cgroup.cpu();
-  let mut limit = cpu.max()?;
+  let mut limit = cgroup.read_value::<sakai::v2::cpu::CpuMax>()?;
   limit.quota = MaxOr::Value(NonZeroTime::try_new(Time::new::<microsecond>(30_000))?);
   limit.period = NonZeroTime::try_new(Time::new::<microsecond>(50_000))?;
-  cpu.set_max(&limit)?;
+  cgroup.write_value::<sakai::v2::cpu::CpuMax>(&limit)?;
   Ok(())
 }
 ```
 
-Each setter submits one kernel command. Another writer can change settings
-between the read and write. Use `Cpu::set_quota` to change the quota while
+Each write submits one kernel command. Another writer can change settings
+between the read and write. Use `write_value::<CpuQuota>(quota)` to change the quota while
 the kernel retains the current period. For keyed limits such as `io.max`,
 each command applies to one device.
 

@@ -1,73 +1,10 @@
 //! Compressed swap accounting and settings in the memory controller.
 
-#[cfg(target_os = "linux")]
-use super::super::Cgroup;
-#[cfg(target_os = "linux")]
-use crate::error::Error;
 use crate::{
   limit::MaxOr,
   scalar::{Scalar, interface},
   unit::Bytes,
 };
-
-/// A borrowed view of one cgroup's compressed swap interfaces.
-///
-/// Each method reads a fresh snapshot. Kernels without zswap can lack these
-/// files, which returns [`crate::Error::FileMissing`].
-///
-/// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-#[cfg(target_os = "linux")]
-#[derive(Debug, Clone, Copy)]
-pub struct Zswap<'a> {
-  pub(crate) cgroup: &'a Cgroup,
-}
-
-#[cfg(target_os = "linux")]
-impl Zswap<'_> {
-  /// Memory consumed by the zswap compression backend for this cgroup and descendants.
-  ///
-  /// Reads a fresh [`ZswapCurrent`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-  ///
-  /// Since Linux 5.19; see the [upstream Linux 5.19 source](https://github.com/torvalds/linux/blob/v5.19/Documentation/admin-guide/cgroup-v2.rst).
-  /// Older kernels return [`crate::Error::FileMissing`] when this interface is read.
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn current(&self) -> Result<ZswapCurrent, Error> { self.cgroup.read_value::<ZswapCurrent>() }
-
-  /// Hard limit on this cgroup's compressed swap pool.
-  ///
-  /// Reads a fresh [`ZswapMax`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-  ///
-  /// Since Linux 5.19; see the [upstream Linux 5.19 source](https://github.com/torvalds/linux/blob/v5.19/Documentation/admin-guide/cgroup-v2.rst).
-  /// Older kernels return [`crate::Error::FileMissing`] when this interface is read.
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn max(&self) -> Result<ZswapMax, Error> { self.cgroup.read_value::<ZswapMax>() }
-
-  /// Sets the zswap pool limit in bytes or removes it with `max`.
-  /// See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-  ///
-  /// # Errors
-  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
-  pub fn set_max(&self, value: MaxOr<Bytes>) -> Result<(), Error> { self.cgroup.write_value::<ZswapMax>(value) }
-
-  /// This cgroup's configured disk swap writeback policy.
-  ///
-  /// Reads a fresh [`ZswapWriteback`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-  ///
-  /// Since Linux 6.8; see the [upstream Linux 6.8 source](https://github.com/torvalds/linux/blob/v6.8/Documentation/admin-guide/cgroup-v2.rst).
-  /// Older kernels return [`crate::Error::FileMissing`] when this interface is read.
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn writeback(&self) -> Result<ZswapWriteback, Error> { self.cgroup.read_value::<ZswapWriteback>() }
-
-  /// Sets whether zswap can write back to disk.
-  /// See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-  ///
-  /// # Errors
-  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
-  pub fn set_writeback(&self, value: bool) -> Result<(), Error> { self.cgroup.write_value::<ZswapWriteback>(value) }
-}
 
 /// Memory consumed by the zswap compression backend for this cgroup and descendants, in bytes.
 ///

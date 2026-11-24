@@ -131,7 +131,7 @@ impl CoreReader {
   /// represent tasks invisible in the reader's PID namespace. See CoreReader
   /// for other read errors and the Linux interface reference.
   fn procs(&self, py: Python<'_>) -> PyResult<Vec<i32>> {
-    PythonError::read(py, &self.owner, |owner| owner.core().procs())
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::core::CgroupProcs>)
       .map(|values| values.into_iter().map(|value| value.into_inner()).collect())
   }
 
@@ -142,18 +142,18 @@ impl CoreReader {
   /// IDs can be recycled while reading. See CoreReader for
   /// read errors and the Linux interface reference.
   fn threads(&self, py: Python<'_>) -> PyResult<Vec<i32>> {
-    PythonError::read(py, &self.owner, |owner| owner.core().threads())
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::core::CgroupThreads>)
       .map(|values| values.into_iter().map(|value| value.into_inner()).collect())
   }
 
   /// Read volatile populated and frozen state; root cgroups lack this interface.
   fn events(&self, py: Python<'_>) -> PyResult<CgroupEvents> {
-    PythonError::read(py, &self.owner, |owner| owner.core().events()).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<CoreCgroupEvents>).map(Into::into)
   }
 
   /// Read volatile descendant and subsystem counts, including at the hierarchy root.
   fn stat(&self, py: Python<'_>) -> PyResult<CgroupStat> {
-    PythonError::read(py, &self.owner, |owner| owner.core().stat()).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<CoreCgroupStat>).map(Into::into)
   }
 
   /// Read cumulative local freezing time, including ancestor-imposed freezing.
@@ -161,7 +161,7 @@ impl CoreReader {
   /// Since Linux 6.18; the root lacks this interface. See CgroupStatLocal for
   /// timing semantics and CoreReader for read errors.
   fn stat_local(&self, py: Python<'_>) -> PyResult<CgroupStatLocal> {
-    PythonError::read(py, &self.owner, |owner| owner.core().stat_local()).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<CoreCgroupStatLocal>).map(Into::into)
   }
 
   /// Read this cgroup's own freeze request as bool, excluding ancestor requests.
@@ -169,7 +169,8 @@ impl CoreReader {
   /// This is configuration, not completed freezing; use events().frozen for
   /// observed state. The root lacks this file. See CoreReader for read errors.
   fn freeze(&self, py: Python<'_>) -> PyResult<bool> {
-    PythonError::read(py, &self.owner, |owner| owner.core().freeze()).map(|value| value.value())
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::core::CgroupFreeze>)
+      .map(|value| value.value())
   }
 
   /// Read the configured maximum descendant depth as MaxOr[Count] cgroup levels.
@@ -178,7 +179,8 @@ impl CoreReader {
   /// restrictions still apply. Available at the root. See CoreReader for errors.
   #[gen_stub(override_return_type(type_repr = "MaxOr[Count]"))]
   fn max_depth(&self, py: Python<'_>) -> PyResult<MaxOr> {
-    PythonError::read(py, &self.owner, |owner| owner.core().max_depth()).map(|value| MaxOr::from_count(value.value()))
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::core::CgroupMaxDepth>)
+      .map(|value| MaxOr::from_count(value.value()))
   }
 
   /// Read the maximum descendant cgroup count, excluding this cgroup, as MaxOr[Count].
@@ -188,7 +190,7 @@ impl CoreReader {
   /// limit. Available at the root. See CoreReader for read errors.
   #[gen_stub(override_return_type(type_repr = "MaxOr[Count]"))]
   fn max_descendants(&self, py: Python<'_>) -> PyResult<MaxOr> {
-    PythonError::read(py, &self.owner, |owner| owner.core().max_descendants())
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::core::CgroupMaxDescendants>)
       .map(|value| MaxOr::from_count(value.value()))
   }
 
@@ -198,24 +200,26 @@ impl CoreReader {
   /// Disabling accounting here does not disable descendants. Available at the
   /// root. See CoreReader for read errors and the Linux interface reference.
   fn pressure_enabled(&self, py: Python<'_>) -> PyResult<bool> {
-    PythonError::read(py, &self.owner, |owner| owner.core().pressure_enabled()).map(|value| value.value())
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::core::CgroupPressure>)
+      .map(|value| value.value())
   }
 
   /// Read the cgroup type: domain, domain threaded, domain invalid, or threaded.
   #[gen_stub(override_return_type(type_repr = "CgroupKind"))]
   fn kind(&self, py: Python<'_>) -> PyResult<String> {
-    PythonError::read(py, &self.owner, |owner| owner.core().kind()).map(|kind| kind.to_string())
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::core::CgroupType>)
+      .map(|kind| kind.to_string())
   }
 
   /// List controllers available to this cgroup, including unknown names.
   fn controllers(&self, py: Python<'_>) -> PyResult<Vec<String>> {
-    PythonError::read(py, &self.owner, |owner| owner.core().controllers())
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::core::CgroupControllers>)
       .map(|values| values.into_iter().map(|value| value.to_string()).collect())
   }
 
   /// List controllers enabled for children of this cgroup.
   fn subtree_control(&self, py: Python<'_>) -> PyResult<Vec<String>> {
-    PythonError::read(py, &self.owner, |owner| owner.core().subtree_control())
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::core::CgroupSubtreeControl>)
       .map(|values| values.into_iter().map(|value| value.to_string()).collect())
   }
 }

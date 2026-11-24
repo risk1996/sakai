@@ -6,111 +6,11 @@
 
 use std::collections::BTreeMap;
 
-#[cfg(target_os = "linux")]
-use super::Cgroup;
-#[cfg(target_os = "linux")]
-use crate::Error;
 use crate::{
   limit::MaxOr,
   parse::{ParseBytes, cgroup_value},
   unit::Bytes,
 };
-
-/// A borrowed view of one cgroup's device-memory controller.
-///
-/// Each read performs fresh I/O; separate reads are not atomic.
-/// Since Linux 6.14 and requires `CONFIG_CGROUP_DMEM` and controller availability.
-/// Missing files return [`crate::Error::FileMissing`], including older kernels
-/// and root exemptions. Capacity is root-only; protection and limit files are
-/// non-root. The kernel also exposes current usage at the root, although the
-/// interface guide describes it as non-root.
-///
-/// See [Linux 6.14 DMEM source](https://github.com/torvalds/linux/blob/v6.14/kernel/cgroup/dmem.c).
-#[cfg(target_os = "linux")]
-#[derive(Debug, Clone, Copy)]
-pub struct Dmem<'a> {
-  pub(crate) cgroup: &'a Cgroup,
-}
-
-#[cfg(target_os = "linux")]
-impl Dmem<'_> {
-  /// Reads registered region capacities in bytes from the root-only interface.
-  ///
-  /// Capacity includes device memory reserved for kernel use, so it is not
-  /// necessarily available to cgroups. Since Linux 6.14; see [Linux DMEM](https://www.kernel.org/doc/html/v6.14/admin-guide/cgroup-v2.html#dmem).
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn capacity(&self) -> Result<DmemCapacity, Error> { self.cgroup.read_value::<DmemCapacity>() }
-
-  /// Reads volatile hierarchical usage for each registered region in bytes.
-  ///
-  /// Since Linux 6.14; see [Linux DMEM](https://www.kernel.org/doc/html/v6.14/admin-guide/cgroup-v2.html#dmem).
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn current(&self) -> Result<DmemCurrent, Error> { self.cgroup.read_value::<DmemCurrent>() }
-
-  /// Reads historical hierarchical device-memory usage peaks per region.
-  ///
-  /// Since Linux 7.3 and available below the hierarchy root. Each region has
-  /// an independent lifetime peak. Reading never resets peaks. See [`DmemPeak`].
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn peak(&self) -> Result<DmemPeak, Error> { self.cgroup.read_value::<DmemPeak>() }
-
-  /// Reads configured hard eviction protections in bytes, or `max`.
-  ///
-  /// Effective protection depends on ancestors and sibling demand. Since Linux
-  /// 6.14; see [Linux DMEM](https://www.kernel.org/doc/html/v6.14/admin-guide/cgroup-v2.html#dmem).
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn min(&self) -> Result<DmemLimits, Error> { self.cgroup.read_value::<DmemMin>() }
-
-  /// Sets the hard eviction protection in bytes for one device-memory region.
-  /// See [Linux device-memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#dmem).
-  ///
-  /// # Errors
-  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
-  pub fn set_min(&self, region: &str, value: MaxOr<Bytes>) -> Result<(), Error> {
-    self.cgroup.write_value::<DmemMin>((region, value))
-  }
-
-  /// Reads configured best-effort eviction protections in bytes, or `max`.
-  ///
-  /// Effective protection depends on ancestors and sibling demand. Since Linux
-  /// 6.14; see [Linux DMEM](https://www.kernel.org/doc/html/v6.14/admin-guide/cgroup-v2.html#dmem).
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn low(&self) -> Result<DmemLimits, Error> { self.cgroup.read_value::<DmemLow>() }
-
-  /// Sets the best-effort eviction protection in bytes for one device-memory region.
-  /// See [Linux device-memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#dmem).
-  ///
-  /// # Errors
-  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
-  pub fn set_low(&self, region: &str, value: MaxOr<Bytes>) -> Result<(), Error> {
-    self.cgroup.write_value::<DmemLow>((region, value))
-  }
-
-  /// Reads configured hierarchical usage limits in bytes, or `max`.
-  ///
-  /// `max` removes this cgroup's limit. Ancestor limits still apply. A region's
-  /// usage can exceed the new limit after it is lowered. Since Linux 7.3,
-  /// lowering a limit can also trigger reclaim if the device driver supports it.
-  /// See the [Linux DMEM interface](https://www.kernel.org/doc/html/v6.14/admin-guide/cgroup-v2.html#dmem)
-  /// and [Linux 7.3 reclaim implementation](https://github.com/torvalds/linux/blob/v7.3/kernel/cgroup/dmem.c).
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn max(&self) -> Result<DmemLimits, Error> { self.cgroup.read_value::<DmemMax>() }
-
-  /// Sets the hard limit in bytes for one device-memory region.
-  /// See [Linux device-memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#dmem).
-  ///
-  /// # Errors
-  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
-  pub fn set_max(&self, region: &str, value: MaxOr<Bytes>) -> Result<(), Error> {
-    self.cgroup.write_value::<DmemMax>((region, value))
-  }
-}
 
 /// A snapshot of registered device-memory region capacities in bytes.
 ///
@@ -264,6 +164,8 @@ mod tests {
   use uom::si::information::byte;
 
   use super::*;
+  #[cfg(target_os = "linux")]
+  use crate::Cgroup;
   use crate::parse::tests::{
     Cases,
     Failure::{Excess, Invalid, Missing},
@@ -278,13 +180,12 @@ mod tests {
   fn reads_region_fixtures_without_writes_and_preserves_missing_paths() {
     for fixture in ["p6_dmem", "p6_dmem_root", "p6_dmem_older"] {
       let cgroup = Cgroup::fixture(&format!("fixtures/{fixture}"));
-      let reader = Dmem { cgroup: &cgroup };
-      cgroup.check_fixture(DmemCapacity::FILE_NAME, true, || reader.capacity());
-      cgroup.check_fixture(DmemCurrent::FILE_NAME, true, || reader.current());
-      cgroup.check_fixture(DmemPeak::FILE_NAME, true, || reader.peak());
-      cgroup.check_fixture(DmemLimits::MIN_FILE_NAME, true, || reader.min());
-      cgroup.check_fixture(DmemLimits::LOW_FILE_NAME, true, || reader.low());
-      cgroup.check_fixture(DmemLimits::MAX_FILE_NAME, true, || reader.max());
+      cgroup.check_fixture(DmemCapacity::FILE_NAME, true, || cgroup.read_value::<DmemCapacity>());
+      cgroup.check_fixture(DmemCurrent::FILE_NAME, true, || cgroup.read_value::<DmemCurrent>());
+      cgroup.check_fixture(DmemPeak::FILE_NAME, true, || cgroup.read_value::<DmemPeak>());
+      cgroup.check_fixture(DmemLimits::MIN_FILE_NAME, true, || cgroup.read_value::<DmemMin>());
+      cgroup.check_fixture(DmemLimits::LOW_FILE_NAME, true, || cgroup.read_value::<DmemLow>());
+      cgroup.check_fixture(DmemLimits::MAX_FILE_NAME, true, || cgroup.read_value::<DmemMax>());
     }
   }
 

@@ -24,53 +24,56 @@ pub(super) struct CpuReader {
 impl CpuReader {
   /// Read hierarchical CPU usage and optional counters for this cgroup's own bandwidth limit.
   fn stat(&self, py: Python<'_>) -> PyResult<CpuStat> {
-    PythonError::read(py, &self.owner, |owner| owner.cpu().stat()).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<CoreCpuStat>).map(Into::into)
   }
 
   /// Read local CPU throttling counters, if the interface exists.
   fn stat_local(&self, py: Python<'_>) -> PyResult<CpuStatLocal> {
-    PythonError::read(py, &self.owner, |owner| owner.cpu().stat_local()).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<CoreCpuStatLocal>).map(Into::into)
   }
 
   /// Read this cgroup's quota and period, not effective ancestor capacity.
   fn max(&self, py: Python<'_>) -> PyResult<CpuMax> {
-    PythonError::read(py, &self.owner, |owner| owner.cpu().max()).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<CoreCpuMax>).map(Into::into)
   }
 
   /// Read CPU weight, preserving the special idle state.
   fn weight(&self, py: Python<'_>) -> PyResult<CpuWeight> {
-    PythonError::read(py, &self.owner, |owner| owner.cpu().weight()).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<CoreCpuWeight>).map(Into::into)
   }
 
   /// Read CPU weight as a nice value from -20 through 19.
   fn weight_nice(&self, py: Python<'_>) -> PyResult<i8> {
-    PythonError::read(py, &self.owner, |owner| owner.cpu().weight_nice()).map(|nice| *nice.as_ref())
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::cpu::Nice>).map(|nice| *nice.as_ref())
   }
 
   /// Read the allowed CPU bandwidth burst in nanoseconds.
   fn max_burst(&self, py: Python<'_>) -> PyResult<Quantity<sakai::Time>> {
-    PythonError::read(py, &self.owner, |owner| owner.cpu().max_burst()).map(|burst| burst.value().into())
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::cpu::CpuMaxBurst>)
+      .map(|burst| burst.value().into())
   }
 
   /// Read whether this cgroup is configured for idle CPU scheduling.
   fn idle(&self, py: Python<'_>) -> PyResult<bool> {
-    PythonError::read(py, &self.owner, |owner| owner.cpu().idle()).map(|idle| idle.value())
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::cpu::CpuIdle>).map(|idle| idle.value())
   }
 
   /// Read the minimum utilization clamp as a ratio from zero to one.
   fn uclamp_min(&self, py: Python<'_>) -> PyResult<Quantity<sakai::Ratio>> {
-    PythonError::read(py, &self.owner, |owner| owner.cpu().uclamp_min()).map(|clamp| clamp.value().into())
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::cpu::CpuUclampMin>)
+      .map(|clamp| clamp.value().into())
   }
 
   /// Read the maximum utilization clamp as `max` or a concrete ratio.
   #[gen_stub(override_return_type(type_repr = "MaxOr[Ratio]"))]
   fn uclamp_max(&self, py: Python<'_>) -> PyResult<MaxOr> {
-    PythonError::read(py, &self.owner, |owner| owner.cpu().uclamp_max()).map(|clamp| MaxOr::from_ratio(clamp.value()))
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::cpu::CpuUclampMax>)
+      .map(|clamp| MaxOr::from_ratio(clamp.value()))
   }
 
   /// Read CPU pressure-stall averages and cumulative times.
   fn pressure(&self, py: Python<'_>) -> PyResult<Pressure> {
-    PythonError::read(py, &self.owner, |owner| owner.cpu().pressure()).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::cpu::CpuPressure>).map(Into::into)
   }
 }
 

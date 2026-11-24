@@ -36,42 +36,42 @@ impl MiscReader {
   ///
   /// Performs fresh read-only I/O with the exception policy documented on MiscReader.
   fn capacity(&self, py: Python<'_>) -> PyResult<MiscCapacity> {
-    PythonError::read(py, &self.owner, |owner| owner.misc().capacity()).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::misc::MiscCapacity>).map(Into::into)
   }
 
   /// Read hierarchical resource usage counts; root support starts with Linux 6.5.
   ///
   /// Performs fresh read-only I/O with the exception policy documented on MiscReader.
   fn current(&self, py: Python<'_>) -> PyResult<MiscCurrent> {
-    PythonError::read(py, &self.owner, |owner| owner.misc().current()).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::misc::MiscCurrent>).map(Into::into)
   }
 
   /// Read historical hierarchical peak resource counts; since Linux 6.11.
   ///
   /// Performs fresh read-only I/O with the exception policy documented on MiscReader.
   fn peak(&self, py: Python<'_>) -> PyResult<MiscPeak> {
-    PythonError::read(py, &self.owner, |owner| owner.misc().peak()).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::misc::MiscPeak>).map(Into::into)
   }
 
   /// Read resource limits as MaxOr[Count]; absent at the hierarchy root.
   ///
   /// Performs fresh read-only I/O with the exception policy documented on MiscReader.
   fn max(&self, py: Python<'_>) -> PyResult<MiscMax> {
-    PythonError::read(py, &self.owner, |owner| owner.misc().max()).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::misc::MiscMax>).map(Into::into)
   }
 
   /// Read hierarchical resource max-boundary failure counts; since Linux 5.16.
   ///
   /// Performs fresh read-only I/O with the exception policy documented on MiscReader.
   fn events(&self, py: Python<'_>) -> PyResult<MiscEvents> {
-    PythonError::read(py, &self.owner, |owner| owner.misc().events()).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::misc::MiscEvents>).map(Into::into)
   }
 
   /// Read failures at this cgroup's limit or platform capacity; since Linux 6.11.
   ///
   /// Performs fresh read-only I/O with the exception policy documented on MiscReader.
   fn events_local(&self, py: Python<'_>) -> PyResult<MiscEvents> {
-    PythonError::read(py, &self.owner, |owner| owner.misc().events_local()).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::misc::MiscEventsLocal>).map(Into::into)
   }
 }
 

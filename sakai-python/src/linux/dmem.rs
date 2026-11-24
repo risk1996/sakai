@@ -45,7 +45,7 @@ impl DmemReader {
   /// no regions were reported. Since Linux 6.14; see DmemReader for read errors
   /// and the Linux interface reference.
   fn capacity(&self, py: Python<'_>) -> PyResult<DmemCapacity> {
-    PythonError::read(py, &self.owner, |owner| owner.dmem().capacity()).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::dmem::DmemCapacity>).map(Into::into)
   }
 
   /// Read current hierarchical device-memory usage as MaxOr[Bytes] bytes per region.
@@ -60,7 +60,7 @@ impl DmemReader {
   /// unlimited configured limit. The sentinel depends on kernel architecture
   /// and system page size. See https://github.com/torvalds/linux/blob/v6.14/kernel/cgroup/dmem.c.
   fn current(&self, py: Python<'_>) -> PyResult<DmemCurrent> {
-    PythonError::read(py, &self.owner, |owner| owner.dmem().current()).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::dmem::DmemCurrent>).map(Into::into)
   }
 
   /// Read historical hierarchical device-memory peaks as MaxOr[Bytes] bytes.
@@ -72,7 +72,7 @@ impl DmemReader {
   /// https://github.com/torvalds/linux/blob/v7.3/kernel/cgroup/dmem.c and
   /// DmemReader for read errors.
   fn peak(&self, py: Python<'_>) -> PyResult<DmemPeak> {
-    PythonError::read(py, &self.owner, |owner| owner.dmem().peak()).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::dmem::DmemPeak>).map(Into::into)
   }
 
   /// Read configured hard eviction protections as MaxOr[Bytes] byte amounts.
@@ -82,7 +82,7 @@ impl DmemReader {
   /// demand. The file is absent at the root. Since Linux 6.14; see DmemReader
   /// for read errors and the Linux interface reference.
   fn min(&self, py: Python<'_>) -> PyResult<DmemLimits> {
-    PythonError::read(py, &self.owner, |owner| owner.dmem().min()).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::dmem::DmemMin>).map(Into::into)
   }
 
   /// Read configured best-effort eviction protections as MaxOr[Bytes] bytes.
@@ -92,7 +92,7 @@ impl DmemReader {
   /// demand. The file is absent at the root. Since Linux 6.14; see DmemReader
   /// for read errors and the Linux interface reference.
   fn low(&self, py: Python<'_>) -> PyResult<DmemLimits> {
-    PythonError::read(py, &self.owner, |owner| owner.dmem().low()).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::dmem::DmemLow>).map(Into::into)
   }
 
   /// Read configured hierarchical limits as MaxOr[Bytes] byte amounts.
@@ -102,7 +102,7 @@ impl DmemReader {
   /// driver supports it. See https://github.com/torvalds/linux/blob/v7.3/kernel/cgroup/dmem.c.
   /// The file is absent at the root. Since Linux 6.14; see DmemReader for read errors.
   fn max(&self, py: Python<'_>) -> PyResult<DmemLimits> {
-    PythonError::read(py, &self.owner, |owner| owner.dmem().max()).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::dmem::DmemMax>).map(Into::into)
   }
 }
 

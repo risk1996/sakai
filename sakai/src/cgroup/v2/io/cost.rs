@@ -259,31 +259,6 @@ cgroup_value! { fields IoDeviceCostModel, {
 
 cgroup_value! { device_rows IoCostModel, devices: IoDeviceCostModel, Device::parse_lines }
 
-#[cfg(target_os = "linux")]
-impl super::Io<'_> {
-  /// Applies one device's QoS settings in one write at the hierarchy root.
-  /// Automatic control writes the enable flag and control mode. User control
-  /// also writes the latency targets and scaling bounds.
-  /// See [Linux I/O cost interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
-  ///
-  /// # Errors
-  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
-  pub fn set_cost_qos(&self, device: Device, value: &IoDeviceCostQos) -> Result<(), crate::Error> {
-    self.cgroup.write_value::<IoCostQos>((device, value))
-  }
-
-  /// Applies one device's cost model in one write at the hierarchy root.
-  /// Automatic control lets the kernel choose the coefficients. User control
-  /// supplies the model and all coefficients.
-  /// See [Linux I/O cost interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
-  ///
-  /// # Errors
-  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
-  pub fn set_cost_model(&self, device: Device, value: &IoDeviceCostModel) -> Result<(), crate::Error> {
-    self.cgroup.write_value::<IoCostModel>((device, value))
-  }
-}
-
 impl EncodeCgroup<IoCostControl> for IoCostControl {
   fn encode_token(&self, output: &mut String) -> Option<()> { write!(output, "{self}").ok() }
 }

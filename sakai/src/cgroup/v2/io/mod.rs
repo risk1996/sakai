@@ -12,10 +12,6 @@ pub use priority::IoPriorityClass;
 pub use stat::{DelayUsage, IoDeviceStat, IoStat};
 pub use weight::{IoWeight, IoWeightCommand, Weight};
 
-#[cfg(target_os = "linux")]
-use super::Cgroup;
-#[cfg(target_os = "linux")]
-use crate::Error;
 use crate::{
   Pressure,
   error::{ParseError, ParseValueError},
@@ -28,95 +24,6 @@ mod max;
 mod priority;
 mod stat;
 mod weight;
-
-/// A borrowed view of one cgroup's I/O controller.
-///
-/// Reads open fresh read-only descriptors. Missing interfaces,
-/// including disabled controllers, kernel configuration omissions, and root
-/// exemptions, return [`crate::Error::FileMissing`].
-///
-/// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
-#[cfg(target_os = "linux")]
-#[derive(Debug, Clone, Copy)]
-pub struct Io<'a> {
-  pub(crate) cgroup: &'a Cgroup,
-}
-
-#[cfg(target_os = "linux")]
-impl Io<'_> {
-  /// Hierarchical byte and operation counters for each reported block device.
-  ///
-  /// Reads a fresh [`IoStat`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn stat(&self) -> Result<IoStat, Error> { self.cgroup.read_value::<IoStat>() }
-
-  /// I/O PSI rolling averages and cumulative stall time; never writes a trigger.
-  ///
-  /// Reads a fresh [`Pressure`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn pressure(&self) -> Result<Pressure, Error> { self.cgroup.read_value::<IoPressure>() }
-
-  /// Default scheduling weight and explicit per-device overrides.
-  ///
-  /// Reads a fresh [`IoWeight`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn weight(&self) -> Result<IoWeight, Error> { self.cgroup.read_value::<IoWeight>() }
-
-  /// Per-device byte-per-second and operation-per-second limits.
-  ///
-  /// Reads a fresh [`IoMax`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn max(&self) -> Result<IoMax, Error> { self.cgroup.read_value::<IoMax>() }
-
-  /// Per-device latency protection targets, where the kernel supports them.
-  ///
-  /// Reads a fresh [`IoLatency`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn latency(&self) -> Result<IoLatency, Error> { self.cgroup.read_value::<IoLatency>() }
-
-  /// Reads the device I/O cost controller's QoS configuration at the root.
-  ///
-  /// Requires `CONFIG_BLK_CGROUP_IOCOST`; automatic values can change between reads.
-  /// See [Linux I/O interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
-  ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors);
-  /// non-root cgroups lack this interface.
-  pub fn cost_qos(&self) -> Result<IoCostQos, Error> { self.cgroup.read_value::<IoCostQos>() }
-
-  /// Reads the device I/O cost models at the root.
-  ///
-  /// Requires `CONFIG_BLK_CGROUP_IOCOST`; model rates are inputs rather than measured usage.
-  /// See [Linux I/O interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
-  ///
-  /// # Errors
-  ///
-  /// See the shared [interface-read errors](crate::v2#interface-read-errors);
-  /// non-root cgroups lack this interface.
-  pub fn cost_model(&self) -> Result<IoCostModel, Error> { self.cgroup.read_value::<IoCostModel>() }
-
-  /// Reads the I/O request-priority policy, including at the root.
-  ///
-  /// Requires `CONFIG_BLK_CGROUP_IOPRIO`; see [`IoPriorityClass`].
-  ///
-  /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn priority_class(&self) -> Result<IoPriorityClass, Error> { self.cgroup.read_value::<IoPriorityClass>() }
-
-  /// Sets the I/O request priority policy.
-  /// See the [Linux I/O priority controller](https://github.com/torvalds/linux/blob/v6.5/block/blk-ioprio.c).
-  ///
-  /// # Errors
-  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
-  pub fn set_priority_class(&self, value: IoPriorityClass) -> Result<(), Error> {
-    self.cgroup.write_value::<IoPriorityClass>(&value)
-  }
-}
 
 /// A block-device identifier keyed by the kernel's decimal `major:minor` pair.
 ///

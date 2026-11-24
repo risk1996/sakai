@@ -61,19 +61,6 @@ impl IoLatency {
   }
 }
 
-#[cfg(target_os = "linux")]
-impl super::Io<'_> {
-  /// Sets a device's latency target in whole microseconds. Pass `None` to clear it.
-  /// See [Linux I/O latency](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-latency-interface-files).
-  ///
-  /// # Errors
-  /// A target must be exactly representable in microseconds. See the
-  /// shared [interface-write errors](crate::v2#interface-write-errors).
-  pub fn set_latency(&self, device: Device, target: Option<NonZeroTime>) -> Result<(), crate::Error> {
-    self.cgroup.write_value::<IoLatency>((device, target))
-  }
-}
-
 impl FromStr for IoLatency {
   type Err = ParseError<ParseValueError>;
 

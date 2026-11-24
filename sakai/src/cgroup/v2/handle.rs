@@ -12,18 +12,8 @@ use rustix::{
 };
 
 use super::{
-  core::Core,
-  cpu::Cpu,
-  cpuset::Cpuset,
-  dmem::Dmem,
-  hugetlb::Hugetlb,
-  io::Io,
-  memory::Memory,
-  misc::Misc,
   notification::{ConfigurationInterface, ConfigurationWatcher, EventInterface, EventPoller},
   path::{CgroupPath, CgroupPathError},
-  pids::Pids,
-  rdma::Rdma,
 };
 use crate::{
   error::Error,
@@ -244,70 +234,6 @@ impl Cgroup {
   /// continue to use the open directory descriptor; see [openat(2)](https://man7.org/linux/man-pages/man2/openat.2.html).
   pub fn path(&self) -> &Path { &self.path }
 
-  /// Borrows this handle to read CPU controller interfaces.
-  ///
-  /// See [`crate::v2::cpu`] for the supported readers and [Linux cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html#controllers).
-  pub fn cpu(&self) -> Cpu<'_> { Cpu { cgroup: self } }
-
-  /// Borrows this handle to read CPU and NUMA memory-node placement.
-  ///
-  /// See [`crate::v2::cpuset`] and [Linux cpuset interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpuset-interface-files).
-  pub fn cpuset(&self) -> Cpuset<'_> { Cpuset { cgroup: self } }
-
-  /// Borrows this handle to read memory controller interfaces.
-  ///
-  /// See [`crate::v2::memory`] for the supported readers and [Linux cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html#controllers).
-  pub fn memory(&self) -> Memory<'_> { Memory { cgroup: self } }
-
-  /// Borrows this handle to read I/O controller interfaces.
-  ///
-  /// See [`crate::v2::io`] for the supported readers and [Linux cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html#controllers).
-  pub fn io(&self) -> Io<'_> { Io { cgroup: self } }
-
-  /// Borrows this handle to read huge-page accounting and limits by page size.
-  ///
-  /// See [`crate::v2::hugetlb`] for units, availability and supported interfaces.
-  pub fn hugetlb(&self) -> Hugetlb<'_> { Hugetlb { cgroup: self } }
-
-  /// Borrows this handle to read per-device RDMA resources.
-  ///
-  /// See [`crate::v2::rdma`] for units, availability and supported interfaces.
-  pub fn rdma(&self) -> Rdma<'_> { Rdma { cgroup: self } }
-
-  /// Borrows this handle to read device-memory regions.
-  ///
-  /// See [`crate::v2::dmem`] for units, availability and supported interfaces.
-  pub fn dmem(&self) -> Dmem<'_> { Dmem { cgroup: self } }
-
-  /// Borrows this handle to read miscellaneous scalar resources.
-  ///
-  /// See [`crate::v2::misc`] for units, availability and supported interfaces.
-  pub fn misc(&self) -> Misc<'_> { Misc { cgroup: self } }
-
-  /// Borrows this handle to read process-number controller interfaces.
-  ///
-  /// See [`crate::v2::pids`] for the supported readers and [Linux cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html#controllers).
-  pub fn pids(&self) -> Pids<'_> { Pids { cgroup: self } }
-
-  /// Borrows this handle to read core cgroup interfaces.
-  ///
-  /// See [`crate::v2::core`] for the supported readers and [Linux cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html#controllers).
-  pub fn core(&self) -> Core<'_> { Core { cgroup: self } }
-
-  /// Reads interrupt pressure, which has only a `full` stall line.
-  ///
-  /// Since Linux 6.1 with `CONFIG_PSI` and `CONFIG_IRQ_TIME_ACCOUNTING`; see the
-  /// [Linux PSI documentation](https://docs.kernel.org/accounting/psi.html) and
-  /// [Linux 6.1 implementation](https://github.com/torvalds/linux/blob/v6.1/kernel/cgroup/cgroup.c).
-  /// This performs fresh read-only I/O; separate pressure reads are not atomic.
-  ///
-  /// # Errors
-  ///
-  /// Returns [`Error::FileMissing`] when unavailable, [`Error::NotSupported`]
-  /// for an unsupported operation, [`Error::Parse`] for invalid contents, or
-  /// [`Error::Operation`] for other operating-system failures.
-  pub fn irq_pressure(&self) -> Result<crate::IrqPressure, Error> { self.read_value::<crate::IrqPressure>() }
-
   /// Opens a read-only subscription to one evented cgroup interface.
   ///
   /// An initial read establishes the notification baseline. Later calls to
@@ -459,7 +385,7 @@ mod tests {
   #[test]
   fn cgroup_type_failure_keeps_raw_input_and_strum_source() {
     let cgroup = Cgroup::fixture("fixtures/invalid_type");
-    let error = assert_err!(cgroup.core().kind());
+    let error = assert_err!(cgroup.read_value::<crate::v2::core::CgroupType>());
     let Error::Parse { path: actual, .. } = &error else {
       panic!("expected parse failure, got {error:?}");
     };
@@ -474,31 +400,31 @@ mod tests {
     let cgroup = Cgroup::fixture("");
     let path = cgroup.path();
     for (result, name) in [
-      (cgroup.cpu().stat_local().map(|_| ()), CpuStatLocal::FILE_NAME),
-      (cgroup.cpuset().cpus().map(|_| ()), CpuList::CPUS_FILE_NAME),
-      (cgroup.cpuset().cpus_effective().map(|_| ()), CpuList::EFFECTIVE_FILE_NAME),
-      (cgroup.cpuset().mems().map(|_| ()), MemoryNodeList::MEMS_FILE_NAME),
-      (cgroup.cpuset().mems_effective().map(|_| ()), MemoryNodeList::EFFECTIVE_FILE_NAME),
-      (cgroup.cpuset().partition().map(|_| ()), CpusetPartition::FILE_NAME),
-      (cgroup.io().stat().map(|_| ()), IoStat::FILE_NAME),
-      (cgroup.io().pressure().map(|_| ()), Pressure::IO_FILE_NAME),
-      (cgroup.io().weight().map(|_| ()), IoWeight::FILE_NAME),
-      (cgroup.io().max().map(|_| ()), IoMax::FILE_NAME),
-      (cgroup.io().latency().map(|_| ()), IoLatency::FILE_NAME),
-      (cgroup.core().kind().map(|_| ()), CgroupType::FILE_NAME),
-      (cgroup.core().events().map(|_| ()), CgroupEvents::FILE_NAME),
-      (cgroup.core().stat().map(|_| ()), CgroupStat::FILE_NAME),
-      (cgroup.pids().current().map(|_| ()), PidsCurrent::FILE_NAME),
-      (cgroup.pids().max().map(|_| ()), PidsMax::FILE_NAME),
-      (cgroup.pids().events().map(|_| ()), PidsEvents::FILE_NAME),
-      (cgroup.memory().current().map(|_| ()), MemoryCurrent::FILE_NAME),
-      (cgroup.memory().max().map(|_| ()), MemoryMax::FILE_NAME),
-      (cgroup.memory().high().map(|_| ()), MemoryHigh::FILE_NAME),
-      (cgroup.memory().low().map(|_| ()), MemoryLow::FILE_NAME),
-      (cgroup.memory().min().map(|_| ()), MemoryMin::FILE_NAME),
-      (cgroup.memory().peak().map(|_| ()), MemoryPeak::FILE_NAME),
-      (cgroup.memory().stat().map(|_| ()), MemoryStat::FILE_NAME),
-      (cgroup.memory().pressure().map(|_| ()), Pressure::MEMORY_FILE_NAME),
+      (cgroup.read_value::<crate::v2::cpu::CpuStatLocal>().map(|_| ()), CpuStatLocal::FILE_NAME),
+      (cgroup.read_value::<crate::v2::cpuset::CpuList>().map(|_| ()), CpuList::CPUS_FILE_NAME),
+      (cgroup.read_value::<crate::v2::cpuset::CpusEffective>().map(|_| ()), CpuList::EFFECTIVE_FILE_NAME),
+      (cgroup.read_value::<crate::v2::cpuset::MemoryNodeList>().map(|_| ()), MemoryNodeList::MEMS_FILE_NAME),
+      (cgroup.read_value::<crate::v2::cpuset::MemsEffective>().map(|_| ()), MemoryNodeList::EFFECTIVE_FILE_NAME),
+      (cgroup.read_value::<crate::v2::cpuset::CpusetPartition>().map(|_| ()), CpusetPartition::FILE_NAME),
+      (cgroup.read_value::<crate::v2::io::IoStat>().map(|_| ()), IoStat::FILE_NAME),
+      (cgroup.read_value::<crate::v2::io::IoPressure>().map(|_| ()), Pressure::IO_FILE_NAME),
+      (cgroup.read_value::<crate::v2::io::IoWeight>().map(|_| ()), IoWeight::FILE_NAME),
+      (cgroup.read_value::<crate::v2::io::IoMax>().map(|_| ()), IoMax::FILE_NAME),
+      (cgroup.read_value::<crate::v2::io::IoLatency>().map(|_| ()), IoLatency::FILE_NAME),
+      (cgroup.read_value::<crate::v2::core::CgroupType>().map(|_| ()), CgroupType::FILE_NAME),
+      (cgroup.read_value::<crate::v2::core::CgroupEvents>().map(|_| ()), CgroupEvents::FILE_NAME),
+      (cgroup.read_value::<crate::v2::core::CgroupStat>().map(|_| ()), CgroupStat::FILE_NAME),
+      (cgroup.read_value::<crate::v2::pids::PidsCurrent>().map(|_| ()), PidsCurrent::FILE_NAME),
+      (cgroup.read_value::<crate::v2::pids::PidsMax>().map(|_| ()), PidsMax::FILE_NAME),
+      (cgroup.read_value::<crate::v2::pids::PidsEvents>().map(|_| ()), PidsEvents::FILE_NAME),
+      (cgroup.read_value::<crate::v2::memory::MemoryCurrent>().map(|_| ()), MemoryCurrent::FILE_NAME),
+      (cgroup.read_value::<crate::v2::memory::MemoryMax>().map(|_| ()), MemoryMax::FILE_NAME),
+      (cgroup.read_value::<crate::v2::memory::MemoryHigh>().map(|_| ()), MemoryHigh::FILE_NAME),
+      (cgroup.read_value::<crate::v2::memory::MemoryLow>().map(|_| ()), MemoryLow::FILE_NAME),
+      (cgroup.read_value::<crate::v2::memory::MemoryMin>().map(|_| ()), MemoryMin::FILE_NAME),
+      (cgroup.read_value::<crate::v2::memory::MemoryPeak>().map(|_| ()), MemoryPeak::FILE_NAME),
+      (cgroup.read_value::<crate::v2::memory::MemoryStat>().map(|_| ()), MemoryStat::FILE_NAME),
+      (cgroup.read_value::<crate::v2::memory::MemoryPressure>().map(|_| ()), Pressure::MEMORY_FILE_NAME),
     ] {
       assert!(matches!(result, Err(Error::FileMissing { path: missing }) if missing == path.join(name)));
     }
@@ -517,16 +443,22 @@ mod tests {
     for fixture in ["p4", "p4_older", "p4_root"] {
       let cgroup = Cgroup::fixture(&format!("fixtures/{fixture}"));
       let path = cgroup.path();
-      let cpuset = cgroup.cpuset();
-      cgroup.check_fixture(CpuList::CPUS_FILE_NAME, true, || cpuset.cpus());
-      cgroup.check_fixture(CpuList::EFFECTIVE_FILE_NAME, true, || cpuset.cpus_effective());
-      cgroup.check_fixture(MemoryNodeList::MEMS_FILE_NAME, true, || cpuset.mems());
-      cgroup.check_fixture(MemoryNodeList::EFFECTIVE_FILE_NAME, true, || cpuset.mems_effective());
+      cgroup.check_fixture(CpuList::CPUS_FILE_NAME, true, || cgroup.read_value::<crate::v2::cpuset::CpuList>());
+      cgroup
+        .check_fixture(CpuList::EFFECTIVE_FILE_NAME, true, || cgroup.read_value::<crate::v2::cpuset::CpusEffective>());
+      cgroup.check_fixture(MemoryNodeList::MEMS_FILE_NAME, true, || {
+        cgroup.read_value::<crate::v2::cpuset::MemoryNodeList>()
+      });
+      cgroup.check_fixture(MemoryNodeList::EFFECTIVE_FILE_NAME, true, || {
+        cgroup.read_value::<crate::v2::cpuset::MemsEffective>()
+      });
       match fixture {
         | "p4_root" => assert!(
-          matches!(cgroup.cpuset().partition(), Err(Error::FileMissing { path: missing }) if missing == path.join(CpusetPartition::FILE_NAME))
+          matches!(cgroup.read_value::<crate::v2::cpuset::CpusetPartition>(), Err(Error::FileMissing { path: missing }) if missing == path.join(CpusetPartition::FILE_NAME))
         ),
-        | _ => cgroup.check_fixture(CpusetPartition::FILE_NAME, false, || cpuset.partition()),
+        | _ => cgroup.check_fixture(CpusetPartition::FILE_NAME, false, || {
+          cgroup.read_value::<crate::v2::cpuset::CpusetPartition>()
+        }),
       }
     }
   }
@@ -536,15 +468,14 @@ mod tests {
     for fixture in ["p3", "p3_older"] {
       let cgroup = Cgroup::fixture(&format!("fixtures/{fixture}"));
       let path = cgroup.path();
-      let io = cgroup.io();
-      cgroup.check_fixture(IoStat::FILE_NAME, false, || io.stat());
-      cgroup.check_fixture(Pressure::IO_FILE_NAME, false, || io.pressure());
-      cgroup.check_fixture(IoWeight::FILE_NAME, false, || io.weight());
-      cgroup.check_fixture(IoMax::FILE_NAME, false, || io.max());
+      cgroup.check_fixture(IoStat::FILE_NAME, false, || cgroup.read_value::<crate::v2::io::IoStat>());
+      cgroup.check_fixture(Pressure::IO_FILE_NAME, false, || cgroup.read_value::<crate::v2::io::IoPressure>());
+      cgroup.check_fixture(IoWeight::FILE_NAME, false, || cgroup.read_value::<crate::v2::io::IoWeight>());
+      cgroup.check_fixture(IoMax::FILE_NAME, false, || cgroup.read_value::<crate::v2::io::IoMax>());
       match fixture {
-        | "p3" => cgroup.check_fixture(IoLatency::FILE_NAME, false, || io.latency()),
+        | "p3" => cgroup.check_fixture(IoLatency::FILE_NAME, false, || cgroup.read_value::<crate::v2::io::IoLatency>()),
         | _ => assert!(
-          matches!(cgroup.io().latency(), Err(Error::FileMissing { path: missing }) if missing == path.join(IoLatency::FILE_NAME))
+          matches!(cgroup.read_value::<crate::v2::io::IoLatency>(), Err(Error::FileMissing { path: missing }) if missing == path.join(IoLatency::FILE_NAME))
         ),
       }
     }
@@ -554,11 +485,11 @@ mod tests {
   fn reads_process_and_state_fixtures() {
     for (fixture, frozen, has_subsystems) in [("p2", Some(false), true), ("p2_older", None, false)] {
       let cgroup = Cgroup::fixture(&format!("fixtures/{fixture}"));
-      let current = assert_ok!(cgroup.pids().current());
-      let max = assert_ok!(cgroup.pids().max());
-      let events = assert_ok!(cgroup.pids().events());
-      let state = assert_ok!(cgroup.core().events());
-      let stat = assert_ok!(cgroup.core().stat());
+      let current = assert_ok!(cgroup.read_value::<crate::v2::pids::PidsCurrent>());
+      let max = assert_ok!(cgroup.read_value::<crate::v2::pids::PidsMax>());
+      let events = assert_ok!(cgroup.read_value::<crate::v2::pids::PidsEvents>());
+      let state = assert_ok!(cgroup.read_value::<crate::v2::core::CgroupEvents>());
+      let stat = assert_ok!(cgroup.read_value::<crate::v2::core::CgroupStat>());
       assert_eq!(current, assert_ok!("12".parse::<PidsCurrent>()));
       assert_eq!(max, assert_ok!("10".parse::<PidsMax>()));
       assert_eq!(events, assert_ok!("max 3".parse::<PidsEvents>()));

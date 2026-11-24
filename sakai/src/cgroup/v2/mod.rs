@@ -1,7 +1,6 @@
 //! Typed snapshots and handles for the unified cgroup v2 hierarchy.
 //!
-//! Snapshots implement string parsing on any OS. Handles and borrowed
-//! controller views are available on Linux. See the
+//! Snapshots implement string parsing on any OS. Typed file I/O is available on Linux. See the
 //! [Linux cgroup v2 guide](https://docs.kernel.org/admin-guide/cgroup-v2.html).
 //!
 //! Each interface declares a [`CgroupFile`] and a mode from [`mode`]. The

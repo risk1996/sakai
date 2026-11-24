@@ -1,8 +1,8 @@
-//! Read-only cgroup v2 interfaces. Parsers work on any OS; handles require Linux.
+//! Typed cgroup v2 interfaces. Parsers work on any OS; handles require Linux.
 //!
 //! `sakai` reads CPU, memory, placement, task counts, I/O, huge pages, RDMA,
 //! device memory, miscellaneous resources, and core cgroup state. Use
-//! `Cgroup` on Linux to discover a cgroup, then select a controller reader.
+//! `Cgroup` on Linux to discover a cgroup, then select an interface type.
 //! Each read returns an owned snapshot: getters inspect that snapshot without
 //! doing more I/O. Reads of different files are not an atomic transaction.
 //!
@@ -45,8 +45,8 @@
 //! # #[cfg(target_os = "linux")]
 //! # fn example() -> Result<(), sakai::Error> {
 //! let cgroup = Cgroup::from_current_process()?;
-//! let usage = cgroup.cpu().stat()?.time().usage();
-//! let quota = cgroup.cpu().max()?;
+//! let usage = cgroup.read_value::<sakai::v2::cpu::CpuStat>()?.time().usage();
+//! let quota = cgroup.read_value::<sakai::v2::cpu::CpuMax>()?;
 //! # Ok(())
 //! # }
 //! ```
@@ -54,7 +54,7 @@
 //! # Parse saved interface contents
 //!
 //! Parsing does not open a cgroup or require Linux. The same snapshot types
-//! are returned by live controller readers.
+//! are returned by typed reads.
 //!
 //! ```
 //! use sakai::{MaxOr, v2::cpu::CpuMax};

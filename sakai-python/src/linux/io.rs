@@ -36,39 +36,39 @@ pub(super) struct IoReader {
 impl IoReader {
   /// Read hierarchical per-device byte and operation counters.
   fn stat(&self, py: Python<'_>) -> PyResult<IoStat> {
-    PythonError::read(py, &self.owner, |owner| owner.io().stat()).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::io::IoStat>).map(Into::into)
   }
 
   /// Read I/O pressure averages as ratios and stall times in nanoseconds.
   fn pressure(&self, py: Python<'_>) -> PyResult<Pressure> {
-    PythonError::read(py, &self.owner, |owner| owner.io().pressure()).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::io::IoPressure>).map(Into::into)
   }
 
   /// Read the default I/O scheduling weight and explicit device overrides.
   fn weight(&self, py: Python<'_>) -> PyResult<IoWeight> {
-    PythonError::read(py, &self.owner, |owner| owner.io().weight()).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::io::IoWeight>).map(Into::into)
   }
 
   /// Read per-device bandwidth and IOPS limits as MaxOr[BytesPerSecond] and MaxOr[OperationsPerSecond] values.
   fn max(&self, py: Python<'_>) -> PyResult<IoMax> {
-    PythonError::read(py, &self.owner, |owner| owner.io().max()).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::io::IoMax>).map(Into::into)
   }
 
   /// Read configured per-device latency protection targets in nanoseconds.
   fn latency(&self, py: Python<'_>) -> PyResult<IoLatency> {
-    PythonError::read(py, &self.owner, |owner| owner.io().latency()).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::io::IoLatency>).map(Into::into)
   }
 
   /// Read root-only I/O cost QoS parameters; percentages are dimensionless ratios.
   /// Requires CONFIG_BLK_CGROUP_IOCOST; automatic parameters may change between reads.
   fn cost_qos(&self, py: Python<'_>) -> PyResult<IoCostQos> {
-    PythonError::read(py, &self.owner, |owner| owner.io().cost_qos()).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::io::IoCostQos>).map(Into::into)
   }
 
   /// Read root-only I/O cost models; rates are model inputs, not measured usage.
   /// Requires CONFIG_BLK_CGROUP_IOCOST; automatic parameters may change between reads.
   fn cost_model(&self, py: Python<'_>) -> PyResult<IoCostModel> {
-    PythonError::read(py, &self.owner, |owner| owner.io().cost_model()).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::io::IoCostModel>).map(Into::into)
   }
 
   /// Read the I/O request-priority policy, including at root.
@@ -76,7 +76,8 @@ impl IoReader {
   /// as promote-to-rt since Linux 6.5; earlier kernels only promote unclassified I/O.
   #[gen_stub(override_return_type(type_repr = "typing.Literal['no-change', 'promote-to-rt', 'none-to-rt', 'restrict-to-be', 'idle']", imports = ("typing",)))]
   fn priority_class(&self, py: Python<'_>) -> PyResult<String> {
-    PythonError::read(py, &self.owner, |owner| owner.io().priority_class()).map(|value| value.to_string())
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::io::IoPriorityClass>)
+      .map(|value| value.to_string())
   }
 }
 

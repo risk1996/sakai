@@ -26,50 +26,51 @@ impl CpusetReader {
   /// Read requested CPU IDs; an empty list means inheritance from ancestors.
   /// Configuration is unchanged by hotplug and can differ from the effective grant.
   fn cpus(&self, py: Python<'_>) -> PyResult<CpuList> {
-    PythonError::read(py, &self.owner, |owner| owner.cpuset().cpus()).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<CoreCpuList>).map(Into::into)
   }
 
   /// Read online CPU IDs granted to this cgroup; hotplug and ancestor changes
   /// affect the grant. An empty list means no CPUs granted, not inheritance.
   fn cpus_effective(&self, py: Python<'_>) -> PyResult<CpuList> {
-    PythonError::read(py, &self.owner, |owner| owner.cpuset().cpus_effective()).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::cpuset::CpusEffective>).map(Into::into)
   }
 
   /// Read the exclusive CPU request for partition allocation, since Linux 6.7.
   /// An empty request falls back to cpuset.cpus when forming a partition.
   /// The hierarchy root lacks this interface.
   fn cpus_exclusive(&self, py: Python<'_>) -> PyResult<CpuList> {
-    PythonError::read(py, &self.owner, |owner| owner.cpuset().cpus_exclusive()).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::cpuset::CpusExclusive>).map(Into::into)
   }
 
   /// Read CPUs granted for exclusive partition allocation, since Linux 6.7.
   /// This is distinct from task placement; the root lacks this interface.
   fn cpus_exclusive_effective(&self, py: Python<'_>) -> PyResult<CpuList> {
-    PythonError::read(py, &self.owner, |owner| owner.cpuset().cpus_exclusive_effective()).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::cpuset::CpusExclusiveEffective>)
+      .map(Into::into)
   }
 
   /// Read CPUs in isolated partitions, since Linux 6.8; available only at root.
   fn cpus_isolated(&self, py: Python<'_>) -> PyResult<CpuList> {
-    PythonError::read(py, &self.owner, |owner| owner.cpuset().cpus_isolated()).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::cpuset::CpusIsolated>).map(Into::into)
   }
 
   /// Read requested NUMA memory-node IDs; an empty list means inheritance.
   /// Configuration is unchanged by hotplug; reading never migrates memory.
   fn mems(&self, py: Python<'_>) -> PyResult<MemoryNodeList> {
-    PythonError::read(py, &self.owner, |owner| owner.cpuset().mems()).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<CoreNodeList>).map(Into::into)
   }
 
   /// Read online memory-node IDs granted to this cgroup; hotplug and ancestor
   /// changes affect the grant. An empty list means no nodes granted.
   fn mems_effective(&self, py: Python<'_>) -> PyResult<MemoryNodeList> {
-    PythonError::read(py, &self.owner, |owner| owner.cpuset().mems_effective()).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::cpuset::MemsEffective>).map(Into::into)
   }
 
   /// Read partition membership, isolation, and invalid-state diagnostics.
   /// Validity can change with hotplug or ancestor configuration. Older kernels
   /// omit reasons; isolated states are available since Linux 6.1.
   fn partition(&self, py: Python<'_>) -> PyResult<CpusetPartition> {
-    PythonError::read(py, &self.owner, |owner| owner.cpuset().partition()).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<CorePartition>).map(Into::into)
   }
 }
 

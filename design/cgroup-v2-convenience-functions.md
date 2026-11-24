@@ -98,7 +98,7 @@ that every pressure file requires its corresponding resource controller.
 | `cgroup.freeze`, `cgroup.stat.local` | Present | Requested-versus-completed freeze summary; interval fraction from `frozen_usec` with its actual accounting meaning |
 | `cgroup.pressure` | Present: `Core::pressure_enabled()` | Report PSI accounting configuration as part of pressure availability |
 | `cpu.pressure`, `memory.pressure`, `io.pressure` | Present | Shared window selection and checked interval stall ratios |
-| `irq.pressure` | Present: `Cgroup::irq_pressure()` | A resource-specific pressure parser and interval report; do not require the `some`/`full` shape of other PSI resources |
+| `irq.pressure` | Present via `Cgroup::read_value::<IrqPressure>()` | A resource-specific pressure parser and interval report; do not require the `some`/`full` shape of other PSI resources |
 | `cgroup.kill` | Write-only action | No metric getter; retain outside this read-only design |
 
 For core helpers, “empty” refers to observed population, not proof that the
@@ -468,8 +468,8 @@ arbitrary universal “pressure is high” threshold. Extend the shared parser o
 when the resource's line shape is compatible; IRQ pressure requires its own
 documented shape.
 
-IRQ pressure reports only a `full` line. The existing `Cgroup::irq_pressure()`
-reader uses `IrqPressure` to preserve that shape; `Pressure` requires `some`
+IRQ pressure reports only a `full` line. The typed reader uses `IrqPressure`
+to preserve that shape. `Pressure` requires `some`
 and cannot parse IRQ output. Build IRQ conveniences from the full-only snapshot
 and retain its documented configuration and runtime support conditions; see
 [PSI output generation](https://github.com/torvalds/linux/blob/master/kernel/sched/psi.c).
