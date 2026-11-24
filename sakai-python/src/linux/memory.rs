@@ -489,6 +489,7 @@ mod tests {
       let object = assert_ok!(Py::new(py, stat));
       for (name, field, unit, expected) in [
         ("bytes", "anon", "bytes", BTreeMap::from([(0_u32, 4096_u64), (2, 8192)])),
+        ("bytes", "file", "bytes", BTreeMap::from([(0, 0)])),
         ("pages", "pgdemote_direct", "pages", BTreeMap::from([(2, 3)])),
         ("counts", "workingset_refault_file", "count", BTreeMap::from([(2, 7)])),
       ] {

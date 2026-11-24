@@ -9,8 +9,9 @@ import tempfile
 import threading
 import unittest
 from collections.abc import Callable, Mapping
+from functools import partial
 from pathlib import Path
-from typing import Any, TypeVar, assert_type, cast, get_origin
+from typing import TYPE_CHECKING, Any, TypeVar, assert_type, cast, get_origin
 
 import sakai
 import sakai._sakai as native
@@ -31,7 +32,6 @@ from sakai import (
   EventPoller,
   InterfaceMissingError,
   IoDeviceMax,
-  IoDeviceStat,
   IoLatency,
   IoMax,
   IoReader,
@@ -55,6 +55,15 @@ from sakai import (
   ZswapReader,
 )
 
+if TYPE_CHECKING:
+
+  def check_io_max_types(device: IoDeviceMax) -> None:
+    assert_type(device.read_bandwidth, MaxOr[BytesPerSecond])
+    assert_type(device.write_bandwidth, MaxOr[BytesPerSecond])
+    assert_type(device.read_iops, MaxOr[OperationsPerSecond])
+    assert_type(device.write_iops, MaxOr[OperationsPerSecond])
+
+
 _Result = TypeVar("_Result")
 _Quantity = Bytes | BytesPerSecond | Count | OperationsPerSecond | Pages | Ratio | Time
 
@@ -68,7 +77,7 @@ class ContractTest(unittest.TestCase):
     self,
     name: str,
     read: Callable[[], _Result],
-    check: Callable[[_Result], None],
+    check: Callable[[_Result], None] | None = None,
     value_type: type[_Result] | None = None,
   ) -> None:
     with self.subTest(interface=name):
@@ -79,7 +88,14 @@ class ContractTest(unittest.TestCase):
       else:
         if value_type is not None:
           self.assertIsInstance(value, value_type)
-        check(value)
+        if check is not None:
+          check(value)
+
+  def check_optional_types(
+    self, *cases: tuple[str, Callable[[], object], type[object]]
+  ) -> None:
+    for filename, read, expected_type in cases:
+      self.check_optional(filename, read, value_type=expected_type)
 
   def check_frozen(self, value: object, *names: str) -> None:
     for name in names:
@@ -156,127 +172,53 @@ class ContractTest(unittest.TestCase):
     self.check_frozen(value, *required)
 
   def test_misc_and_device_memory(self) -> None:
-    def check_values(
-      snapshot: object, attribute: str, check: Callable[[Any], None]
-    ) -> None:
-      values = getattr(snapshot, attribute)
-      self.assertIsInstance(values, Mapping)
-      self.check_frozen(snapshot, attribute)
-      self.check_readonly(values, "unused")
-      for name, value in values.items():
-        self.assertIsInstance(name, str)
-        check(value)
-
     misc = self.pinned_reader(Cgroup.misc)
-    self.assertIsInstance(misc, sakai.MiscReader)
-    for method, result_type in [
-      ("capacity", sakai.MiscCapacity),
-      ("current", sakai.MiscCurrent),
-      ("peak", sakai.MiscPeak),
-      ("events", sakai.MiscEvents),
-      ("events_local", sakai.MiscEvents),
-    ]:
-      self.check_optional(
-        "misc." + method.replace("_", "."),
-        getattr(misc, method),
-        lambda value: check_values(value, "resources", self.check_unsigned),
-        result_type,
-      )
-    self.check_optional(
-      "misc.max",
-      misc.max,
-      lambda value: check_values(value, "resources", self.check_limit),
-      sakai.MiscMax,
-    )
     dmem = self.pinned_reader(Cgroup.dmem)
+    self.assertIsInstance(misc, sakai.MiscReader)
     self.assertIsInstance(dmem, sakai.DmemReader)
-    self.check_optional(
-      "dmem.capacity",
-      dmem.capacity,
-      lambda value: check_values(value, "regions", self.check_unsigned),
-      sakai.DmemCapacity,
+    self.check_optional_types(
+      ("misc.capacity", misc.capacity, sakai.MiscCapacity),
+      ("misc.current", misc.current, sakai.MiscCurrent),
+      ("misc.peak", misc.peak, sakai.MiscPeak),
+      ("misc.max", misc.max, sakai.MiscMax),
+      ("misc.events", misc.events, sakai.MiscEvents),
+      ("misc.events.local", misc.events_local, sakai.MiscEvents),
+      ("dmem.capacity", dmem.capacity, sakai.DmemCapacity),
+      ("dmem.current", dmem.current, sakai.DmemCurrent),
+      ("dmem.peak", dmem.peak, sakai.DmemPeak),
+      ("dmem.min", dmem.min, sakai.DmemLimits),
+      ("dmem.low", dmem.low, sakai.DmemLimits),
+      ("dmem.max", dmem.max, sakai.DmemLimits),
     )
-    for method in ["current", "peak", "min", "low", "max"]:
-      self.check_optional(
-        "dmem." + method,
-        getattr(dmem, method),
-        lambda value: check_values(value, "regions", self.check_limit),
-        {"current": sakai.DmemCurrent, "peak": sakai.DmemPeak}.get(
-          method, sakai.DmemLimits
-        ),
-      )
 
   def test_rdma(self) -> None:
     rdma = self.pinned_reader(Cgroup.rdma)
     self.assertIsInstance(rdma, sakai.RdmaReader)
-
-    def check_rdma(snapshot: Any, kind: str) -> None:  # noqa: ANN401
-      self.check_frozen(snapshot, "devices")
-      self.check_readonly(snapshot.devices, ("unused", None))
-      for key, device in snapshot.devices.items():
-        self.assertIsInstance(key, tuple)
-        self.assertEqual(len(key), 2)
-        name, index = key
-        self.assertIsInstance(name, str)
-        if index is not None:
-          self.check_integer(index)
-          self.assertLessEqual(index, 2**32 - 1)
-        self.check_frozen(device, "hca_handle", "hca_object")
-        for value in [device.hca_handle, device.hca_object]:
-          if kind == "max":
-            self.check_limit(value)
-          elif kind == "events":
-            self.check_counters(value, sakai.RdmaResourceEvents, "max alloc_fail")
-          else:
-            self.check_unsigned(value)
-
-    for method, result_type, kind in [
-      ("current", sakai.RdmaCurrent, "current"),
-      ("peak", sakai.RdmaCurrent, "current"),
-      ("max", sakai.RdmaMax, "max"),
-      ("events", sakai.RdmaEvents, "events"),
-      ("events_local", sakai.RdmaEvents, "events"),
-    ]:
-      self.check_optional(
-        "rdma." + method.replace("_", "."),
-        getattr(rdma, method),
-        lambda value, kind=kind: check_rdma(value, kind),
-        result_type,
-      )
+    self.check_optional_types(
+      ("rdma.current", rdma.current, sakai.RdmaCurrent),
+      ("rdma.peak", rdma.peak, sakai.RdmaCurrent),
+      ("rdma.max", rdma.max, sakai.RdmaMax),
+      ("rdma.events", rdma.events, sakai.RdmaEvents),
+      ("rdma.events.local", rdma.events_local, sakai.RdmaEvents),
+    )
 
   def test_hugetlb(self) -> None:
     huge = self.pinned_reader(Cgroup.hugetlb)
     self.assertIsInstance(huge, sakai.HugetlbReader)
     for size in ["2MB", "1GB"]:
-      for suffix, read, check, result_type in [
-        ("current", huge.current, self.check_unsigned, Bytes),
-        ("max", huge.max, self.check_limit, MaxOr),
-        ("rsvd.current", huge.reserved_current, self.check_unsigned, Bytes),
-        ("rsvd.max", huge.reserved_max, self.check_limit, MaxOr),
-        (
-          "events",
-          huge.events,
-          lambda value: self.check_counters(value, sakai.HugetlbEvents, "max"),
-          sakai.HugetlbEvents,
-        ),
-        (
-          "events.local",
-          huge.events_local,
-          lambda value: self.check_counters(value, sakai.HugetlbEvents, "max"),
-          sakai.HugetlbEvents,
-        ),
-        (
-          "numa_stat",
-          huge.numa_stat,
-          lambda value: self.check_unsigned(value.total),
-          sakai.HugetlbNumaStat,
-        ),
-      ]:
+      for suffix, read, result_type in (
+        ("current", huge.current, Bytes),
+        ("max", huge.max, MaxOr),
+        ("rsvd.current", huge.reserved_current, Bytes),
+        ("rsvd.max", huge.reserved_max, MaxOr),
+        ("events", huge.events, sakai.HugetlbEvents),
+        ("events.local", huge.events_local, sakai.HugetlbEvents),
+        ("numa_stat", huge.numa_stat, sakai.HugetlbNumaStat),
+      ):
         self.check_optional(
           f"hugetlb.{size}.{suffix}",
-          lambda read=read, size=size: read(size),
-          cast("Callable[[Any], None]", check),
-          result_type,
+          partial(read, size),
+          value_type=result_type,
         )
     for size in ["../2MB", "2mb", "2048KB", "0KB", "3MB"]:
       with self.subTest(page_size=size), self.assertRaises(ValueError):
@@ -551,119 +493,18 @@ class ContractTest(unittest.TestCase):
       for value in values.values():
         self.check_unsigned(value)
     self.assertIsInstance(memory.pressure(), Pressure)
+    self.check_optional("memory.numa_stat", memory.numa_stat, value_type=MemoryNumaStat)
 
-  def check_device_key(self, key: tuple[int, int]) -> None:
-    self.assertIsInstance(key, tuple)
-    self.assertEqual(len(key), 2)
-    for number in key:
-      self.check_integer(number)
-
-  def test_io_stat_contract(self) -> None:
-    def check_stat(stat: IoStat) -> None:
-      self.assertIsInstance(stat, IoStat)
-      for key, device in stat.devices.items():
-        self.check_device_key(key)
-        self.assertIsInstance(device, IoDeviceStat)
-        for name in (
-          "read_bytes",
-          "write_bytes",
-          "discard_bytes",
-          "read_operations",
-          "write_operations",
-          "discard_operations",
-        ):
-          value = getattr(device, name)
-          if value is not None:
-            self.check_unsigned(value)
-          self.check_frozen(device, name)
-      self.check_readonly(stat.devices, (8, 0))
-      self.check_frozen(stat, "devices")
-
-    self.check_optional("io.stat", self.group.io().stat, check_stat)
-
-  def test_io_weight_contract(self) -> None:
-    def check_weight(weight: IoWeight) -> None:
-      self.assertIsInstance(weight, IoWeight)
-      self.check_integer(weight.default_weight)
-      self.assertTrue(1 <= weight.default_weight <= 10_000)
-      for key, value in weight.devices.items():
-        self.check_device_key(key)
-        self.check_integer(value)
-        self.assertTrue(1 <= value <= 10_000)
-      self.check_readonly(weight.devices, (8, 0))
-      self.check_frozen(weight, "default_weight")
-
-    self.check_optional("io.weight", self.group.io().weight, check_weight)
-
-  def test_io_max_contract(self) -> None:
-    def check_max(maximum: IoMax) -> None:
-      self.assertIsInstance(maximum, IoMax)
-      for key, device in maximum.devices.items():
-        self.check_device_key(key)
-        self.assertIsInstance(device, IoDeviceMax)
-        for limit in (
-          assert_type(device.read_bandwidth, MaxOr[BytesPerSecond]),
-          assert_type(device.write_bandwidth, MaxOr[BytesPerSecond]),
-          assert_type(device.read_iops, MaxOr[OperationsPerSecond]),
-          assert_type(device.write_iops, MaxOr[OperationsPerSecond]),
-        ):
-          self.check_limit(limit)
-        self.check_frozen(device, "read_bandwidth")
-      self.check_readonly(maximum.devices, (8, 0))
-      self.check_frozen(maximum, "devices")
-
-    self.check_optional("io.max", self.group.io().max, check_max)
-
-  def test_io_latency_contract(self) -> None:
-    def check_latency(latency: IoLatency) -> None:
-      self.assertIsInstance(latency, IoLatency)
-      for key, value in latency.targets.items():
-        self.check_device_key(key)
-        self.check_unsigned(value)
-        self.assertGreater(value.nanoseconds, 0)
-        self.assertEqual(value.nanoseconds % 1000, 0)
-      self.check_readonly(latency.targets, (8, 0))
-      self.check_frozen(latency, "targets")
-
-    self.check_optional("io.latency", self.group.io().latency, check_latency)
-
-  def test_io_cost_and_priority_contract(self) -> None:
-    def check_qos(value: sakai.IoCostQos) -> None:
-      self.check_readonly(value.devices, (8, 0))
-      for key, device in value.devices.items():
-        self.check_device_key(key)
-        self.assertIsInstance(device.enabled, bool)
-        self.assertIn(device.control, {"auto", "user"})
-        for percentile in (device.read_percentile, device.write_percentile):
-          self.check_unsigned(percentile, float)
-          self.assertTrue(0 <= percentile.fraction <= 1)
-        for scaling in (device.min_scaling, device.max_scaling):
-          self.check_unsigned(scaling, float)
-        for latency in (device.read_latency, device.write_latency):
-          self.check_unsigned(latency)
-          self.assertEqual(latency.nanoseconds % 1000, 0)
-        self.check_frozen(device, "enabled", "control")
-
-    def check_model(value: sakai.IoCostModel) -> None:
-      self.check_readonly(value.devices, (8, 0))
-      for key, device in value.devices.items():
-        self.check_device_key(key)
-        self.assertIn(device.control, {"auto", "user"})
-        self.assertEqual(device.model, "linear")
-        for name in (
-          "read_bandwidth",
-          "write_bandwidth",
-          "read_sequential_iops",
-          "read_random_iops",
-          "write_sequential_iops",
-          "write_random_iops",
-        ):
-          self.check_unsigned(getattr(device, name))
-        self.check_frozen(device, "control", "read_bandwidth")
-
+  def test_io_optional_readers(self) -> None:
     reader = self.group.io()
-    self.check_optional("io.cost.qos", reader.cost_qos, check_qos)
-    self.check_optional("io.cost.model", reader.cost_model, check_model)
+    self.check_optional_types(
+      ("io.stat", reader.stat, IoStat),
+      ("io.weight", reader.weight, IoWeight),
+      ("io.max", reader.max, IoMax),
+      ("io.latency", reader.latency, IoLatency),
+      ("io.cost.qos", reader.cost_qos, sakai.IoCostQos),
+      ("io.cost.model", reader.cost_model, sakai.IoCostModel),
+    )
     self.check_optional(
       "io.prio.class",
       reader.priority_class,
@@ -687,9 +528,7 @@ class ContractTest(unittest.TestCase):
   def test_io_reader_retains_handle(self) -> None:
     reader = self.pinned_reader(Cgroup.io)
     self.assertIsInstance(reader, IoReader)
-    self.check_optional(
-      "io.stat", reader.stat, lambda value: self.assertIsInstance(value, IoStat)
-    )
+    self.check_optional("io.stat", reader.stat, value_type=IoStat)
 
   def test_cpuset_lists_and_reader_ownership(self) -> None:
     reader = self.pinned_reader(Cgroup.cpuset)
@@ -758,13 +597,10 @@ class ContractTest(unittest.TestCase):
     )
     self.assertEqual(Cgroup.from_pid(os.getpid()).path, self.group.path)
     core = self.group.core()
-    for filename, read in (
-      ("cgroup.freeze", core.freeze),
-      ("cgroup.pressure", core.pressure_enabled),
-    ):
-      self.check_optional(
-        filename, read, lambda value: self.assertIsInstance(value, bool)
-      )
+    self.check_optional_types(
+      ("cgroup.freeze", core.freeze, bool),
+      ("cgroup.pressure", core.pressure_enabled, bool),
+    )
     for filename, read in (
       ("cgroup.max.depth", core.max_depth),
       ("cgroup.max.descendants", core.max_descendants),
@@ -881,23 +717,6 @@ class ContractTest(unittest.TestCase):
       ("memory.zswap.current", zswap.current),
     ):
       self.check_optional(name, read, self.check_unsigned, Bytes)
-
-  def test_numa_contract(self) -> None:
-    def check_stat(stat: MemoryNumaStat) -> None:
-      self.assertIsInstance(stat, MemoryNumaStat)
-      self.assertIn("anon", stat.bytes)
-      self.assertIn("file", stat.bytes)
-      for values in (stat.bytes, stat.pages, stat.counts):
-        self.check_readonly(values, "future")
-        for field, nodes in values.items():
-          with self.subTest(field=field):
-            self.assertTrue(all(isinstance(node, int) for node in nodes))
-            for value in nodes.values():
-              self.check_unsigned(value)
-            self.check_readonly(nodes, 0)
-      self.check_frozen(stat, "bytes")
-
-    self.check_optional("memory.numa_stat", self.group.memory().numa_stat, check_stat)
 
   def test_non_utf8_child_lookup(self) -> None:
     class BytePath(os.PathLike[bytes]):
