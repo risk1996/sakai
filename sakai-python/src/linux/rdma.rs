@@ -315,7 +315,7 @@ mod tests {
         assert_ok!(assert_ok!(device.getattr("hca_object")).getattr("count").and_then(|value| value.extract::<u64>())),
         i32::MAX as u64
       );
-      check_frozen(&device, &["hca_handle"]);
+      check_frozen(&device, &["hca_handle", "hca_object"]);
 
       let limits = RdmaMax::from(assert_ok!("mlx4_0 hca_handle=0 hca_object=max".parse::<CoreRdmaMax>()));
       let limits = assert_ok!(Py::new(py, limits));
@@ -325,7 +325,7 @@ mod tests {
       check_limit(&handle, Some(0), "count");
       let object = assert_ok!(device.getattr("hca_object"));
       check_limit(&object, None, "count");
-      check_frozen(&device, &["hca_handle"]);
+      check_frozen(&device, &["hca_handle", "hca_object"]);
     });
   }
 
@@ -351,8 +351,8 @@ mod tests {
         assert_ok!(assert_ok!(handles.getattr("alloc_fail")).getattr("count").and_then(|value| value.extract::<u64>())),
         7
       );
-      check_frozen(&handles, &["max"]);
-      check_frozen(&device, &["hca_handle"]);
+      check_frozen(&handles, &["max", "alloc_fail"]);
+      check_frozen(&device, &["hca_handle", "hca_object"]);
     });
   }
 

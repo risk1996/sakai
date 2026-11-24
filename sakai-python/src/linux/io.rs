@@ -520,6 +520,7 @@ mod tests {
         let devices = readonly(object.bind(py).as_any(), "devices", (8, 0));
         for (key, expected) in expected.devices {
           let device = assert_ok!(devices.get_item(key));
+          assert!(device.is_instance_of::<IoDeviceStat>());
           for (name, unit, expected) in [
             ("read_bytes", "bytes", expected.read_bytes.map(|value| value.0.value)),
             ("write_bytes", "bytes", expected.write_bytes.map(|value| value.0.value)),
@@ -596,6 +597,7 @@ mod tests {
         assert_eq!(assert_ok!(devices.len()), expected.len());
         for (key, expected) in expected {
           let device = assert_ok!(devices.get_item(key));
+          assert!(device.is_instance_of::<IoDeviceMax>());
           for ((name, unit), expected) in [
             ("read_bandwidth", "bytes_per_second"),
             ("write_bandwidth", "bytes_per_second"),
@@ -663,18 +665,20 @@ mod tests {
     Python::initialize();
     Python::attach(|py| {
       let qos = IoCostQos::from(assert_ok!(
-        "8:0 enable=1 ctrl=user rpct=95 rlat=2 wpct=0 wlat=0 min=50 max=10000".parse::<CoreIoCostQos>()
+        "8:0 enable=1 ctrl=user rpct=95 rlat=2 wpct=80 wlat=3 min=50 max=10000".parse::<CoreIoCostQos>()
       ));
       let qos = assert_ok!(Py::new(py, qos));
       let devices = readonly(qos.bind(py).as_any(), "devices", (8, 0));
       let device = assert_ok!(devices.get_item((8, 0)));
       assert!(assert_ok!(assert_ok!(device.getattr("enabled")).extract::<bool>()));
       assert_eq!(assert_ok!(assert_ok!(device.getattr("control")).extract::<String>()), "user");
-      assert_eq!(
-        assert_ok!(assert_ok!(device.getattr("read_latency")).extract::<Quantity<sakai::Time>>()),
-        2_000.into()
-      );
-      for (name, expected) in [("read_percentile", 0.95_f64), ("min_scaling", 0.5), ("max_scaling", 100.0)] {
+      check_frozen(&device, &["enabled", "control"]);
+      for (name, expected) in [("read_latency", 2_000), ("write_latency", 3_000)] {
+        assert_eq!(assert_ok!(assert_ok!(device.getattr(name)).extract::<Quantity<sakai::Time>>()), expected.into());
+      }
+      for (name, expected) in
+        [("read_percentile", 0.95_f64), ("write_percentile", 0.8), ("min_scaling", 0.5), ("max_scaling", 100.0)]
+      {
         assert_in_delta!(
           assert_ok!(assert_ok!(assert_ok!(device.getattr(name)).getattr("fraction")).extract::<f64>()),
           expected,
@@ -692,6 +696,7 @@ mod tests {
       let device = assert_ok!(devices.get_item((8, 0)));
       assert_eq!(assert_ok!(assert_ok!(device.getattr("control")).extract::<String>()), "auto");
       assert_eq!(assert_ok!(assert_ok!(device.getattr("model")).extract::<String>()), "linear");
+      check_frozen(&device, &["control"]);
       for (name, unit, expected) in [
         ("read_bandwidth", "bytes_per_second", 1),
         ("read_sequential_iops", "operations_per_second", 2),
