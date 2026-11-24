@@ -5,6 +5,7 @@ on:
     branches:
       - main
   pull_request:
+    types: [opened, reopened, synchronize, edited]
   workflow_call:
   workflow_dispatch:
     inputs:
@@ -26,6 +27,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  pr-title:
+    name: Conventional PR title
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-slim
+    permissions:
+      pull-requests: read
+    steps:
+      - uses: amannn/action-semantic-pull-request@v6.1.2
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
   security:
     name: RustSec and dependency policy
     runs-on: ubuntu-26.04
