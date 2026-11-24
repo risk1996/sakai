@@ -25,6 +25,7 @@ use crate::{
 /// snapshots. An index can appear or disappear when another adapter shares
 /// the name. See [Linux RDMA interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#rdma-interface-files).
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
 pub struct RdmaDevice {
   /// Adapter name.
   pub name: String,
@@ -95,6 +96,7 @@ impl EncodeCgroup<UsageCount> for Count {
 ///
 /// See [Linux RDMA interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#rdma-interface-files).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub struct RdmaCurrent {
   devices: BTreeMap<RdmaDevice, RdmaDeviceCurrent>,
 }
@@ -123,6 +125,7 @@ impl RdmaCurrent {
 /// count as 2,147,483,647 rather than treating usage as unlimited. See the
 /// [kernel read implementation](https://github.com/torvalds/linux/blob/v5.15/kernel/cgroup/rdma.c).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct RdmaDeviceCurrent {
   hca_handle: Count,
   hca_object: Count,
@@ -155,6 +158,7 @@ cgroup_value! { device_rows RdmaCurrent, devices: RdmaDeviceCurrent, parse_devic
 ///
 /// See [Linux RDMA interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#rdma-interface-files).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub struct RdmaMax {
   /// Resource limits by RDMA device.
   pub devices: BTreeMap<RdmaDevice, RdmaDeviceMax>,
@@ -176,6 +180,7 @@ impl RdmaMax {
 ///
 /// See [Linux RDMA interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#rdma-interface-files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct RdmaDeviceMax {
   /// HCA handle limit, or `max` for no limit here.
   pub hca_handle: MaxOr<Count>,
@@ -209,6 +214,7 @@ cgroup_value! { device_rows RdmaMax, devices: RdmaDeviceMax, parse_devices }
 /// ignored; optional device indices remain part of the map keys.
 /// All four baseline event counters are required for each device.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub struct RdmaEvents {
   devices: BTreeMap<RdmaDevice, RdmaDeviceEvents>,
 }
@@ -231,6 +237,7 @@ impl RdmaEvents {
 /// Since Linux 7.2; see the
 /// [release-tagged implementation](https://github.com/torvalds/linux/blob/v7.2/kernel/cgroup/rdma.c).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct RdmaDeviceEvents {
   hca_handle: RdmaResourceEvents,
   hca_object: RdmaResourceEvents,
@@ -276,6 +283,7 @@ impl RdmaDeviceEvents {
 /// Since Linux 7.2; see the
 /// [release-tagged implementation](https://github.com/torvalds/linux/blob/v7.2/kernel/cgroup/rdma.c).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct RdmaResourceEvents {
   max: Count,
   alloc_fail: Count,

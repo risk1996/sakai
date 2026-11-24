@@ -66,6 +66,7 @@ struct CgroupTypeParseError {
 ///
 /// See [Linux `cgroup.type` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::EnumString, strum::Display)]
+#[non_exhaustive]
 pub enum CgroupType {
   /// A normal, valid domain cgroup.
   ///

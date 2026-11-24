@@ -17,6 +17,7 @@ use crate::{
   validate(greater_or_equal = 1, less_or_equal = 10_000),
   derive(Debug, Clone, Copy, PartialEq, Eq, Hash, AsRef)
 )]
+#[non_exhaustive]
 pub struct Weight(u16);
 
 /// A configuration snapshot of `io.weight`'s default and device overrides.
@@ -28,6 +29,7 @@ pub struct Weight(u16);
 ///
 /// See [Linux `io.weight` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct IoWeight {
   /// Default weight for devices without an override.
   pub default: Weight,

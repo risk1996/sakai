@@ -19,6 +19,7 @@ use crate::{
 ///
 /// See [Linux `io.latency` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub struct IoLatency {
   /// Configured latency targets by block device.
   pub devices: BTreeMap<Device, NonZeroTime>,

@@ -37,6 +37,7 @@ use crate::{
 ///
 /// See [Linux `io.max` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub struct IoMax {
   /// Configured limits by block device.
   pub devices: BTreeMap<Device, IoDeviceMax>,
@@ -62,6 +63,7 @@ impl IoMax {
 ///
 /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct IoDeviceMax {
   /// Read bandwidth limit in bytes per second.
   pub read_bandwidth: MaxOr<BytesPerSecond>,

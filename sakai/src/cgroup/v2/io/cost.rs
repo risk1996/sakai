@@ -63,6 +63,7 @@ impl ParseCgroup<Self> for IoCostModelName {
 ///
 /// See [Linux I/O cost interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct IoCostQos {
   /// QoS settings by block device.
   pub devices: BTreeMap<Device, IoDeviceCostQos>,
@@ -84,6 +85,7 @@ impl IoCostQos {
 ///
 /// See [Linux I/O cost interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
 pub struct IoDeviceCostQos {
   /// Whether the I/O cost controller is enabled for this device.
   pub enabled: bool,
@@ -172,6 +174,7 @@ impl ParseCgroup<ParseScalingPercent> for Ratio {
 ///
 /// See [Linux I/O cost interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub struct IoCostModel {
   /// Cost models by block device.
   pub devices: BTreeMap<Device, IoDeviceCostModel>,
@@ -193,6 +196,7 @@ impl IoCostModel {
 ///
 /// See [Linux I/O cost interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct IoDeviceCostModel {
   /// Whether the kernel or user controls the cost model.
   pub control: IoCostControl,

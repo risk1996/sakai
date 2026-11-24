@@ -15,6 +15,7 @@ use crate::{
 ///
 /// See [Linux `memory.stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub struct MemoryStat {
   bytes: BTreeMap<MemoryStatByteField, Bytes>,
   pages: BTreeMap<MemoryStatPageField, Pages>,

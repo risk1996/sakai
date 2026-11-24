@@ -46,6 +46,7 @@ macro_rules! placement_list {
   ($(#[$doc:meta])* $name:ident, $field:literal, $configured:ident, $file:literal, $effective:literal) => {
     $(#[$doc])*
     #[derive(Debug, Clone, PartialEq, Eq, Default)]
+    #[non_exhaustive]
     pub struct $name {
       /// Inclusive ID ranges, in ascending order without overlap.
       pub ranges: Vec<RangeInclusive<u32>>,

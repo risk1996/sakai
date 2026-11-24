@@ -22,6 +22,7 @@ use crate::{
 ///
 /// See [Linux `memory.numa_stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub struct MemoryNumaStat {
   bytes: BTreeMap<MemoryStatByteField, BTreeMap<u32, Bytes>>,
   pages: BTreeMap<MemoryStatPageField, BTreeMap<u32, Pages>>,

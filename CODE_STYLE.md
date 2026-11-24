@@ -19,8 +19,7 @@
 - Leave formatting to the project formatter; verify with `devenv tasks run check:fmt`.
 - Prioritize correctness and leveraging the awesome Rust type system:
   - use enum instead of string matching if the list of possible values is known and finite,
-  - mark public enums `#[non_exhaustive]` when kernel fields, controllers, or
-    error categories can grow. Keep genuinely closed alternatives exhaustive.
+  - mark public cgroup structs and enums `#[non_exhaustive]`.
     Use exhaustive matches inside the defining crate so additions require
     updating internal handling; downstream matches need a fallback.
   - use `uom` whenever there is a dimension of the return type (e.g. time, bytes, count, etc.), say no to primitive obsession,

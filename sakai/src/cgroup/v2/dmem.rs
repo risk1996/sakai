@@ -22,6 +22,7 @@ use crate::{
 ///
 /// Since Linux 6.14; see [Linux DMEM](https://www.kernel.org/doc/html/v6.14/admin-guide/cgroup-v2.html#dmem).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub struct DmemCapacity {
   regions: BTreeMap<String, Bytes>,
 }
@@ -53,6 +54,7 @@ cgroup_value! { map DmemCapacity, regions: ParseBytes, "bytes" }
 ///
 /// Since Linux 6.14; see [Linux DMEM](https://www.kernel.org/doc/html/v6.14/admin-guide/cgroup-v2.html#dmem).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub struct DmemCurrent {
   /// Configured byte amounts or `max` by region.
   pub regions: BTreeMap<String, MaxOr<Bytes>>,
@@ -83,6 +85,7 @@ cgroup_value! { map DmemCurrent, regions: ParseBytes, "bytes" }
 /// Since Linux 7.3; see [Linux 7.3 source](https://github.com/torvalds/linux/blob/v7.3/kernel/cgroup/dmem.c)
 /// and [Linux `dmem.peak`](https://docs.kernel.org/admin-guide/cgroup-v2.html#dmem).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub struct DmemPeak {
   regions: BTreeMap<String, MaxOr<Bytes>>,
 }
@@ -114,6 +117,7 @@ cgroup_value! { map DmemPeak, regions: ParseBytes, "bytes" }
 /// Since Linux 6.14; see [Linux DMEM](https://www.kernel.org/doc/html/v6.14/admin-guide/cgroup-v2.html#dmem)
 /// and the [versioned implementation](https://github.com/torvalds/linux/blob/v6.14/kernel/cgroup/dmem.c).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub struct DmemLimits {
   regions: BTreeMap<String, MaxOr<Bytes>>,
 }

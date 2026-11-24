@@ -14,6 +14,7 @@ use crate::{
 ///
 /// See [Linux `cpu.stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct CpuStat {
   time: CpuTimeStat,
   bandwidth: Option<CpuBandwidthStat>,
@@ -50,6 +51,7 @@ impl CpuStat {
 /// Since Linux 6.6; see the [upstream Linux 6.6 source](https://github.com/torvalds/linux/blob/v6.6/kernel/cgroup/cgroup.c).
 /// Older kernels return [`crate::Error::FileMissing`] when this interface is read.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct CpuStatLocal {
   throttled: Option<Time>,
 }
@@ -92,6 +94,7 @@ impl CpuStat {
 ///
 /// See [Linux `cpu.stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct CpuTimeStat {
   usage: Time,
   user: Time,
@@ -147,6 +150,7 @@ impl CpuTimeStat {
 /// See [Linux `cpu.stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files)
 /// and the [counter implementation](https://github.com/torvalds/linux/blob/v6.13/kernel/sched/sched.h).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct CpuBandwidthStat {
   nr_periods: Count,
   nr_throttled: Count,
@@ -189,6 +193,7 @@ impl CpuBandwidthStat {
 ///
 /// Since Linux 5.16; see the [upstream Linux 5.16 source](https://github.com/torvalds/linux/blob/v5.16/kernel/sched/core.c).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct CpuBurstStat {
   nr_bursts: Count,
   burst: Time,

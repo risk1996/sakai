@@ -24,17 +24,12 @@ pub(super) enum PythonLimitValue {
 #[pyclass(generic, frozen, module = "sakai._sakai")]
 #[derive(Clone, Copy)]
 pub(super) struct MaxOr {
-  inner: Option<PythonLimitValue>,
+  inner: CoreMaxOr<PythonLimitValue>,
 }
 
 impl MaxOr {
   pub(super) fn from_value<T>(value: CoreMaxOr<T>, convert: impl FnOnce(T) -> PythonLimitValue) -> Self {
-    Self {
-      inner: match value {
-        | CoreMaxOr::Max => None,
-        | CoreMaxOr::Value(value) => Some(convert(value)),
-      },
-    }
+    Self { inner: value.map(convert) }
   }
 
   pub(super) fn from_time(value: CoreMaxOr<NonZeroTime>) -> Self {
@@ -60,20 +55,24 @@ impl MaxOr {
 impl MaxOr {
   /// Whether the kernel reported `max`.
   #[getter]
-  pub(super) fn is_max(&self) -> bool { self.inner.is_none() }
+  pub(super) fn is_max(&self) -> bool { matches!(self.inner, CoreMaxOr::Max) }
 
   /// Concrete value; raises ValueError when the kernel reported `max`.
   #[getter]
   #[gen_stub(override_return_type(type_repr = "_ValueT"))]
   pub(super) fn value(&self) -> PyResult<PythonLimitValue> {
-    self.inner.ok_or_else(|| PyValueError::new_err("max has no numeric value"))
+    match self.inner {
+      | CoreMaxOr::Max => Err(PyValueError::new_err("max has no numeric value")),
+      | CoreMaxOr::Value(value) => Ok(value),
+      | _ => Err(PyValueError::new_err("unsupported cgroup limit")),
+    }
   }
 
   fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
-    match self.inner {
-      | None => Ok("MaxOr(max)".into()),
-      | Some(value) => Ok(format!("MaxOr(value={})", value.into_pyobject(py)?.repr()?)),
+    if self.is_max() {
+      return Ok("MaxOr(max)".into());
     }
+    Ok(format!("MaxOr(value={})", self.value()?.into_pyobject(py)?.repr()?))
   }
 }
 

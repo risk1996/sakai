@@ -22,6 +22,7 @@ pub trait Interface: Copy {
 /// Values are parsed without I/O. Controller readers obtain fresh snapshots.
 /// Different interfaces retain different types even when their units match.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct Scalar<T, I> {
   /// The stored quantity or limit. Editing it only changes this value.
   pub value: T,

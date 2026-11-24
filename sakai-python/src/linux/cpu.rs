@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use pyo3::prelude::*;
+use pyo3::{exceptions::PyValueError, prelude::*};
 use sakai::v2::cpu::{
   CpuBandwidthStat as CoreCpuBandwidthStat, CpuBurstStat as CoreCpuBurstStat, CpuMax as CoreCpuMax,
   CpuStat as CoreCpuStat, CpuStatLocal as CoreCpuStatLocal, CpuTimeStat as CoreCpuTimeStat, CpuWeight as CoreCpuWeight,
@@ -39,7 +39,7 @@ impl CpuReader {
 
   /// Read CPU weight, preserving the special idle state.
   fn weight(&self, py: Python<'_>) -> PyResult<CpuWeight> {
-    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<CoreCpuWeight>).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<CoreCpuWeight>).and_then(CpuWeight::try_from)
   }
 
   /// Read CPU weight as a nice value from -20 through 19.
@@ -221,11 +221,14 @@ pub(super) struct CpuWeight {
   weight: Option<u16>,
 }
 
-impl From<CoreCpuWeight> for CpuWeight {
-  fn from(value: CoreCpuWeight) -> Self {
+impl TryFrom<CoreCpuWeight> for CpuWeight {
+  type Error = PyErr;
+
+  fn try_from(value: CoreCpuWeight) -> PyResult<Self> {
     match value {
-      | CoreCpuWeight::Idle => Self { is_idle: true, weight: None },
-      | CoreCpuWeight::Shares(weight) => Self { is_idle: false, weight: Some(*weight.as_ref()) },
+      | CoreCpuWeight::Idle => Ok(Self { is_idle: true, weight: None }),
+      | CoreCpuWeight::Shares(weight) => Ok(Self { is_idle: false, weight: Some(*weight.as_ref()) }),
+      | _ => Err(PyValueError::new_err("unsupported cgroup CPU weight")),
     }
   }
 }
@@ -282,8 +285,8 @@ mod tests {
     assert_eq!(limited.period, 100_000_000.into());
     assert!(matches!(assert_ok!(limited.cpu_count.value()), PythonLimitValue::Ratio(value) if value == 0.25.into()));
 
-    let idle = CpuWeight::from(assert_ok!("0".parse::<CoreCpuWeight>()));
-    let weighted = CpuWeight::from(assert_ok!("100".parse::<CoreCpuWeight>()));
+    let idle = assert_ok!(CpuWeight::try_from(assert_ok!("0".parse::<CoreCpuWeight>())));
+    let weighted = assert_ok!(CpuWeight::try_from(assert_ok!("100".parse::<CoreCpuWeight>())));
     assert!(idle.is_idle);
     assert_eq!(idle.weight, None);
     assert!(!weighted.is_idle);

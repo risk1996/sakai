@@ -23,6 +23,7 @@ use crate::{
 ///
 /// See [Linux `io.stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
 #[derive(Debug, Clone, PartialEq, Default)]
+#[non_exhaustive]
 pub struct IoStat {
   devices: BTreeMap<Device, IoDeviceStat>,
 }
@@ -48,6 +49,7 @@ impl IoStat {
 ///
 /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[non_exhaustive]
 pub struct IoDeviceStat {
   read_bytes: Option<Bytes>,
   write_bytes: Option<Bytes>,
@@ -199,6 +201,7 @@ impl IoDeviceStat {
 /// to inspect the exact encoded value.
 /// See the [Linux delay implementation](https://github.com/torvalds/linux/blob/v6.8/block/blk-cgroup.c).
 #[nutype(validate(greater_or_equal = -1), derive(Debug, Clone, Copy, PartialEq, Eq, AsRef))]
+#[non_exhaustive]
 pub struct DelayUsage(i32);
 
 impl ParseCgroup<Self> for DelayUsage {

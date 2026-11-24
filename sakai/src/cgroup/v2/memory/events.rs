@@ -13,6 +13,7 @@ use crate::{
 ///
 /// See [Linux `memory.events` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct MemoryEvents {
   counts: MemoryEventCounts,
 }
@@ -52,6 +53,7 @@ impl FromStr for MemoryEvents {
 ///
 /// See [Linux `memory.events.local` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct MemoryEventsLocal {
   counts: MemoryEventCounts,
 }
@@ -91,6 +93,7 @@ impl FromStr for MemoryEventsLocal {
 ///
 /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct MemoryEventCounts {
   low: Count,
   high: Count,

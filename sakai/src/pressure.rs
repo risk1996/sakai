@@ -19,6 +19,7 @@ use crate::{
 ///
 /// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
 pub struct Pressure {
   some: PressureLine,
   full: Option<PressureLine>,
@@ -62,6 +63,7 @@ impl Pressure {
 ///
 /// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
 pub struct PressureLine {
   avg10: Ratio,
   avg60: Ratio,
@@ -147,6 +149,7 @@ impl FromStr for Pressure {
 /// returns [`crate::Error::NotSupported`]; see the
 /// [Linux 6.14 implementation](https://github.com/torvalds/linux/blob/v6.14/kernel/sched/psi.c).
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
 pub struct IrqPressure {
   full: PressureLine,
 }

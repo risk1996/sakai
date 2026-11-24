@@ -30,6 +30,7 @@ mod weight;
 /// Device numbers identify a block device, not a mount or a filename.
 /// See [makedev(3)](https://man7.org/linux/man-pages/man3/makedev.3.html).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
 pub struct Device {
   major: u32,
   minor: u32,

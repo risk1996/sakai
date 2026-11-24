@@ -35,10 +35,20 @@ use crate::{
 ///
 /// See [Linux HugeTLB filenames](https://github.com/torvalds/linux/blob/v5.15/mm/hugetlb_cgroup.c).
 #[nutype(
-  validate(predicate = |size| size.get::<byte>() >= 1024 && size.get::<byte>().is_power_of_two()),
+  validate(with = PageSize::validate_size, error = PageSizeError),
   derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, AsRef)
 )]
+#[non_exhaustive]
 pub struct PageSize(Bytes);
+
+/// An invalid HugeTLB [`PageSize`].
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
+pub enum PageSizeError {
+  /// The size in bytes is below 1 KiB or is not a power of two.
+  #[error("PageSize failed the predicate test.")]
+  PredicateViolated,
+}
 
 cgroup_value! { display PageSize }
 
@@ -46,6 +56,11 @@ impl PageSize {
   const GIBIBYTE: u64 = 1 << 30;
   const KIBIBYTE: u64 = 1 << 10;
   const MEBIBYTE: u64 = 1 << 20;
+
+  fn validate_size(size: &Bytes) -> Result<(), PageSizeError> {
+    let bytes = size.get::<byte>();
+    if bytes >= Self::KIBIBYTE && bytes.is_power_of_two() { Ok(()) } else { Err(PageSizeError::PredicateViolated) }
+  }
 
   fn file_name(&self, suffix: &str) -> String { format!("hugetlb.{self}.{suffix}") }
 }
@@ -96,6 +111,7 @@ macro_rules! scalar {
     /// See [Linux HugeTLB accounting](https://docs.kernel.org/admin-guide/cgroup-v1/hugetlb.html)
     /// and [v2 source](https://github.com/torvalds/linux/blob/v5.15/mm/hugetlb_cgroup.c).
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    #[non_exhaustive]
     pub struct $name {
       /// Stored quantity or limit in bytes.
       pub value: $value,
@@ -149,6 +165,7 @@ scalar!(
 /// See [Linux HugeTLB events](https://docs.kernel.org/admin-guide/cgroup-v2.html#hugetlb)
 /// and [reservation charge implementation](https://github.com/torvalds/linux/blob/v5.15/mm/hugetlb_cgroup.c).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct HugetlbEvents {
   max: Count,
 }
@@ -177,6 +194,7 @@ cgroup_value! { keyed HugetlbEvents, |_| "value", { max: required ParseCount => 
 ///
 /// See [Linux 5.17 source](https://github.com/torvalds/linux/blob/v5.17/mm/hugetlb_cgroup.c).
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct HugetlbNumaStat {
   total: Bytes,
   nodes: BTreeMap<u32, Bytes>,

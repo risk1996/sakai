@@ -18,6 +18,7 @@ use crate::{
 /// For namespace-invisible zero entries, see [kernel list output](https://github.com/torvalds/linux/blob/v6.1/kernel/cgroup/cgroup.c)
 /// and [PID namespace conversion](https://github.com/torvalds/linux/blob/v6.1/include/linux/pid.h).
 #[nutype(validate(predicate = |id| *id >= 0), derive(Debug, Clone, Copy, PartialEq, Eq, Hash, AsRef))]
+#[non_exhaustive]
 pub struct TaskId(i32);
 
 impl TaskId {

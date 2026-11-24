@@ -34,6 +34,7 @@ const CGROUP2_SUPER_MAGIC: fs::FsWord = 0x6367_7270;
 /// [proc_pid_cgroup(5)](https://man7.org/linux/man-pages/man5/proc_pid_cgroup.5.html), and
 /// [proc_pid_mountinfo(5)](https://man7.org/linux/man-pages/man5/proc_pid_mountinfo.5.html).
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct Cgroup {
   directory: OwnedFd,
   path: PathBuf,

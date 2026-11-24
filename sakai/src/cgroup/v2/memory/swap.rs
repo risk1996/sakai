@@ -52,6 +52,7 @@ pub type SwapHigh = Scalar<MaxOr<Bytes>, interface::SwapHigh>;
 /// The [event propagation implementation](https://github.com/torvalds/linux/blob/v6.12/include/linux/memcontrol.h)
 /// applies the mount option to both memory and swap events.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct SwapEvents {
   high: Option<Count>,
   max: Count,

@@ -295,22 +295,25 @@ fn parses_live_delegated_controller_interfaces() {
   assert_ok!(reader.write_value::<CpuMax>(&limit));
   assert_eq!(assert_ok!(reader.read_value::<CpuMax>()), limit);
   assert_eq!(assert_ok!(fs::read_to_string(fixture.path.join(CpuMax::FILE_NAME))).trim(), "30000 50000");
-  assert_ok!(reader.write_value::<CpuQuota>(MaxOr::Max));
-  assert_eq!(assert_ok!(reader.read_value::<CpuMax>()), CpuMax { quota: MaxOr::Max, ..limit });
+  let mut unlimited = limit;
+  unlimited.quota = MaxOr::Max;
+  assert_ok!(reader.write_value::<CpuQuota>(unlimited.quota));
+  assert_eq!(assert_ok!(reader.read_value::<CpuMax>()), unlimited);
 
   let path = fixture.path.join(CpuMax::FILE_NAME);
-  let inexact = assert_ok!(NonZeroTime::try_new(Time::new::<nanosecond>(50_000_001)));
+  let mut invalid = limit;
+  invalid.period = assert_ok!(NonZeroTime::try_new(Time::new::<nanosecond>(50_000_001)));
   assert!(matches!(
-    reader.write_value::<CpuMax>(&CpuMax { period: inexact, ..limit }),
+    reader.write_value::<CpuMax>(&invalid),
     Err(Error::Encode { path: actual, source }) if actual == path && source.field() == "period"
   ));
-  let too_short = assert_ok!(NonZeroTime::try_new(Time::new::<microsecond>(1)));
+  invalid.period = assert_ok!(NonZeroTime::try_new(Time::new::<microsecond>(1)));
   assert!(matches!(
-    reader.write_value::<CpuMax>(&CpuMax { period: too_short, ..limit }),
+    reader.write_value::<CpuMax>(&invalid),
     Err(Error::Operation { operation: "write interface", path: actual, source })
       if actual == path && source.kind() == io::ErrorKind::InvalidInput && source.raw_os_error().is_some()
   ));
-  assert_eq!(assert_ok!(reader.read_value::<CpuMax>()), CpuMax { quota: MaxOr::Max, ..limit });
+  assert_eq!(assert_ok!(reader.read_value::<CpuMax>()), unlimited);
   assert_ok!(reader.read_value::<CpuStat>());
   match reader.read_value::<CpuStatLocal>() {
     | Ok(_) | Err(Error::FileMissing { .. }) => {},

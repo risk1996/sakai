@@ -15,10 +15,33 @@ use crate::{
 ///
 /// See [Linux CPU interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
 #[nutype(
-  validate(greater_or_equal = 1, less_or_equal = 10_000),
+  validate(with = Weight::validate_weight, error = WeightError),
   derive(Debug, Clone, Copy, PartialEq, Eq, Hash, AsRef)
 )]
+#[non_exhaustive]
 pub struct Weight(u16);
+
+impl Weight {
+  fn validate_weight(weight: &u16) -> Result<(), WeightError> {
+    match *weight {
+      | 0 => Err(WeightError::GreaterOrEqualViolated),
+      | 1..=10_000 => Ok(()),
+      | _ => Err(WeightError::LessOrEqualViolated),
+    }
+  }
+}
+
+/// An invalid CPU scheduling [`Weight`].
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
+pub enum WeightError {
+  /// The weight is below 1.
+  #[error("Weight is too small. The value must be greater or equal to 1.")]
+  GreaterOrEqualViolated,
+  /// The weight is above 10,000.
+  #[error("Weight is too big. The value must be less or equal to 10000.")]
+  LessOrEqualViolated,
+}
 
 /// The CPU scheduling weight configured by a cgroup's `cpu.weight` file.
 ///
@@ -28,6 +51,7 @@ pub struct Weight(u16);
 ///
 /// See [Linux `cpu.weight` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum CpuWeight {
   /// The cgroup uses idle scheduling, encoded as `0` in `cpu.weight`.
   ///

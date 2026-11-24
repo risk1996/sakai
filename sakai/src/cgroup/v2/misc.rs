@@ -21,6 +21,7 @@ use crate::{
 /// are valid; hardware-dependent and future resource names are preserved.
 /// See [Linux misc interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#misc).
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct MiscCapacity {
   resources: BTreeMap<String, Count>,
 }
@@ -49,6 +50,7 @@ cgroup_value! { map MiscCapacity, resources: ParseCount, "value" }
 /// [Linux 6.5 source](https://github.com/torvalds/linux/blob/v6.5/kernel/cgroup/misc.c).
 /// See [Linux misc interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#misc).
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct MiscCurrent {
   resources: BTreeMap<String, Count>,
 }
@@ -78,6 +80,7 @@ cgroup_value! { map MiscCurrent, resources: ParseCount, "value" }
 /// Since Linux 6.11. See [Linux 6.11 source](https://github.com/torvalds/linux/blob/v6.11/kernel/cgroup/misc.c).
 /// See [Linux misc interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#misc).
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct MiscPeak {
   resources: BTreeMap<String, Count>,
 }
@@ -106,6 +109,7 @@ cgroup_value! { map MiscPeak, resources: ParseCount, "value" }
 /// Zero is valid, and a limit may exceed the separately read machine capacity.
 /// See [Linux misc interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#misc).
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct MiscMax {
   /// Maximum counts per resource.
   pub resources: BTreeMap<String, MaxOr<Count>>,
@@ -142,6 +146,7 @@ cgroup_value! { map MiscMax, resources: ParseCount, "value" }
 /// The implementation checks capacity alongside each cgroup limit; see
 /// [Linux charging](https://github.com/torvalds/linux/blob/master/kernel/cgroup/misc.c).
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct MiscEvents {
   resources: BTreeMap<String, Count>,
 }

@@ -47,6 +47,7 @@ pub type PidsMax = Scalar<MaxOr<Count>, interface::PidsMax>;
 ///
 /// See [Linux `pids.events` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#pid).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct PidsEvents {
   max: Count,
 }

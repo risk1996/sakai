@@ -15,6 +15,7 @@ use crate::{
 ///
 /// See [Linux `cgroup.events` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct CgroupEvents {
   populated: bool,
   frozen: Option<bool>,
@@ -60,6 +61,7 @@ cgroup_value! { keyed CgroupEvents, |_| "value", {
 /// Since Linux 6.18; see [Linux 6.18 source](https://github.com/torvalds/linux/blob/v6.18/kernel/cgroup/cgroup.c)
 /// and [Linux `cgroup.stat.local`](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct CgroupStatLocal {
   frozen_time: Time,
 }
@@ -93,6 +95,7 @@ cgroup_value! { keyed CgroupStatLocal, |_| "value", {
 ///
 /// See [Linux `cgroup.stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct CgroupStat {
   descendants: Count,
   dying_descendants: Count,

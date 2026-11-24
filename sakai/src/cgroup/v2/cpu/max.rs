@@ -16,6 +16,7 @@ use crate::{
 ///
 /// See [Linux `cpu.max` interface](https://www.kernel.org/doc/html/v7.3/admin-guide/cgroup-v2.html#cpu-interface-files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct CpuMax {
   /// CPU time allowed per period, or `max` for no quota at this cgroup.
   pub quota: MaxOr<NonZeroTime>,

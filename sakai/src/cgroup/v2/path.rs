@@ -9,6 +9,7 @@ use procfs::process::Process;
 /// Discovery observes the caller's namespaces; the process or mount can change
 /// after the read. This resolves a path without opening or verifying the directory.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct CgroupPath {
   path: PathBuf,
   mount_point: PathBuf,
