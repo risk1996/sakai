@@ -110,6 +110,11 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 For implementation commits, the scope should be comma-separated programming languages,
 e.g. `feat(rust,python): implement new feature`.
 
+# Pull Requests
+
+PR title should follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) as well. Declare that breaking changes accordingly.
+PR description should use [PR template](.github/pull_request_template.md), with its comments removed.
+
 ## Note
 
 If you find contradictions, these are the priority (lower ones should follow the above):
