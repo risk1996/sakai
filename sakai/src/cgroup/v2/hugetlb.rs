@@ -51,7 +51,6 @@ impl PageSize {
   const KIBIBYTE: u64 = 1 << 10;
   const MEBIBYTE: u64 = 1 << 20;
 
-  #[cfg(any(target_os = "linux", test))]
   fn file_name(&self, suffix: &str) -> String { format!("hugetlb.{self}.{suffix}") }
 }
 
@@ -116,7 +115,7 @@ impl Hugetlb<'_> {
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn current(&self, size: &PageSize) -> Result<HugetlbCurrent, Error> {
-    self.cgroup.parse(&size.file_name(HugetlbCurrent::SUFFIX))
+    self.cgroup.read_file::<HugetlbCurrent>(size)
   }
 
   /// Reads the configured HugeTLB fault limit in bytes, or `max`.
@@ -125,9 +124,7 @@ impl Hugetlb<'_> {
   /// See [Linux HugeTLB limits](https://docs.kernel.org/admin-guide/cgroup-v2.html#hugetlb).
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn max(&self, size: &PageSize) -> Result<HugetlbMax, Error> {
-    self.cgroup.parse(&size.file_name(HugetlbMax::SUFFIX))
-  }
+  pub fn max(&self, size: &PageSize) -> Result<HugetlbMax, Error> { self.cgroup.read_file::<HugetlbMax>(size) }
 
   /// Sets the HugeTLB fault limit in bytes or removes it with `max`.
   /// See [Linux HugeTLB interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#hugetlb).
@@ -135,7 +132,7 @@ impl Hugetlb<'_> {
   /// # Errors
   /// See the shared [interface-write errors](crate::v2#interface-write-errors).
   pub fn set_max(&self, size: &PageSize, value: MaxOr<Bytes>) -> Result<(), Error> {
-    self.cgroup.write(&size.file_name(HugetlbMax::SUFFIX), HugetlbMax { value }.encode_cgroup())
+    self.cgroup.write_file::<HugetlbMax>(size, value)
   }
 
   /// Reads hierarchical reserved and unreserved-faulted HugeTLB bytes.
@@ -146,7 +143,7 @@ impl Hugetlb<'_> {
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn reserved_current(&self, size: &PageSize) -> Result<HugetlbReservedCurrent, Error> {
-    self.cgroup.parse(&size.file_name(HugetlbReservedCurrent::SUFFIX))
+    self.cgroup.read_file::<HugetlbReservedCurrent>(size)
   }
 
   /// Reads the reservation-accounting limit in bytes, or `max`.
@@ -157,7 +154,7 @@ impl Hugetlb<'_> {
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn reserved_max(&self, size: &PageSize) -> Result<HugetlbReservedMax, Error> {
-    self.cgroup.parse(&size.file_name(HugetlbReservedMax::SUFFIX))
+    self.cgroup.read_file::<HugetlbReservedMax>(size)
   }
 
   /// Sets the HugeTLB reservation limit in bytes or removes it with `max`.
@@ -166,7 +163,7 @@ impl Hugetlb<'_> {
   /// # Errors
   /// See the shared [interface-write errors](crate::v2#interface-write-errors).
   pub fn set_reserved_max(&self, size: &PageSize, value: MaxOr<Bytes>) -> Result<(), Error> {
-    self.cgroup.write(&size.file_name(HugetlbReservedMax::SUFFIX), HugetlbReservedMax { value }.encode_cgroup())
+    self.cgroup.write_file::<HugetlbReservedMax>(size, value)
   }
 
   /// Reads cumulative hierarchical allocation failures caused by HugeTLB limits.
@@ -174,9 +171,7 @@ impl Hugetlb<'_> {
   /// See [Linux HugeTLB events](https://docs.kernel.org/admin-guide/cgroup-v2.html#hugetlb).
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn events(&self, size: &PageSize) -> Result<HugetlbEvents, Error> {
-    self.cgroup.parse(&size.file_name(HugetlbEvents::SUFFIX))
-  }
+  pub fn events(&self, size: &PageSize) -> Result<HugetlbEvents, Error> { self.cgroup.read_file::<HugetlbEvents>(size) }
 
   /// Reads cumulative allocation failures originating in this cgroup alone.
   ///
@@ -184,7 +179,7 @@ impl Hugetlb<'_> {
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn events_local(&self, size: &PageSize) -> Result<HugetlbEvents, Error> {
-    self.cgroup.parse(&size.file_name(HugetlbEvents::LOCAL_SUFFIX))
+    self.cgroup.read_file::<HugetlbEventsLocal>(size)
   }
 
   /// Reads hierarchical in-use HugeTLB bytes by NUMA node, including the total.
@@ -194,7 +189,7 @@ impl Hugetlb<'_> {
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn numa_stat(&self, size: &PageSize) -> Result<HugetlbNumaStat, Error> {
-    self.cgroup.parse(&size.file_name(HugetlbNumaStat::SUFFIX))
+    self.cgroup.read_file::<HugetlbNumaStat>(size)
   }
 }
 
@@ -214,7 +209,6 @@ macro_rules! scalar {
     impl $name {
       /// Interface filename template; replace `<hugepagesize>` with a [`PageSize`] label.
       pub const FILE_NAME_TEMPLATE: &'static str = concat!("hugetlb.<hugepagesize>.", $suffix);
-      #[cfg(target_os = "linux")]
       const SUFFIX: &'static str = $suffix;
 
       /// Returns the stored byte quantity or limit without performing I/O.
@@ -269,9 +263,7 @@ impl HugetlbEvents {
   pub const FILE_NAME_TEMPLATE: &'static str = "hugetlb.<hugepagesize>.events";
   /// Local event filename template, parameterized by [`PageSize`].
   pub const LOCAL_FILE_NAME_TEMPLATE: &'static str = "hugetlb.<hugepagesize>.events.local";
-  #[cfg(target_os = "linux")]
   const LOCAL_SUFFIX: &'static str = "events.local";
-  #[cfg(target_os = "linux")]
   const SUFFIX: &'static str = "events";
 
   /// Returns the stored count of allocation failures caused by a HugeTLB limit.
@@ -298,7 +290,6 @@ pub struct HugetlbNumaStat {
 impl HugetlbNumaStat {
   /// NUMA filename template, parameterized by [`PageSize`].
   pub const FILE_NAME_TEMPLATE: &'static str = "hugetlb.<hugepagesize>.numa_stat";
-  #[cfg(target_os = "linux")]
   const SUFFIX: &'static str = "numa_stat";
 
   /// Returns stored hierarchical usage in bytes across all NUMA nodes.
@@ -351,6 +342,41 @@ impl FromStr for HugetlbNumaStat {
     Ok(Self { total, nodes })
   }
 }
+
+crate::v2::interface::cgroup_file!(file HugetlbCurrent, HugetlbCurrent::FILE_NAME_TEMPLATE, Read,
+  PageSize => |size: &PageSize| size.file_name(HugetlbCurrent::SUFFIX));
+crate::v2::interface::cgroup_file!(read HugetlbCurrent => HugetlbCurrent);
+
+crate::v2::interface::cgroup_file!(file HugetlbMax, HugetlbMax::FILE_NAME_TEMPLATE, ReadWrite,
+  PageSize => |size: &PageSize| size.file_name(HugetlbMax::SUFFIX));
+crate::v2::interface::cgroup_file!(read HugetlbMax => HugetlbMax);
+
+crate::v2::interface::cgroup_file!(write HugetlbMax, 'a => MaxOr<Bytes>, |value| HugetlbMax { value }.encode_cgroup());
+
+crate::v2::interface::cgroup_file!(file HugetlbReservedCurrent, HugetlbReservedCurrent::FILE_NAME_TEMPLATE, Read,
+  PageSize => |size: &PageSize| size.file_name(HugetlbReservedCurrent::SUFFIX));
+crate::v2::interface::cgroup_file!(read HugetlbReservedCurrent => HugetlbReservedCurrent);
+
+crate::v2::interface::cgroup_file!(file HugetlbReservedMax, HugetlbReservedMax::FILE_NAME_TEMPLATE, ReadWrite,
+  PageSize => |size: &PageSize| size.file_name(HugetlbReservedMax::SUFFIX));
+crate::v2::interface::cgroup_file!(read HugetlbReservedMax => HugetlbReservedMax);
+
+crate::v2::interface::cgroup_file!(write HugetlbReservedMax, 'a => MaxOr<Bytes>, |value| HugetlbReservedMax { value }.encode_cgroup());
+
+crate::v2::interface::cgroup_file!(file HugetlbEvents, HugetlbEvents::FILE_NAME_TEMPLATE, Read,
+  PageSize => |size: &PageSize| size.file_name(HugetlbEvents::SUFFIX));
+crate::v2::interface::cgroup_file!(read HugetlbEvents => HugetlbEvents);
+
+crate::v2::interface::cgroup_file!(file HugetlbNumaStat, HugetlbNumaStat::FILE_NAME_TEMPLATE, Read,
+  PageSize => |size: &PageSize| size.file_name(HugetlbNumaStat::SUFFIX));
+crate::v2::interface::cgroup_file!(read HugetlbNumaStat => HugetlbNumaStat);
+
+crate::v2::interface::cgroup_file!(file HugetlbEventsLocal, HugetlbEvents::LOCAL_FILE_NAME_TEMPLATE, Read,
+  PageSize => |size: &PageSize| size.file_name(HugetlbEvents::LOCAL_SUFFIX));
+crate::v2::interface::cgroup_file!(read HugetlbEventsLocal => HugetlbEvents);
+
+/// Local HugeTLB allocation failures for a given page size.
+pub struct HugetlbEventsLocal;
 
 #[cfg(test)]
 mod tests {

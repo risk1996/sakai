@@ -30,7 +30,7 @@ impl Swap<'_> {
   /// Reads a fresh [`SwapCurrent`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn current(&self) -> Result<SwapCurrent, Error> { self.cgroup.parse(SwapCurrent::FILE_NAME) }
+  pub fn current(&self) -> Result<SwapCurrent, Error> { self.cgroup.read_value::<SwapCurrent>() }
 
   /// Peak swap usage since cgroup creation for this fresh descriptor.
   ///
@@ -40,39 +40,35 @@ impl Swap<'_> {
   /// Older kernels return [`crate::Error::FileMissing`] when this interface is read.
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn peak(&self) -> Result<SwapPeak, Error> { self.cgroup.parse(SwapPeak::FILE_NAME) }
+  pub fn peak(&self) -> Result<SwapPeak, Error> { self.cgroup.read_value::<SwapPeak>() }
 
   /// Hard swap limit configured for this cgroup.
   ///
   /// Reads a fresh [`SwapMax`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn max(&self) -> Result<SwapMax, Error> { self.cgroup.parse(SwapMax::FILE_NAME) }
+  pub fn max(&self) -> Result<SwapMax, Error> { self.cgroup.read_value::<SwapMax>() }
 
   /// Sets the swap limit in bytes or removes it with `max`.
   /// See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
   /// # Errors
   /// See the shared [interface-write errors](crate::v2#interface-write-errors).
-  pub fn set_max(&self, value: MaxOr<Bytes>) -> Result<(), Error> {
-    self.cgroup.write(SwapMax::FILE_NAME, SwapMax::new(value).encode_cgroup())
-  }
+  pub fn set_max(&self, value: MaxOr<Bytes>) -> Result<(), Error> { self.cgroup.write_value::<SwapMax>(value) }
 
   /// Swap throttling limit configured for this cgroup.
   ///
   /// Reads a fresh [`SwapHigh`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn high(&self) -> Result<SwapHigh, Error> { self.cgroup.parse(SwapHigh::FILE_NAME) }
+  pub fn high(&self) -> Result<SwapHigh, Error> { self.cgroup.read_value::<SwapHigh>() }
 
   /// Sets the swap throttling threshold in bytes or removes it with `max`.
   /// See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
   /// # Errors
   /// See the shared [interface-write errors](crate::v2#interface-write-errors).
-  pub fn set_high(&self, value: MaxOr<Bytes>) -> Result<(), Error> {
-    self.cgroup.write(SwapHigh::FILE_NAME, SwapHigh::new(value).encode_cgroup())
-  }
+  pub fn set_high(&self, value: MaxOr<Bytes>) -> Result<(), Error> { self.cgroup.write_value::<SwapHigh>(value) }
 
   /// Swap high, max, and allocation failure counters.
   ///
@@ -82,7 +78,7 @@ impl Swap<'_> {
   /// Reads a fresh [`SwapEvents`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn events(&self) -> Result<SwapEvents, Error> { self.cgroup.parse(SwapEvents::FILE_NAME) }
+  pub fn events(&self) -> Result<SwapEvents, Error> { self.cgroup.read_value::<SwapEvents>() }
 }
 
 /// Hierarchical swap usage reported by `memory.swap.current`.
@@ -136,11 +132,13 @@ pub struct SwapEvents {
   fail: Count,
 }
 
+crate::v2::interface::cgroup_file!(SwapEvents, "memory.swap.events", Read);
+
 impl SwapEvents {
   /// The cgroup v2 `memory.swap.events` interface filename.
   ///
   /// See [Linux `memory.swap.events` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-  pub const FILE_NAME: &'static str = "memory.swap.events";
+  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
 
   /// Times swap usage exceeded the high threshold, when reported.
   ///

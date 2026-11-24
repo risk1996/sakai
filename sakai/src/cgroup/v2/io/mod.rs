@@ -7,16 +7,17 @@ use std::{collections::BTreeMap, str::FromStr};
 
 pub use cost::{IoCostControl, IoCostModel, IoCostModelName, IoCostQos, IoDeviceCostModel, IoDeviceCostQos};
 pub use latency::IoLatency;
-pub use max::{IoDeviceMax, IoMax, IoMaxUpdate};
+pub use max::{IoDeviceMax, IoMax, IoMaxCommand, IoMaxUpdate};
 pub use priority::IoPriorityClass;
 pub use stat::{DelayUsage, IoDeviceStat, IoStat};
-pub use weight::{IoWeight, Weight};
+pub use weight::{IoWeight, IoWeightCommand, Weight};
 
 #[cfg(target_os = "linux")]
 use super::Cgroup;
 #[cfg(target_os = "linux")]
-use crate::{Error, Pressure};
+use crate::Error;
 use crate::{
+  Pressure,
   error::{ParseError, ParseValueError},
   parse::{KeyedFields, cgroup_value},
 };
@@ -48,35 +49,35 @@ impl Io<'_> {
   /// Reads a fresh [`IoStat`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn stat(&self) -> Result<IoStat, Error> { self.cgroup.parse(IoStat::FILE_NAME) }
+  pub fn stat(&self) -> Result<IoStat, Error> { self.cgroup.read_value::<IoStat>() }
 
   /// I/O PSI rolling averages and cumulative stall time; never writes a trigger.
   ///
   /// Reads a fresh [`Pressure`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn pressure(&self) -> Result<Pressure, Error> { self.cgroup.parse(Pressure::IO_FILE_NAME) }
+  pub fn pressure(&self) -> Result<Pressure, Error> { self.cgroup.read_value::<IoPressure>() }
 
   /// Default scheduling weight and explicit per-device overrides.
   ///
   /// Reads a fresh [`IoWeight`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn weight(&self) -> Result<IoWeight, Error> { self.cgroup.parse(IoWeight::FILE_NAME) }
+  pub fn weight(&self) -> Result<IoWeight, Error> { self.cgroup.read_value::<IoWeight>() }
 
   /// Per-device byte-per-second and operation-per-second limits.
   ///
   /// Reads a fresh [`IoMax`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn max(&self) -> Result<IoMax, Error> { self.cgroup.parse(IoMax::FILE_NAME) }
+  pub fn max(&self) -> Result<IoMax, Error> { self.cgroup.read_value::<IoMax>() }
 
   /// Per-device latency protection targets, where the kernel supports them.
   ///
   /// Reads a fresh [`IoLatency`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn latency(&self) -> Result<IoLatency, Error> { self.cgroup.parse(IoLatency::FILE_NAME) }
+  pub fn latency(&self) -> Result<IoLatency, Error> { self.cgroup.read_value::<IoLatency>() }
 
   /// Reads the device I/O cost controller's QoS configuration at the root.
   ///
@@ -87,7 +88,7 @@ impl Io<'_> {
   ///
   /// See the shared [interface-read errors](crate::v2#interface-read-errors);
   /// non-root cgroups lack this interface.
-  pub fn cost_qos(&self) -> Result<IoCostQos, Error> { self.cgroup.parse(IoCostQos::FILE_NAME) }
+  pub fn cost_qos(&self) -> Result<IoCostQos, Error> { self.cgroup.read_value::<IoCostQos>() }
 
   /// Reads the device I/O cost models at the root.
   ///
@@ -98,14 +99,14 @@ impl Io<'_> {
   ///
   /// See the shared [interface-read errors](crate::v2#interface-read-errors);
   /// non-root cgroups lack this interface.
-  pub fn cost_model(&self) -> Result<IoCostModel, Error> { self.cgroup.parse(IoCostModel::FILE_NAME) }
+  pub fn cost_model(&self) -> Result<IoCostModel, Error> { self.cgroup.read_value::<IoCostModel>() }
 
   /// Reads the I/O request-priority policy, including at the root.
   ///
   /// Requires `CONFIG_BLK_CGROUP_IOPRIO`; see [`IoPriorityClass`].
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn priority_class(&self) -> Result<IoPriorityClass, Error> { self.cgroup.parse(IoPriorityClass::FILE_NAME) }
+  pub fn priority_class(&self) -> Result<IoPriorityClass, Error> { self.cgroup.read_value::<IoPriorityClass>() }
 
   /// Sets the I/O request priority policy.
   /// See the [Linux I/O priority controller](https://github.com/torvalds/linux/blob/v6.5/block/blk-ioprio.c).
@@ -113,7 +114,7 @@ impl Io<'_> {
   /// # Errors
   /// See the shared [interface-write errors](crate::v2#interface-write-errors).
   pub fn set_priority_class(&self, value: IoPriorityClass) -> Result<(), Error> {
-    self.cgroup.write(IoPriorityClass::FILE_NAME, value.encode_cgroup())
+    self.cgroup.write_value::<IoPriorityClass>(&value)
   }
 }
 
@@ -222,3 +223,8 @@ mod tests {
     ]);
   }
 }
+
+crate::v2::interface::cgroup_file!(alias
+  /// I/O pressure snapshots.
+  IoPressure, Pressure::IO_FILE_NAME, Read, Pressure
+);

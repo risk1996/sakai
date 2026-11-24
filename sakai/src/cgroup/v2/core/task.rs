@@ -2,10 +2,8 @@ use std::fmt::Write;
 
 use nutype::nutype;
 
-#[cfg(any(target_os = "linux", test))]
-use crate::error::ParseError;
 use crate::{
-  error::ParseValueError,
+  error::{ParseError, ParseValueError},
   parse::{EncodeCgroup, ParseCgroup, cgroup_value},
 };
 
@@ -28,7 +26,6 @@ impl TaskId {
   /// The thread list interface filename.
   pub const THREADS_FILE_NAME: &'static str = "cgroup.threads";
 
-  #[cfg(any(target_os = "linux", test))]
   pub(super) fn parse_list(contents: &str) -> Result<Vec<Self>, ParseError<ParseValueError>> {
     contents
       .lines()

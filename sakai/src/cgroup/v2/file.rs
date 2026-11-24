@@ -52,13 +52,6 @@ fn write_command(command: &[u8], mut send: impl FnMut(&[u8]) -> rustix::io::Resu
   }
 }
 
-pub(super) fn check_token(value: &str, field: &'static str) -> Result<(), crate::error::EncodeError> {
-  if value.is_empty() || value.bytes().any(|byte| byte.is_ascii_whitespace() || byte == 0) {
-    return Err(crate::error::EncodeError { field });
-  }
-  Ok(())
-}
-
 #[cfg(test)]
 mod tests {
   use std::{fs, os::unix::fs::symlink};

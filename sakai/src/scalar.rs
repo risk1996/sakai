@@ -7,12 +7,14 @@ use crate::{
   limit::MaxOr,
   parse::{EncodeCgroup, ParseBoolean, ParseBytes, ParseCgroup, ParseCount, ParseMicroseconds, ParsePercent, Parser},
   unit::{Bytes, Count, Ratio, Time},
+  v2::{AccessMode, CgroupFile, FileCommand, FileValue},
 };
 
 /// The filename and diagnostic label of a scalar interface.
 pub trait Interface: Copy {
   const FILE_NAME: &'static str;
   const FIELD: &'static str;
+  type Mode: AccessMode;
 }
 
 /// A typed scalar snapshot, distinguished by its interface marker.
@@ -99,189 +101,105 @@ impl<T: Copy + ScalarValue + EncodeCgroup<ScalarEncoding<T>>, I: Interface> Scal
   }
 }
 
+impl<T, I: Interface> crate::v2::interface::sealed::File for Scalar<T, I> {}
+impl<T, I: Interface> CgroupFile for Scalar<T, I> {
+  type Key = ();
+  type Mode = I::Mode;
+
+  const FILE_NAME: &'static str = I::FILE_NAME;
+}
+
+impl<T, I: Interface> FileValue for Scalar<T, I>
+where
+  Self: FromStr<Err = ParseError<ParseValueError>>,
+{
+  type Value = Self;
+
+  fn decode(contents: &str) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> { Ok(contents.parse()?) }
+}
+
+impl<T: Copy + ScalarValue + EncodeCgroup<ScalarEncoding<T>>, I: Interface<Mode: crate::v2::WriteMode>> FileCommand
+  for Scalar<T, I>
+{
+  type Command<'a> = T;
+
+  fn encode(value: T) -> Result<String, EncodeError> { Self::new(value).encode_cgroup() }
+}
+
 /// Interface markers used by the public snapshot aliases.
 pub mod interface {
   use super::Interface;
+  use crate::v2::mode;
 
-  /// Marker for the cgroup's own freeze request.
-  #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-  pub struct CgroupFreeze;
-  impl Interface for CgroupFreeze {
-    const FIELD: &'static str = "freeze";
-    const FILE_NAME: &'static str = "cgroup.freeze";
+  macro_rules! scalar_interface {
+    ($(#[$doc:meta])* $name:ident, $file:literal, $field:literal, $mode:ident) => {
+      $(#[$doc])*
+      #[derive(Clone, Copy, PartialEq, Eq, Hash)]
+      pub struct $name;
+
+      impl Interface for $name {
+        const FIELD: &'static str = $field;
+        const FILE_NAME: &'static str = $file;
+        type Mode = mode::$mode;
+      }
+    };
   }
 
-  /// Marker for the configured descendant depth limit.
-  #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-  pub struct CgroupMaxDepth;
-  impl Interface for CgroupMaxDepth {
-    const FIELD: &'static str = "depth";
-    const FILE_NAME: &'static str = "cgroup.max.depth";
-  }
-
-  /// Marker for the configured descendant cgroup count limit.
-  #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-  pub struct CgroupMaxDescendants;
-  impl Interface for CgroupMaxDescendants {
-    const FIELD: &'static str = "descendants";
-    const FILE_NAME: &'static str = "cgroup.max.descendants";
-  }
-
-  /// Marker for the local pressure accounting enable flag.
-  #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-  pub struct CgroupPressure;
-  impl Interface for CgroupPressure {
-    const FIELD: &'static str = "pressure";
-    const FILE_NAME: &'static str = "cgroup.pressure";
-  }
-
-  #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-  pub struct PidsCurrent;
-  impl Interface for PidsCurrent {
-    const FIELD: &'static str = "current";
-    const FILE_NAME: &'static str = "pids.current";
-  }
-
-  /// Marker for the historical task count peak.
-  #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-  pub struct PidsPeak;
-  impl Interface for PidsPeak {
-    const FIELD: &'static str = "peak";
-    const FILE_NAME: &'static str = "pids.peak";
-  }
-
-  #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-  pub struct PidsMax;
-  impl Interface for PidsMax {
-    const FIELD: &'static str = "max";
-    const FILE_NAME: &'static str = "pids.max";
-  }
-
-  #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-  pub struct MemoryOomGroup;
-  impl Interface for MemoryOomGroup {
-    const FIELD: &'static str = "oom.group";
-    const FILE_NAME: &'static str = "memory.oom.group";
-  }
-
-  #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-  pub struct MemoryCurrent;
-  impl Interface for MemoryCurrent {
-    const FIELD: &'static str = "current";
-    const FILE_NAME: &'static str = "memory.current";
-  }
-
-  #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-  pub struct MemoryPeak;
-  impl Interface for MemoryPeak {
-    const FIELD: &'static str = "peak";
-    const FILE_NAME: &'static str = "memory.peak";
-  }
-
-  #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-  pub struct MemoryMax;
-  impl Interface for MemoryMax {
-    const FIELD: &'static str = "max";
-    const FILE_NAME: &'static str = "memory.max";
-  }
-
-  #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-  pub struct MemoryHigh;
-  impl Interface for MemoryHigh {
-    const FIELD: &'static str = "high";
-    const FILE_NAME: &'static str = "memory.high";
-  }
-
-  #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-  pub struct MemoryLow;
-  impl Interface for MemoryLow {
-    const FIELD: &'static str = "low";
-    const FILE_NAME: &'static str = "memory.low";
-  }
-
-  #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-  pub struct MemoryMin;
-  impl Interface for MemoryMin {
-    const FIELD: &'static str = "min";
-    const FILE_NAME: &'static str = "memory.min";
-  }
-
-  #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-  pub struct SwapCurrent;
-  impl Interface for SwapCurrent {
-    const FIELD: &'static str = "current";
-    const FILE_NAME: &'static str = "memory.swap.current";
-  }
-
-  #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-  pub struct SwapPeak;
-  impl Interface for SwapPeak {
-    const FIELD: &'static str = "peak";
-    const FILE_NAME: &'static str = "memory.swap.peak";
-  }
-
-  #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-  pub struct SwapMax;
-  impl Interface for SwapMax {
-    const FIELD: &'static str = "max";
-    const FILE_NAME: &'static str = "memory.swap.max";
-  }
-
-  #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-  pub struct SwapHigh;
-  impl Interface for SwapHigh {
-    const FIELD: &'static str = "high";
-    const FILE_NAME: &'static str = "memory.swap.high";
-  }
-
-  #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-  pub struct ZswapCurrent;
-  impl Interface for ZswapCurrent {
-    const FIELD: &'static str = "current";
-    const FILE_NAME: &'static str = "memory.zswap.current";
-  }
-
-  #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-  pub struct ZswapMax;
-  impl Interface for ZswapMax {
-    const FIELD: &'static str = "max";
-    const FILE_NAME: &'static str = "memory.zswap.max";
-  }
-
-  #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-  pub struct ZswapWriteback;
-  impl Interface for ZswapWriteback {
-    const FIELD: &'static str = "writeback";
-    const FILE_NAME: &'static str = "memory.zswap.writeback";
-  }
-
-  #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-  pub struct CpuIdle;
-  impl Interface for CpuIdle {
-    const FIELD: &'static str = "idle";
-    const FILE_NAME: &'static str = "cpu.idle";
-  }
-
-  #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-  pub struct CpuMaxBurst;
-  impl Interface for CpuMaxBurst {
-    const FIELD: &'static str = "burst";
-    const FILE_NAME: &'static str = "cpu.max.burst";
-  }
-
-  #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-  pub struct CpuUclampMin;
-  impl Interface for CpuUclampMin {
-    const FIELD: &'static str = "utilization";
-    const FILE_NAME: &'static str = "cpu.uclamp.min";
-  }
-
-  #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-  pub struct CpuUclampMax;
-  impl Interface for CpuUclampMax {
-    const FIELD: &'static str = "utilization";
-    const FILE_NAME: &'static str = "cpu.uclamp.max";
-  }
+  scalar_interface!(
+    /// Marker for the cgroup's own freeze request.
+    CgroupFreeze,
+    "cgroup.freeze",
+    "freeze",
+    ReadWrite
+  );
+  scalar_interface!(
+    /// Marker for the configured descendant depth limit.
+    CgroupMaxDepth,
+    "cgroup.max.depth",
+    "depth",
+    ReadWrite
+  );
+  scalar_interface!(
+    /// Marker for the configured descendant cgroup count limit.
+    CgroupMaxDescendants,
+    "cgroup.max.descendants",
+    "descendants",
+    ReadWrite
+  );
+  scalar_interface!(
+    /// Marker for the local pressure accounting enable flag.
+    CgroupPressure,
+    "cgroup.pressure",
+    "pressure",
+    ReadWrite
+  );
+  scalar_interface!(PidsCurrent, "pids.current", "current", Read);
+  scalar_interface!(
+    /// Marker for the historical task count peak.
+    PidsPeak,
+    "pids.peak",
+    "peak",
+    Read
+  );
+  scalar_interface!(PidsMax, "pids.max", "max", ReadWrite);
+  scalar_interface!(MemoryOomGroup, "memory.oom.group", "oom.group", ReadWrite);
+  scalar_interface!(MemoryCurrent, "memory.current", "current", Read);
+  scalar_interface!(MemoryPeak, "memory.peak", "peak", Read);
+  scalar_interface!(MemoryMax, "memory.max", "max", ReadWrite);
+  scalar_interface!(MemoryHigh, "memory.high", "high", ReadWrite);
+  scalar_interface!(MemoryLow, "memory.low", "low", ReadWrite);
+  scalar_interface!(MemoryMin, "memory.min", "min", ReadWrite);
+  scalar_interface!(SwapCurrent, "memory.swap.current", "current", Read);
+  scalar_interface!(SwapPeak, "memory.swap.peak", "peak", Read);
+  scalar_interface!(SwapMax, "memory.swap.max", "max", ReadWrite);
+  scalar_interface!(SwapHigh, "memory.swap.high", "high", ReadWrite);
+  scalar_interface!(ZswapCurrent, "memory.zswap.current", "current", Read);
+  scalar_interface!(ZswapMax, "memory.zswap.max", "max", ReadWrite);
+  scalar_interface!(ZswapWriteback, "memory.zswap.writeback", "writeback", ReadWrite);
+  scalar_interface!(CpuIdle, "cpu.idle", "idle", ReadWrite);
+  scalar_interface!(CpuMaxBurst, "cpu.max.burst", "burst", ReadWrite);
+  scalar_interface!(CpuUclampMin, "cpu.uclamp.min", "utilization", ReadWrite);
+  scalar_interface!(CpuUclampMax, "cpu.uclamp.max", "utilization", ReadWrite);
 }
 
 #[cfg(test)]

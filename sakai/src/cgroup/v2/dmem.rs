@@ -40,14 +40,14 @@ impl Dmem<'_> {
   /// necessarily available to cgroups. Since Linux 6.14; see [Linux DMEM](https://www.kernel.org/doc/html/v6.14/admin-guide/cgroup-v2.html#dmem).
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn capacity(&self) -> Result<DmemCapacity, Error> { self.cgroup.parse(DmemCapacity::FILE_NAME) }
+  pub fn capacity(&self) -> Result<DmemCapacity, Error> { self.cgroup.read_value::<DmemCapacity>() }
 
   /// Reads volatile hierarchical usage for each registered region in bytes.
   ///
   /// Since Linux 6.14; see [Linux DMEM](https://www.kernel.org/doc/html/v6.14/admin-guide/cgroup-v2.html#dmem).
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn current(&self) -> Result<DmemCurrent, Error> { self.cgroup.parse(DmemCurrent::FILE_NAME) }
+  pub fn current(&self) -> Result<DmemCurrent, Error> { self.cgroup.read_value::<DmemCurrent>() }
 
   /// Reads historical hierarchical device-memory usage peaks per region.
   ///
@@ -55,7 +55,7 @@ impl Dmem<'_> {
   /// an independent lifetime peak. Reading never resets peaks. See [`DmemPeak`].
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn peak(&self) -> Result<DmemPeak, Error> { self.cgroup.parse(DmemPeak::FILE_NAME) }
+  pub fn peak(&self) -> Result<DmemPeak, Error> { self.cgroup.read_value::<DmemPeak>() }
 
   /// Reads configured hard eviction protections in bytes, or `max`.
   ///
@@ -63,7 +63,7 @@ impl Dmem<'_> {
   /// 6.14; see [Linux DMEM](https://www.kernel.org/doc/html/v6.14/admin-guide/cgroup-v2.html#dmem).
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn min(&self) -> Result<DmemLimits, Error> { self.cgroup.parse(DmemLimits::MIN_FILE_NAME) }
+  pub fn min(&self) -> Result<DmemLimits, Error> { self.cgroup.read_value::<DmemMin>() }
 
   /// Sets the hard eviction protection in bytes for one device-memory region.
   /// See [Linux device-memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#dmem).
@@ -71,7 +71,7 @@ impl Dmem<'_> {
   /// # Errors
   /// See the shared [interface-write errors](crate::v2#interface-write-errors).
   pub fn set_min(&self, region: &str, value: MaxOr<Bytes>) -> Result<(), Error> {
-    self.cgroup.write_keyed::<ParseBytes>(DmemLimits::MIN_FILE_NAME, region, "region", &value, "bytes")
+    self.cgroup.write_value::<DmemMin>((region, value))
   }
 
   /// Reads configured best-effort eviction protections in bytes, or `max`.
@@ -80,7 +80,7 @@ impl Dmem<'_> {
   /// 6.14; see [Linux DMEM](https://www.kernel.org/doc/html/v6.14/admin-guide/cgroup-v2.html#dmem).
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn low(&self) -> Result<DmemLimits, Error> { self.cgroup.parse(DmemLimits::LOW_FILE_NAME) }
+  pub fn low(&self) -> Result<DmemLimits, Error> { self.cgroup.read_value::<DmemLow>() }
 
   /// Sets the best-effort eviction protection in bytes for one device-memory region.
   /// See [Linux device-memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#dmem).
@@ -88,7 +88,7 @@ impl Dmem<'_> {
   /// # Errors
   /// See the shared [interface-write errors](crate::v2#interface-write-errors).
   pub fn set_low(&self, region: &str, value: MaxOr<Bytes>) -> Result<(), Error> {
-    self.cgroup.write_keyed::<ParseBytes>(DmemLimits::LOW_FILE_NAME, region, "region", &value, "bytes")
+    self.cgroup.write_value::<DmemLow>((region, value))
   }
 
   /// Reads configured hierarchical usage limits in bytes, or `max`.
@@ -100,7 +100,7 @@ impl Dmem<'_> {
   /// and [Linux 7.3 reclaim implementation](https://github.com/torvalds/linux/blob/v7.3/kernel/cgroup/dmem.c).
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn max(&self) -> Result<DmemLimits, Error> { self.cgroup.parse(DmemLimits::MAX_FILE_NAME) }
+  pub fn max(&self) -> Result<DmemLimits, Error> { self.cgroup.read_value::<DmemMax>() }
 
   /// Sets the hard limit in bytes for one device-memory region.
   /// See [Linux device-memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#dmem).
@@ -108,7 +108,7 @@ impl Dmem<'_> {
   /// # Errors
   /// See the shared [interface-write errors](crate::v2#interface-write-errors).
   pub fn set_max(&self, region: &str, value: MaxOr<Bytes>) -> Result<(), Error> {
-    self.cgroup.write_keyed::<ParseBytes>(DmemLimits::MAX_FILE_NAME, region, "region", &value, "bytes")
+    self.cgroup.write_value::<DmemMax>((region, value))
   }
 }
 
@@ -126,9 +126,11 @@ pub struct DmemCapacity {
   regions: BTreeMap<String, Bytes>,
 }
 
+crate::v2::interface::cgroup_file!(DmemCapacity, "dmem.capacity", Read);
+
 impl DmemCapacity {
   /// The root-only cgroup v2 capacity interface filename, since Linux 6.14.
-  pub const FILE_NAME: &'static str = "dmem.capacity";
+  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
 
   /// Returns capacities in bytes keyed by opaque region name.
   #[must_use]
@@ -156,9 +158,11 @@ pub struct DmemCurrent {
   pub regions: BTreeMap<String, MaxOr<Bytes>>,
 }
 
+crate::v2::interface::cgroup_file!(DmemCurrent, "dmem.current", Read);
+
 impl DmemCurrent {
   /// The cgroup v2 current device-memory usage filename, since Linux 6.14.
-  pub const FILE_NAME: &'static str = "dmem.current";
+  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
 
   /// Returns byte usage or the kernel's `max` sentinel by opaque region name.
   #[must_use]
@@ -183,9 +187,11 @@ pub struct DmemPeak {
   regions: BTreeMap<String, MaxOr<Bytes>>,
 }
 
+crate::v2::interface::cgroup_file!(DmemPeak, "dmem.peak", Read);
+
 impl DmemPeak {
   /// The non-root historical device-memory peak filename, since Linux 7.3.
-  pub const FILE_NAME: &'static str = "dmem.peak";
+  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
 
   /// Returns historical byte peaks or the kernel's `max` sentinel by region name.
   #[must_use]
@@ -226,6 +232,31 @@ impl DmemLimits {
 }
 
 cgroup_value! { map DmemLimits, regions: ParseBytes, "bytes" }
+
+crate::v2::interface::cgroup_file!(alias
+  /// Device-memory min by region.
+  DmemMin, DmemLimits::MIN_FILE_NAME, ReadWrite, DmemLimits
+);
+
+crate::v2::interface::cgroup_file!(write DmemMin, 'a => (&'a str, MaxOr<Bytes>), encode_region);
+
+crate::v2::interface::cgroup_file!(alias
+  /// Device-memory low by region.
+  DmemLow, DmemLimits::LOW_FILE_NAME, ReadWrite, DmemLimits
+);
+
+crate::v2::interface::cgroup_file!(write DmemLow, 'a => (&'a str, MaxOr<Bytes>), encode_region);
+
+crate::v2::interface::cgroup_file!(alias
+  /// Device-memory max by region.
+  DmemMax, DmemLimits::MAX_FILE_NAME, ReadWrite, DmemLimits
+);
+
+crate::v2::interface::cgroup_file!(write DmemMax, 'a => (&'a str, MaxOr<Bytes>), encode_region);
+
+fn encode_region((region, value): (&str, MaxOr<Bytes>)) -> Result<String, crate::error::EncodeError> {
+  super::interface::encode_keyed::<ParseBytes>(region, "region", &value, "bytes")
+}
 
 #[cfg(test)]
 mod tests {

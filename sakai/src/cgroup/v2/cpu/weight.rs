@@ -39,11 +39,14 @@ pub enum CpuWeight {
   Shares(Weight),
 }
 
+crate::v2::interface::cgroup_file!(file CpuWeight, "cpu.weight", ReadWrite);
+crate::v2::interface::cgroup_file!(read CpuWeight => CpuWeight);
+
 impl CpuWeight {
   /// The cgroup v2 `cpu.weight` interface filename.
   ///
   /// See [Linux `cpu.weight` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
-  pub const FILE_NAME: &'static str = "cpu.weight";
+  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
 }
 
 cgroup_value! { token CpuWeight: ParseCpuWeight, "weight" }
@@ -71,6 +74,8 @@ impl EncodeCgroup<ParseCpuWeight> for CpuWeight {
     write!(output, "{value}").ok()
   }
 }
+
+crate::v2::interface::cgroup_file!(write CpuWeight, 'a => Weight, |weight| CpuWeight::Shares(weight).encode_cgroup());
 
 #[cfg(test)]
 mod tests {

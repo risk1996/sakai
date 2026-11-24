@@ -3,7 +3,6 @@ use std::{
   io,
   os::unix::ffi::OsStrExt,
   path::{Component, Path, PathBuf},
-  str::FromStr,
 };
 
 use procfs::process::Process;
@@ -26,7 +25,10 @@ use super::{
   pids::Pids,
   rdma::Rdma,
 };
-use crate::error::{EncodeError, Error};
+use crate::{
+  error::Error,
+  v2::{ReadableFile, WritableFile},
+};
 
 const DIRECTORY_FLAGS: OFlags = OFlags::RDONLY.union(OFlags::CLOEXEC).union(OFlags::NOFOLLOW).union(OFlags::DIRECTORY);
 
@@ -304,7 +306,7 @@ impl Cgroup {
   /// Returns [`Error::FileMissing`] when unavailable, [`Error::NotSupported`]
   /// for an unsupported operation, [`Error::Parse`] for invalid contents, or
   /// [`Error::Operation`] for other operating-system failures.
-  pub fn irq_pressure(&self) -> Result<crate::IrqPressure, Error> { self.parse(crate::IrqPressure::FILE_NAME) }
+  pub fn irq_pressure(&self) -> Result<crate::IrqPressure, Error> { self.read_value::<crate::IrqPressure>() }
 
   /// Opens a read-only subscription to one evented cgroup interface.
   ///
@@ -343,45 +345,56 @@ impl Cgroup {
     ConfigurationWatcher::open(&self.directory, self.path.join(interface.filename()), interface)
   }
 
-  pub(crate) fn read(&self, file: &str) -> Result<String, Error> {
-    super::file::read_file(&self.directory, file).map_err(|error| Error::read(self.path.join(file), error))
+  /// Reads a typed cgroup value from a fixed filename.
+  ///
+  /// # Errors
+  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  pub fn read_value<F: ReadableFile<Key = ()>>(&self) -> Result<F::Value, Error> { self.read_file::<F>(&()) }
+
+  /// Reads a typed cgroup value, resolving the filename with the supplied key.
+  ///
+  /// # Errors
+  /// See the shared [interface-read errors](crate::v2#interface-read-errors).
+  pub fn read_file<F: ReadableFile>(&self, key: &F::Key) -> Result<F::Value, Error> {
+    let file = F::filename(key);
+    let raw = super::file::read_file(&self.directory, &file)
+      .map_err(|source| Error::read(self.path.join(file.as_ref()), source))?;
+    F::decode(&raw).map_err(|source| Error::Parse { path: self.path.join(file.as_ref()), source })
   }
 
-  pub(crate) fn write(&self, file: &str, command: Result<String, EncodeError>) -> Result<(), Error> {
-    let command = command.map_err(|source| Error::Encode { path: self.path.join(file), source })?;
-    super::file::write_file(&self.directory, file, &command)
-      .map_err(|source| Error::interface_operation("write interface", self.path.join(file), source))
+  /// Writes one typed command to a fixed filename.
+  ///
+  /// Read-only declarations cannot be used as write targets.
+  ///
+  /// ```compile_fail
+  /// use sakai::{Cgroup, v2::cpu::CpuStat};
+  ///
+  /// fn write_stats(cgroup: &Cgroup) {
+  ///   let _ = cgroup.write_value::<CpuStat>(());
+  /// }
+  /// ```
+  ///
+  /// # Errors
+  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
+  pub fn write_value<F: WritableFile<Key = ()>>(&self, command: F::Command<'_>) -> Result<(), Error> {
+    self.write_file::<F>(&(), command)
   }
 
-  pub(super) fn write_keyed<Unit>(
-    &self,
-    file: &str,
-    key: &str,
-    key_field: &'static str,
-    value: &impl crate::parse::EncodeCgroup<Unit>,
-    value_field: &'static str,
-  ) -> Result<(), Error> {
-    let command = super::file::check_token(key, key_field).and_then(|()| {
-      let mut command = format!("{key} ");
-      value.encode_field(&mut command, value_field)?;
-      Ok(command)
-    });
-    self.write(file, command)
-  }
-
-  pub(crate) fn parse<T: FromStr>(&self, file: &str) -> Result<T, Error>
-  where
-    T::Err: std::error::Error + Send + Sync + 'static, {
-    self
-      .read(file)?
-      .parse()
-      .map_err(|error: T::Err| Error::Parse { path: self.path.join(file), source: Box::new(error) })
+  /// Writes one typed command, resolving the filename with the supplied key.
+  ///
+  /// # Errors
+  /// See the shared [interface-write errors](crate::v2#interface-write-errors).
+  pub fn write_file<F: WritableFile>(&self, key: &F::Key, command: F::Command<'_>) -> Result<(), Error> {
+    let file = F::filename(key);
+    let command = F::encode(command).map_err(|source| Error::Encode { path: self.path.join(file.as_ref()), source })?;
+    super::file::write_file(&self.directory, &file, &command)
+      .map_err(|source| Error::interface_operation("write interface", self.path.join(file.as_ref()), source))
   }
 }
 
 #[cfg(test)]
 mod tests {
-  use std::{error::Error as _, fmt::Debug};
+  use std::{error::Error as _, fmt::Debug, str::FromStr};
 
   use assertables::{assert_err, assert_ok};
 
@@ -426,12 +439,15 @@ mod tests {
 
   #[test]
   fn parse_failure_keeps_path_and_typed_source() {
-    let cgroup = Cgroup::fixture("");
-    let error = assert_err!(cgroup.parse::<CpuIdle>("mod.rs"));
+    let scratch = assert_ok!(tempfile::tempdir());
+    let path = scratch.path().to_path_buf();
+    assert_ok!(std::fs::write(path.join(CpuIdle::FILE_NAME), "invalid"));
+    let cgroup = Cgroup { directory: assert_ok!(fs::open(&path, DIRECTORY_FLAGS, Mode::empty())), path };
+    let error = assert_err!(cgroup.read_value::<CpuIdle>());
     let Error::Parse { path: actual, source } = &error else {
       panic!("expected parse failure, got {error:?}");
     };
-    assert_eq!(actual, &cgroup.path().join("mod.rs"));
+    assert_eq!(actual, &cgroup.path().join(CpuIdle::FILE_NAME));
     let parsed = source.downcast_ref::<ParseError<ParseValueError>>().expect("original parse error");
     assert_eq!(error.source().map(ToString::to_string), Some(parsed.to_string()));
     assert!(matches!(parsed, ParseError::Invalid { field: "idle", .. }));

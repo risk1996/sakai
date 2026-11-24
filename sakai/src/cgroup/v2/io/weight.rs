@@ -35,11 +35,14 @@ pub struct IoWeight {
   pub devices: BTreeMap<Device, Weight>,
 }
 
+crate::v2::interface::cgroup_file!(file IoWeight, "io.weight", ReadWrite);
+crate::v2::interface::cgroup_file!(read IoWeight => IoWeight);
+
 impl IoWeight {
   /// The cgroup v2 `io.weight` interface filename.
   ///
   /// See [Linux `io.weight` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
-  pub const FILE_NAME: &'static str = "io.weight";
+  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
 
   /// Returns the default scheduling weight.
   ///
@@ -96,7 +99,7 @@ impl super::Io<'_> {
   /// # Errors
   /// See the shared [interface-write errors](crate::v2#interface-write-errors).
   pub fn set_weight(&self, weight: Weight) -> Result<(), crate::Error> {
-    self.cgroup.write(IoWeight::FILE_NAME, Ok(format!("{DEFAULT_WEIGHT_KEY} {}", weight.as_ref())))
+    self.cgroup.write_value::<IoWeight>(IoWeightCommand::Default(weight))
   }
 
   /// Sets the scheduling weight for one device. Pass `None` to remove its override.
@@ -105,8 +108,7 @@ impl super::Io<'_> {
   /// # Errors
   /// See the shared [interface-write errors](crate::v2#interface-write-errors).
   pub fn set_device_weight(&self, device: Device, weight: Option<Weight>) -> Result<(), crate::Error> {
-    let value = weight.map_or_else(|| DEFAULT_WEIGHT_KEY.to_owned(), |weight| weight.as_ref().to_string());
-    self.cgroup.write(IoWeight::FILE_NAME, Ok(format!("{device} {value}")))
+    self.cgroup.write_value::<IoWeight>(IoWeightCommand::Device(device, weight))
   }
 }
 
@@ -119,6 +121,23 @@ impl ParseCgroup<ParseWeight> for Weight {
     Self::try_new(value.parse()?).map_err(|_error| ParseValueError::OutOfRange)
   }
 }
+
+/// Changes the default weight or one device override in `io.weight`.
+#[derive(Debug, Clone, Copy)]
+pub enum IoWeightCommand {
+  /// Sets the default weight.
+  Default(Weight),
+  /// Sets an override or clears it with `None`.
+  Device(Device, Option<Weight>),
+}
+
+crate::v2::interface::cgroup_file!(write IoWeight, 'a => IoWeightCommand, |command| Ok(match command {
+  | IoWeightCommand::Default(weight) => format!("{DEFAULT_WEIGHT_KEY} {}", weight.as_ref()),
+  | IoWeightCommand::Device(device, weight) => {
+    let value = weight.map_or_else(|| DEFAULT_WEIGHT_KEY.to_owned(), |weight| weight.as_ref().to_string());
+    format!("{device} {value}")
+  },
+}));
 
 #[cfg(test)]
 mod tests {

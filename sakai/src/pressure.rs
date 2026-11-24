@@ -316,3 +316,5 @@ mod tests {
     ]);
   }
 }
+
+crate::v2::interface::cgroup_file!(IrqPressure, IrqPressure::FILE_NAME, Read);

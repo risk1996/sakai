@@ -16,6 +16,12 @@ which operations the kernel accepts.
 
 ## Read, edit, and write
 
+Each interface declares a filename and sealed access mode through
+`CgroupFile`. The mode and codec determine whether it can be passed to
+`Cgroup::read_value` or `Cgroup::write_value`. HugeTLB filenames additionally
+take a typed page-size key using `read_file` or `write_file`. File declarations
+can use different types for the read snapshot and write command.
+
 Controller views expose a named setter for each setting. A value with multiple
 fields can be read, edited directly, and passed back to its setter. One setter
 call submits one command for the interface.

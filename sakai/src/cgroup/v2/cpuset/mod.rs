@@ -10,6 +10,7 @@ pub use partition::CpusetPartition;
 
 #[cfg(target_os = "linux")]
 use super::Cgroup;
+use super::interface::cgroup_file;
 #[cfg(target_os = "linux")]
 use crate::Error;
 
@@ -35,9 +36,7 @@ impl Cpuset<'_> {
   ///
   /// # Errors
   /// See the shared [interface-write errors](crate::v2#interface-write-errors).
-  pub fn set_cpus(&self, value: &CpuList) -> Result<(), Error> {
-    self.write_list(CpuList::CPUS_FILE_NAME, value.encode_cgroup())
-  }
+  pub fn set_cpus(&self, value: &CpuList) -> Result<(), Error> { self.cgroup.write_value::<CpuList>(value) }
 
   /// Replaces the requested exclusive CPU list. An empty list clears the request.
   /// See [Linux cpuset interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpuset-interface-files).
@@ -45,7 +44,7 @@ impl Cpuset<'_> {
   /// # Errors
   /// See the shared [interface-write errors](crate::v2#interface-write-errors).
   pub fn set_cpus_exclusive(&self, value: &CpuList) -> Result<(), Error> {
-    self.write_list(CpuList::EXCLUSIVE_FILE_NAME, value.encode_cgroup())
+    self.cgroup.write_value::<CpusExclusive>(value)
   }
 
   /// Replaces the requested memory-node list. An empty list restores inheritance.
@@ -54,7 +53,7 @@ impl Cpuset<'_> {
   /// # Errors
   /// See the shared [interface-write errors](crate::v2#interface-write-errors).
   pub fn set_mems(&self, value: &MemoryNodeList) -> Result<(), Error> {
-    self.write_list(MemoryNodeList::MEMS_FILE_NAME, value.encode_cgroup())
+    self.cgroup.write_value::<MemoryNodeList>(value)
   }
 
   /// Requests the base partition state of this value. Any diagnostic reason is ignored.
@@ -63,19 +62,7 @@ impl Cpuset<'_> {
   /// # Errors
   /// See the shared [interface-write errors](crate::v2#interface-write-errors).
   pub fn set_partition(&self, value: &CpusetPartition) -> Result<(), Error> {
-    self.cgroup.write(CpusetPartition::FILE_NAME, Ok(value.state().to_owned()))
-  }
-
-  fn write_list(&self, file: &str, command: Result<String, crate::error::EncodeError>) -> Result<(), Error> {
-    self.cgroup.write(
-      file,
-      command.map(|mut command| {
-        if command.is_empty() {
-          command.push('\n');
-        }
-        command
-      }),
-    )
+    self.cgroup.write_value::<CpusetPartition>(value)
   }
 
   /// Reads requested CPU IDs; an empty list means inheritance from ancestors.
@@ -86,7 +73,7 @@ impl Cpuset<'_> {
   /// # Errors
   ///
   /// See the shared [interface-read errors](crate::v2#interface-read-errors); the root lacks this interface.
-  pub fn cpus(&self) -> Result<CpuList, Error> { self.cgroup.parse(CpuList::CPUS_FILE_NAME) }
+  pub fn cpus(&self) -> Result<CpuList, Error> { self.cgroup.read_value::<CpuList>() }
 
   /// Reads online CPU IDs actually granted to tasks in this cgroup.
   ///
@@ -95,7 +82,7 @@ impl Cpuset<'_> {
   /// exposes this file. See [`CpuList`] and [Linux cpuset interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpuset-interface-files).
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn cpus_effective(&self) -> Result<CpuList, Error> { self.cgroup.parse(CpuList::EFFECTIVE_FILE_NAME) }
+  pub fn cpus_effective(&self) -> Result<CpuList, Error> { self.cgroup.read_value::<CpusEffective>() }
 
   /// Reads the CPUs requested for exclusive partition allocation.
   ///
@@ -108,7 +95,7 @@ impl Cpuset<'_> {
   ///
   /// See the shared [interface-read errors](crate::v2#interface-read-errors);
   /// the root and older kernels lack this interface.
-  pub fn cpus_exclusive(&self) -> Result<CpuList, Error> { self.cgroup.parse(CpuList::EXCLUSIVE_FILE_NAME) }
+  pub fn cpus_exclusive(&self) -> Result<CpuList, Error> { self.cgroup.read_value::<CpusExclusive>() }
 
   /// Reads CPUs actually available for exclusive partition allocation.
   ///
@@ -122,7 +109,7 @@ impl Cpuset<'_> {
   /// See the shared [interface-read errors](crate::v2#interface-read-errors);
   /// the root and older kernels lack this interface.
   pub fn cpus_exclusive_effective(&self) -> Result<CpuList, Error> {
-    self.cgroup.parse(CpuList::EXCLUSIVE_EFFECTIVE_FILE_NAME)
+    self.cgroup.read_value::<CpusExclusiveEffective>()
   }
 
   /// Reads CPUs belonging to isolated partitions across the hierarchy.
@@ -135,7 +122,7 @@ impl Cpuset<'_> {
   ///
   /// See the shared [interface-read errors](crate::v2#interface-read-errors);
   /// non-root cgroups and older kernels lack this interface.
-  pub fn cpus_isolated(&self) -> Result<CpuList, Error> { self.cgroup.parse(CpuList::ISOLATED_FILE_NAME) }
+  pub fn cpus_isolated(&self) -> Result<CpuList, Error> { self.cgroup.read_value::<CpusIsolated>() }
 
   /// Reads requested NUMA memory-node IDs; an empty list means inheritance.
   ///
@@ -146,7 +133,7 @@ impl Cpuset<'_> {
   /// # Errors
   ///
   /// See the shared [interface-read errors](crate::v2#interface-read-errors); the root lacks this interface.
-  pub fn mems(&self) -> Result<MemoryNodeList, Error> { self.cgroup.parse(MemoryNodeList::MEMS_FILE_NAME) }
+  pub fn mems(&self) -> Result<MemoryNodeList, Error> { self.cgroup.read_value::<MemoryNodeList>() }
 
   /// Reads online memory-node IDs actually granted to tasks in this cgroup.
   ///
@@ -156,9 +143,7 @@ impl Cpuset<'_> {
   /// [Linux cpuset interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpuset-interface-files).
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn mems_effective(&self) -> Result<MemoryNodeList, Error> {
-    self.cgroup.parse(MemoryNodeList::EFFECTIVE_FILE_NAME)
-  }
+  pub fn mems_effective(&self) -> Result<MemoryNodeList, Error> { self.cgroup.read_value::<MemsEffective>() }
 
   /// Reads partition membership, isolation, or invalid partition state.
   ///
@@ -170,5 +155,49 @@ impl Cpuset<'_> {
   ///
   /// See the shared [interface-read errors](crate::v2#interface-read-errors);
   /// the root and older kernels lack this interface.
-  pub fn partition(&self) -> Result<CpusetPartition, Error> { self.cgroup.parse(CpusetPartition::FILE_NAME) }
+  pub fn partition(&self) -> Result<CpusetPartition, Error> { self.cgroup.read_value::<CpusetPartition>() }
+}
+
+crate::v2::interface::cgroup_file!(alias
+  /// Effective CPU placement.
+  CpusEffective, CpuList::EFFECTIVE_FILE_NAME, Read, CpuList
+);
+
+crate::v2::interface::cgroup_file!(alias
+  /// Effective exclusive CPUs.
+  CpusExclusiveEffective, CpuList::EXCLUSIVE_EFFECTIVE_FILE_NAME, Read, CpuList
+);
+
+crate::v2::interface::cgroup_file!(alias
+  /// Isolated CPUs.
+  CpusIsolated, CpuList::ISOLATED_FILE_NAME, Read, CpuList
+);
+
+crate::v2::interface::cgroup_file!(alias
+  /// Effective NUMA placement.
+  MemsEffective, MemoryNodeList::EFFECTIVE_FILE_NAME, Read, MemoryNodeList
+);
+
+crate::v2::interface::cgroup_file!(alias
+  /// Configured exclusive CPUs.
+  CpusExclusive, CpuList::EXCLUSIVE_FILE_NAME, ReadWrite, CpuList
+);
+
+crate::v2::interface::cgroup_file!(file CpuList, CpuList::CPUS_FILE_NAME, ReadWrite);
+crate::v2::interface::cgroup_file!(read CpuList => CpuList);
+
+crate::v2::interface::cgroup_file!(file MemoryNodeList, MemoryNodeList::MEMS_FILE_NAME, ReadWrite);
+crate::v2::interface::cgroup_file!(read MemoryNodeList => MemoryNodeList);
+
+cgroup_file!(write CpuList, 'a => &'a CpuList, |value: &CpuList| placement_command(value.encode_cgroup()));
+cgroup_file!(write CpusExclusive, 'a => &'a CpuList, |value: &CpuList| placement_command(value.encode_cgroup()));
+cgroup_file!(write MemoryNodeList, 'a => &'a MemoryNodeList, |value: &MemoryNodeList| placement_command(value.encode_cgroup()));
+cgroup_file!(write CpusetPartition, 'a => &'a CpusetPartition, |value: &CpusetPartition| Ok(value.state().to_owned()));
+
+fn placement_command(command: Result<String, crate::error::EncodeError>) -> Result<String, crate::error::EncodeError> {
+  let mut command = command?;
+  if command.is_empty() {
+    command.push('\n');
+  }
+  Ok(command)
 }

@@ -23,11 +23,13 @@ pub struct CpuMax {
   pub period: NonZeroTime,
 }
 
+crate::v2::interface::cgroup_file!(CpuMax, "cpu.max", ReadWrite);
+
 impl CpuMax {
   /// The cgroup v2 `cpu.max` interface filename.
   ///
   /// See [Linux `cpu.max` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
-  pub const FILE_NAME: &'static str = "cpu.max";
+  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
 
   /// Returns the CPU bandwidth implied by this cgroup's quota and period.
   ///
@@ -59,6 +61,16 @@ cgroup_value! {
     period: ParseNonZeroMicroseconds,
   }
 }
+
+/// Quota-only command for `cpu.max`. The kernel keeps the existing period.
+pub struct CpuQuota;
+
+crate::v2::interface::cgroup_file!(file CpuQuota, CpuMax::FILE_NAME, Write);
+crate::v2::interface::cgroup_file!(write CpuQuota, 'a => MaxOr<NonZeroTime>, |quota| {
+  let mut command = String::new();
+  crate::parse::EncodeCgroup::<ParseNonZeroMicroseconds>::encode_field(&quota, &mut command, "quota")?;
+  Ok(command)
+});
 
 #[cfg(test)]
 mod tests {

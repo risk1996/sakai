@@ -20,11 +20,13 @@ pub struct CgroupEvents {
   frozen: Option<bool>,
 }
 
+crate::v2::interface::cgroup_file!(CgroupEvents, "cgroup.events", Read);
+
 impl CgroupEvents {
   /// The cgroup v2 `cgroup.events` interface filename.
   ///
   /// See [Linux `cgroup.events` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
-  pub const FILE_NAME: &'static str = "cgroup.events";
+  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
 
   /// Whether this cgroup or any descendant contains live processes.
   ///
@@ -62,9 +64,11 @@ pub struct CgroupStatLocal {
   frozen_time: Time,
 }
 
+crate::v2::interface::cgroup_file!(CgroupStatLocal, "cgroup.stat.local", Read);
+
 impl CgroupStatLocal {
   /// The non-root local freezer statistics filename, since Linux 6.18.
-  pub const FILE_NAME: &'static str = "cgroup.stat.local";
+  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
 
   /// Returns cumulative local freezing duration, parsed from microseconds.
   ///
@@ -96,11 +100,13 @@ pub struct CgroupStat {
   dying_subsystems: HashMap<CgroupController, Count>,
 }
 
+crate::v2::interface::cgroup_file!(CgroupStat, "cgroup.stat", Read);
+
 impl CgroupStat {
   /// The cgroup v2 `cgroup.stat` interface filename.
   ///
   /// See [Linux `cgroup.stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
-  pub const FILE_NAME: &'static str = "cgroup.stat";
+  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
 
   /// Visible descendant cgroups, excluding this cgroup.
   ///

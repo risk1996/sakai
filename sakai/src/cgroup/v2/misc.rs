@@ -36,28 +36,28 @@ impl Misc<'_> {
   /// Reads a fresh [`MiscCapacity`] snapshot. See [Linux misc interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#misc).
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn capacity(&self) -> Result<MiscCapacity, Error> { self.cgroup.parse(MiscCapacity::FILE_NAME) }
+  pub fn capacity(&self) -> Result<MiscCapacity, Error> { self.cgroup.read_value::<MiscCapacity>() }
 
   /// Hierarchical resource usage in counts; older kernels omit the root file.
   ///
   /// Reads a fresh [`MiscCurrent`] snapshot. See [Linux misc interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#misc).
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn current(&self) -> Result<MiscCurrent, Error> { self.cgroup.parse(MiscCurrent::FILE_NAME) }
+  pub fn current(&self) -> Result<MiscCurrent, Error> { self.cgroup.read_value::<MiscCurrent>() }
 
   /// Historical hierarchical maximum resource usage; since Linux 6.11.
   ///
   /// Reads a fresh [`MiscPeak`] snapshot. See [Linux misc interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#misc).
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn peak(&self) -> Result<MiscPeak, Error> { self.cgroup.parse(MiscPeak::FILE_NAME) }
+  pub fn peak(&self) -> Result<MiscPeak, Error> { self.cgroup.read_value::<MiscPeak>() }
 
   /// Configured resource limits in counts; absent at the hierarchy root.
   ///
   /// Reads a fresh [`MiscMax`] snapshot. See [Linux misc interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#misc).
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn max(&self) -> Result<MiscMax, Error> { self.cgroup.parse(MiscMax::FILE_NAME) }
+  pub fn max(&self) -> Result<MiscMax, Error> { self.cgroup.read_value::<MiscMax>() }
 
   /// Sets the maximum count for one miscellaneous resource, or removes its limit with `max`.
   /// See [Linux miscellaneous resource interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#misc).
@@ -65,7 +65,7 @@ impl Misc<'_> {
   /// # Errors
   /// See the shared [interface-write errors](crate::v2#interface-write-errors).
   pub fn set_max(&self, resource: &str, value: MaxOr<Count>) -> Result<(), Error> {
-    self.cgroup.write_keyed::<ParseCount>(MiscMax::FILE_NAME, resource, "resource", &value, "limit")
+    self.cgroup.write_value::<MiscMax>((resource, value))
   }
 
   /// Hierarchical resource limit or capacity failures; absent at the root.
@@ -73,14 +73,14 @@ impl Misc<'_> {
   /// Reads a fresh [`MiscEvents`] snapshot. See [Linux misc interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#misc).
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn events(&self) -> Result<MiscEvents, Error> { self.cgroup.parse(MiscEvents::FILE_NAME) }
+  pub fn events(&self) -> Result<MiscEvents, Error> { self.cgroup.read_value::<MiscEvents>() }
 
   /// Failures at this cgroup's limit or platform capacity; since Linux 6.11.
   ///
   /// Reads a fresh [`MiscEvents`] snapshot. See [Linux misc interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#misc).
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn events_local(&self) -> Result<MiscEvents, Error> { self.cgroup.parse(MiscEvents::LOCAL_FILE_NAME) }
+  pub fn events_local(&self) -> Result<MiscEvents, Error> { self.cgroup.read_value::<MiscEventsLocal>() }
 }
 
 /// Machine-wide available miscellaneous resource capacities.
@@ -94,9 +94,11 @@ pub struct MiscCapacity {
   resources: BTreeMap<String, Count>,
 }
 
+crate::v2::interface::cgroup_file!(MiscCapacity, "misc.capacity", Read);
+
 impl MiscCapacity {
   /// The cgroup v2 `misc.capacity` interface filename.
-  pub const FILE_NAME: &'static str = "misc.capacity";
+  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
 
   /// Reported resource names and their counts of resource units.
   ///
@@ -120,9 +122,11 @@ pub struct MiscCurrent {
   resources: BTreeMap<String, Count>,
 }
 
+crate::v2::interface::cgroup_file!(MiscCurrent, "misc.current", Read);
+
 impl MiscCurrent {
   /// The cgroup v2 `misc.current` interface filename.
-  pub const FILE_NAME: &'static str = "misc.current";
+  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
 
   /// Reported resource names and their counts of resource units.
   ///
@@ -147,9 +151,11 @@ pub struct MiscPeak {
   resources: BTreeMap<String, Count>,
 }
 
+crate::v2::interface::cgroup_file!(MiscPeak, "misc.peak", Read);
+
 impl MiscPeak {
   /// The cgroup v2 `misc.peak` interface filename.
-  pub const FILE_NAME: &'static str = "misc.peak";
+  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
 
   /// Reported resource names and their counts of resource units.
   ///
@@ -174,9 +180,12 @@ pub struct MiscMax {
   pub resources: BTreeMap<String, MaxOr<Count>>,
 }
 
+crate::v2::interface::cgroup_file!(file MiscMax, "misc.max", ReadWrite);
+crate::v2::interface::cgroup_file!(read MiscMax => MiscMax);
+
 impl MiscMax {
   /// The cgroup v2 `misc.max` interface filename.
-  pub const FILE_NAME: &'static str = "misc.max";
+  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
 
   /// Reported resource names and their configured limits in resource counts.
   ///
@@ -206,9 +215,11 @@ pub struct MiscEvents {
   resources: BTreeMap<String, Count>,
 }
 
+crate::v2::interface::cgroup_file!(MiscEvents, "misc.events", Read);
+
 impl MiscEvents {
   /// Hierarchical miscellaneous-resource event interface filename.
-  pub const FILE_NAME: &'static str = "misc.events";
+  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
   /// Local miscellaneous-resource event interface filename.
   pub const LOCAL_FILE_NAME: &'static str = "misc.events.local";
 
@@ -258,6 +269,15 @@ impl FromStr for MiscEvents {
     Ok(Self { resources })
   }
 }
+
+crate::v2::interface::cgroup_file!(alias
+  /// Local miscellaneous resource events.
+  MiscEventsLocal, MiscEvents::LOCAL_FILE_NAME, Read, MiscEvents
+);
+
+crate::v2::interface::cgroup_file!(write MiscMax, 'a => (&'a str, MaxOr<Count>), |(resource, value)| {
+  super::interface::encode_keyed::<ParseCount>(resource, "resource", &value, "limit")
+});
 
 #[cfg(test)]
 mod tests {

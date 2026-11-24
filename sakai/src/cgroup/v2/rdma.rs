@@ -108,7 +108,7 @@ impl Rdma<'_> {
   /// [Linux RDMA interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#rdma-interface-files).
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn current(&self) -> Result<RdmaCurrent, Error> { self.cgroup.parse(RdmaCurrent::FILE_NAME) }
+  pub fn current(&self) -> Result<RdmaCurrent, Error> { self.cgroup.read_value::<RdmaCurrent>() }
 
   /// Reads per-device HCA handle and object limits, measured in counts.
   ///
@@ -117,7 +117,7 @@ impl Rdma<'_> {
   /// [Linux RDMA interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#rdma-interface-files).
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn max(&self) -> Result<RdmaMax, Error> { self.cgroup.parse(RdmaMax::FILE_NAME) }
+  pub fn max(&self) -> Result<RdmaMax, Error> { self.cgroup.read_value::<RdmaMax>() }
 
   /// Sets both resource limits for one RDMA device in one write.
   /// See [Linux RDMA interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#rdma-interface-files).
@@ -125,12 +125,7 @@ impl Rdma<'_> {
   /// # Errors
   /// See the shared [interface-write errors](crate::v2#interface-write-errors).
   pub fn set_device_max(&self, device: &RdmaDevice, value: &RdmaDeviceMax) -> Result<(), Error> {
-    let command = super::file::check_token(device.name(), "device").and_then(|()| {
-      let mut command = device.to_string();
-      value.encode_fields(&mut command, " ", '=')?;
-      Ok(command)
-    });
-    self.cgroup.write(RdmaMax::FILE_NAME, command)
+    self.cgroup.write_value::<RdmaMax>((device, value))
   }
 
   /// Reads historical hierarchical HCA resource high-water marks in counts.
@@ -144,7 +139,7 @@ impl Rdma<'_> {
   ///
   /// Older kernels return [`Error::FileMissing`]. See the shared
   /// [interface-read errors](crate::v2#interface-read-errors) for other failures.
-  pub fn peak(&self) -> Result<RdmaCurrent, Error> { self.cgroup.parse(RdmaCurrent::PEAK_FILE_NAME) }
+  pub fn peak(&self) -> Result<RdmaCurrent, Error> { self.cgroup.read_value::<RdmaPeak>() }
 
   /// Reads hierarchical per-device RDMA allocation-failure event counts.
   ///
@@ -156,7 +151,7 @@ impl Rdma<'_> {
   ///
   /// Older kernels return [`Error::FileMissing`]. See the shared
   /// [interface-read errors](crate::v2#interface-read-errors) for other failures.
-  pub fn events(&self) -> Result<RdmaEvents, Error> { self.cgroup.parse(RdmaEvents::FILE_NAME) }
+  pub fn events(&self) -> Result<RdmaEvents, Error> { self.cgroup.read_value::<RdmaEvents>() }
 
   /// Reads local per-device RDMA allocation-failure event counts.
   ///
@@ -170,7 +165,7 @@ impl Rdma<'_> {
   ///
   /// Older kernels return [`Error::FileMissing`]. See the shared
   /// [interface-read errors](crate::v2#interface-read-errors) for other failures.
-  pub fn events_local(&self) -> Result<RdmaEvents, Error> { self.cgroup.parse(RdmaEvents::LOCAL_FILE_NAME) }
+  pub fn events_local(&self) -> Result<RdmaEvents, Error> { self.cgroup.read_value::<RdmaEventsLocal>() }
 }
 
 /// A volatile snapshot of hierarchical RDMA resource usage or peak usage.
@@ -189,9 +184,11 @@ pub struct RdmaCurrent {
   devices: BTreeMap<RdmaDevice, RdmaDeviceCurrent>,
 }
 
+crate::v2::interface::cgroup_file!(RdmaCurrent, "rdma.current", Read);
+
 impl RdmaCurrent {
   /// The cgroup v2 `rdma.current` interface filename.
-  pub const FILE_NAME: &'static str = "rdma.current";
+  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
   /// The `rdma.peak` interface filename, available since Linux 7.2.
   ///
   /// See the [Linux 7.2 implementation](https://github.com/torvalds/linux/blob/v7.2/kernel/cgroup/rdma.c).
@@ -248,9 +245,12 @@ pub struct RdmaMax {
   pub devices: BTreeMap<RdmaDevice, RdmaDeviceMax>,
 }
 
+crate::v2::interface::cgroup_file!(file RdmaMax, "rdma.max", ReadWrite);
+crate::v2::interface::cgroup_file!(read RdmaMax => RdmaMax);
+
 impl RdmaMax {
   /// The cgroup v2 `rdma.max` interface filename.
-  pub const FILE_NAME: &'static str = "rdma.max";
+  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
 
   /// Returns stored per-device limits without performing I/O.
   #[must_use]
@@ -298,9 +298,11 @@ pub struct RdmaEvents {
   devices: BTreeMap<RdmaDevice, RdmaDeviceEvents>,
 }
 
+crate::v2::interface::cgroup_file!(RdmaEvents, "rdma.events", Read);
+
 impl RdmaEvents {
   /// The hierarchical `rdma.events` filename, available since Linux 7.2.
-  pub const FILE_NAME: &'static str = "rdma.events";
+  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
   /// The local `rdma.events.local` filename, available since Linux 7.2.
   pub const LOCAL_FILE_NAME: &'static str = "rdma.events.local";
 
@@ -406,6 +408,26 @@ fn parse_devices<T>(
       Ok((RdmaDevice::new(device, index), parse(fields)?))
     })
     .collect()
+}
+
+crate::v2::interface::cgroup_file!(alias
+  /// Peak RDMA usage.
+  RdmaPeak, RdmaCurrent::PEAK_FILE_NAME, Read, RdmaCurrent
+);
+
+crate::v2::interface::cgroup_file!(alias
+  /// Local RDMA events.
+  RdmaEventsLocal, RdmaEvents::LOCAL_FILE_NAME, Read, RdmaEvents
+);
+
+crate::v2::interface::cgroup_file!(write RdmaMax, 'a => (&'a RdmaDevice, &'a RdmaDeviceMax), encode_device_max);
+
+fn encode_device_max((device, value): (&RdmaDevice, &RdmaDeviceMax)) -> Result<String, crate::error::EncodeError> {
+  super::interface::check_token(device.name(), "device").and_then(|()| {
+    let mut command = device.to_string();
+    value.encode_fields(&mut command, " ", '=')?;
+    Ok(command)
+  })
 }
 
 #[cfg(test)]

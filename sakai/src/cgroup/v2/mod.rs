@@ -4,6 +4,23 @@
 //! controller views are available on Linux. See the
 //! [Linux cgroup v2 guide](https://docs.kernel.org/admin-guide/cgroup-v2.html).
 //!
+//! Each interface declares a [`CgroupFile`] and a mode from [`mode`]. The
+//! mode describes the operations exposed by Sakai. For example, pressure
+//! snapshots are readable, and installing a PSI trigger would require a
+//! separate descriptor-scoped API.
+//!
+//! On Linux, the typed operations are also available directly on the handle.
+//!
+//! ```no_run
+//! #[cfg(target_os = "linux")]
+//! fn restore_limit(
+//!   cgroup: &sakai::Cgroup,
+//!   limit: &sakai::v2::cpu::CpuMax,
+//! ) -> Result<(), sakai::Error> {
+//!   cgroup.write_value::<sakai::v2::cpu::CpuMax>(limit)
+//! }
+//! ```
+//!
 //! # Interface-read errors
 //!
 //! Linux interface readers report the following errors:
@@ -30,6 +47,9 @@
 
 #[cfg(target_os = "linux")]
 pub use handle::Cgroup;
+pub use interface::{
+  AccessMode, CgroupFile, FileCommand, FileValue, ReadMode, ReadableFile, WritableFile, WriteMode, mode,
+};
 #[cfg(target_os = "linux")]
 pub use path::{CgroupPath, CgroupPathError};
 
@@ -50,5 +70,6 @@ pub mod rdma;
 mod file;
 #[cfg(target_os = "linux")]
 mod handle;
+pub(crate) mod interface;
 #[cfg(target_os = "linux")]
 mod path;

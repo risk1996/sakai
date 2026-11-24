@@ -68,9 +68,12 @@ pub struct IoCostQos {
   pub devices: BTreeMap<Device, IoDeviceCostQos>,
 }
 
+crate::v2::interface::cgroup_file!(file IoCostQos, "io.cost.qos", ReadWrite);
+crate::v2::interface::cgroup_file!(read IoCostQos => IoCostQos);
+
 impl IoCostQos {
   /// The root-only I/O cost QoS interface filename.
-  pub const FILE_NAME: &'static str = "io.cost.qos";
+  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
 
   /// Inspects stored per-device parameters without kernel I/O.
   #[must_use]
@@ -174,9 +177,12 @@ pub struct IoCostModel {
   pub devices: BTreeMap<Device, IoDeviceCostModel>,
 }
 
+crate::v2::interface::cgroup_file!(file IoCostModel, "io.cost.model", ReadWrite);
+crate::v2::interface::cgroup_file!(read IoCostModel => IoCostModel);
+
 impl IoCostModel {
   /// The root-only I/O cost model interface filename.
-  pub const FILE_NAME: &'static str = "io.cost.model";
+  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
 
   /// Inspects stored per-device models without kernel I/O.
   #[must_use]
@@ -263,14 +269,7 @@ impl super::Io<'_> {
   /// # Errors
   /// See the shared [interface-write errors](crate::v2#interface-write-errors).
   pub fn set_cost_qos(&self, device: Device, value: &IoDeviceCostQos) -> Result<(), crate::Error> {
-    let command = match value.control {
-      | IoCostControl::Auto => Ok(format!("{device} enable={} ctrl=auto", u8::from(value.enabled))),
-      | IoCostControl::User => {
-        let mut command = device.to_string();
-        value.encode_fields(&mut command, " ", '=').map(|()| command)
-      },
-    };
-    self.cgroup.write(IoCostQos::FILE_NAME, command)
+    self.cgroup.write_value::<IoCostQos>((device, value))
   }
 
   /// Applies one device's cost model in one write at the hierarchy root.
@@ -281,14 +280,7 @@ impl super::Io<'_> {
   /// # Errors
   /// See the shared [interface-write errors](crate::v2#interface-write-errors).
   pub fn set_cost_model(&self, device: Device, value: &IoDeviceCostModel) -> Result<(), crate::Error> {
-    let command = match value.control {
-      | IoCostControl::Auto => Ok(format!("{device} ctrl=auto")),
-      | IoCostControl::User => {
-        let mut command = device.to_string();
-        value.encode_fields(&mut command, " ", '=').map(|()| command)
-      },
-    };
-    self.cgroup.write(IoCostModel::FILE_NAME, command)
+    self.cgroup.write_value::<IoCostModel>((device, value))
   }
 }
 
@@ -303,6 +295,30 @@ impl EncodeCgroup<IoCostModelName> for IoCostModelName {
 impl EncodeCgroup<ParseScalingPercent> for Ratio {
   fn encode_token(&self, output: &mut String) -> Option<()> {
     crate::parse::encode_percent(self, output, |value| ScalingPercent::try_new(value).is_ok())
+  }
+}
+
+crate::v2::interface::cgroup_file!(write IoCostQos, 'a => (Device, &'a IoDeviceCostQos), encode_qos);
+
+fn encode_qos((device, value): (Device, &IoDeviceCostQos)) -> Result<String, crate::error::EncodeError> {
+  match value.control {
+    | IoCostControl::Auto => Ok(format!("{device} enable={} ctrl=auto", u8::from(value.enabled))),
+    | IoCostControl::User => {
+      let mut command = device.to_string();
+      value.encode_fields(&mut command, " ", '=').map(|()| command)
+    },
+  }
+}
+
+crate::v2::interface::cgroup_file!(write IoCostModel, 'a => (Device, &'a IoDeviceCostModel), encode_model);
+
+fn encode_model((device, value): (Device, &IoDeviceCostModel)) -> Result<String, crate::error::EncodeError> {
+  match value.control {
+    | IoCostControl::Auto => Ok(format!("{device} ctrl=auto")),
+    | IoCostControl::User => {
+      let mut command = device.to_string();
+      value.encode_fields(&mut command, " ", '=').map(|()| command)
+    },
   }
 }
 

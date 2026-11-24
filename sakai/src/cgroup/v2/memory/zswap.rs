@@ -32,7 +32,7 @@ impl Zswap<'_> {
   /// Older kernels return [`crate::Error::FileMissing`] when this interface is read.
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn current(&self) -> Result<ZswapCurrent, Error> { self.cgroup.parse(ZswapCurrent::FILE_NAME) }
+  pub fn current(&self) -> Result<ZswapCurrent, Error> { self.cgroup.read_value::<ZswapCurrent>() }
 
   /// Hard limit on this cgroup's compressed swap pool.
   ///
@@ -42,16 +42,14 @@ impl Zswap<'_> {
   /// Older kernels return [`crate::Error::FileMissing`] when this interface is read.
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn max(&self) -> Result<ZswapMax, Error> { self.cgroup.parse(ZswapMax::FILE_NAME) }
+  pub fn max(&self) -> Result<ZswapMax, Error> { self.cgroup.read_value::<ZswapMax>() }
 
   /// Sets the zswap pool limit in bytes or removes it with `max`.
   /// See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
   /// # Errors
   /// See the shared [interface-write errors](crate::v2#interface-write-errors).
-  pub fn set_max(&self, value: MaxOr<Bytes>) -> Result<(), Error> {
-    self.cgroup.write(ZswapMax::FILE_NAME, ZswapMax::new(value).encode_cgroup())
-  }
+  pub fn set_max(&self, value: MaxOr<Bytes>) -> Result<(), Error> { self.cgroup.write_value::<ZswapMax>(value) }
 
   /// This cgroup's configured disk swap writeback policy.
   ///
@@ -61,16 +59,14 @@ impl Zswap<'_> {
   /// Older kernels return [`crate::Error::FileMissing`] when this interface is read.
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn writeback(&self) -> Result<ZswapWriteback, Error> { self.cgroup.parse(ZswapWriteback::FILE_NAME) }
+  pub fn writeback(&self) -> Result<ZswapWriteback, Error> { self.cgroup.read_value::<ZswapWriteback>() }
 
   /// Sets whether zswap can write back to disk.
   /// See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
   /// # Errors
   /// See the shared [interface-write errors](crate::v2#interface-write-errors).
-  pub fn set_writeback(&self, value: bool) -> Result<(), Error> {
-    self.cgroup.write(ZswapWriteback::FILE_NAME, ZswapWriteback::new(value).encode_cgroup())
-  }
+  pub fn set_writeback(&self, value: bool) -> Result<(), Error> { self.cgroup.write_value::<ZswapWriteback>(value) }
 }
 
 /// Memory consumed by the zswap compression backend for this cgroup and descendants, in bytes.

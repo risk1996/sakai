@@ -42,11 +42,14 @@ pub struct IoMax {
   pub devices: BTreeMap<Device, IoDeviceMax>,
 }
 
+crate::v2::interface::cgroup_file!(file IoMax, "io.max", ReadWrite);
+crate::v2::interface::cgroup_file!(read IoMax => IoMax);
+
 impl IoMax {
   /// The cgroup v2 `io.max` interface filename.
   ///
   /// See [Linux `io.max` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
-  pub const FILE_NAME: &'static str = "io.max";
+  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
 
   /// Returns each reported device's configured limits.
   ///
@@ -126,7 +129,6 @@ pub struct IoMaxUpdate {
   pub write_iops: Option<MaxOr<OperationsPerSecond>>,
 }
 
-#[cfg(any(target_os = "linux", test))]
 impl IoMaxUpdate {
   fn encode_command(&self, device: Device) -> Result<String, crate::error::EncodeError> {
     let mut command = device.to_string();
@@ -157,9 +159,7 @@ impl super::Io<'_> {
   /// # Errors
   /// See the shared [interface-write errors](crate::v2#interface-write-errors).
   pub fn set_device_max(&self, device: Device, limits: &IoDeviceMax) -> Result<(), crate::Error> {
-    let mut command = device.to_string();
-    let encoded = limits.encode_fields(&mut command, " ", '=');
-    self.cgroup.write(IoMax::FILE_NAME, encoded.map(|()| command))
+    self.cgroup.write_value::<IoMax>(IoMaxCommand::Set(device, limits))
   }
 
   /// Updates selected limits for one device in one write.
@@ -169,7 +169,7 @@ impl super::Io<'_> {
   /// An empty update is rejected. See the shared
   /// [interface-write errors](crate::v2#interface-write-errors).
   pub fn update_device_max(&self, device: Device, update: &IoMaxUpdate) -> Result<(), crate::Error> {
-    self.cgroup.write(IoMax::FILE_NAME, update.encode_command(device))
+    self.cgroup.write_value::<IoMax>(IoMaxCommand::Update(device, update))
   }
 }
 
@@ -196,6 +196,24 @@ impl EncodeCgroup<ParseBandwidth> for BytesPerSecond {
 impl EncodeCgroup<ParseIops> for OperationsPerSecond {
   fn encode_token(&self, output: &mut String) -> Option<()> { write!(output, "{}", self.get::<hertz>()).ok() }
 }
+
+/// A complete or partial limit change for one device in `io.max`.
+#[derive(Debug, Clone, Copy)]
+pub enum IoMaxCommand<'a> {
+  /// Replaces all four limits for the device.
+  Set(Device, &'a IoDeviceMax),
+  /// Changes only the supplied limits for the device.
+  Update(Device, &'a IoMaxUpdate),
+}
+
+crate::v2::interface::cgroup_file!(write IoMax, 'a => IoMaxCommand<'a>, |command| match command {
+  | IoMaxCommand::Set(device, limits) => {
+    let mut command = device.to_string();
+    limits.encode_fields(&mut command, " ", '=')?;
+    Ok(command)
+  },
+  | IoMaxCommand::Update(device, update) => update.encode_command(device),
+});
 
 #[cfg(test)]
 mod tests {

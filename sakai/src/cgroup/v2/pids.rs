@@ -31,37 +31,35 @@ impl Pids<'_> {
   /// Reads a fresh [`PidsCurrent`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#pid).
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn current(&self) -> Result<PidsCurrent, Error> { self.cgroup.parse(PidsCurrent::FILE_NAME) }
+  pub fn current(&self) -> Result<PidsCurrent, Error> { self.cgroup.read_value::<PidsCurrent>() }
 
   /// Reads the historical hierarchical task-count peak, including threads.
   ///
   /// Since Linux 6.1; see [`PidsPeak`]. Reading does not reset the peak.
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn peak(&self) -> Result<PidsPeak, Error> { self.cgroup.parse(PidsPeak::FILE_NAME) }
+  pub fn peak(&self) -> Result<PidsPeak, Error> { self.cgroup.read_value::<PidsPeak>() }
 
   /// Configured task limit in counts, or `max` for no limit at this cgroup.
   ///
   /// Reads a fresh [`PidsMax`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#pid).
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn max(&self) -> Result<PidsMax, Error> { self.cgroup.parse(PidsMax::FILE_NAME) }
+  pub fn max(&self) -> Result<PidsMax, Error> { self.cgroup.read_value::<PidsMax>() }
 
   /// Sets the task count limit or removes it with `max`.
   /// See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#pid).
   ///
   /// # Errors
   /// See the shared [interface-write errors](crate::v2#interface-write-errors).
-  pub fn set_max(&self, value: MaxOr<Count>) -> Result<(), Error> {
-    self.cgroup.write(PidsMax::FILE_NAME, PidsMax::new(value).encode_cgroup())
-  }
+  pub fn set_max(&self, value: MaxOr<Count>) -> Result<(), Error> { self.cgroup.write_value::<PidsMax>(value) }
 
   /// Hierarchical process-limit event counts.
   ///
   /// Reads a fresh [`PidsEvents`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#pid).
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn events(&self) -> Result<PidsEvents, Error> { self.cgroup.parse(PidsEvents::FILE_NAME) }
+  pub fn events(&self) -> Result<PidsEvents, Error> { self.cgroup.read_value::<PidsEvents>() }
 
   /// Reads local process-limit failures; available since Linux 6.11.
   ///
@@ -70,7 +68,7 @@ impl Pids<'_> {
   /// this cgroup, including ancestor-limit failures. See [`PidsEvents`].
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn events_local(&self) -> Result<PidsEvents, Error> { self.cgroup.parse(PidsEvents::LOCAL_FILE_NAME) }
+  pub fn events_local(&self) -> Result<PidsEvents, Error> { self.cgroup.read_value::<PidsEventsLocal>() }
 }
 
 /// Current number of tasks in this cgroup and its descendants.
@@ -117,11 +115,13 @@ pub struct PidsEvents {
   max: Count,
 }
 
+crate::v2::interface::cgroup_file!(PidsEvents, "pids.events", Read);
+
 impl PidsEvents {
   /// The cgroup v2 `pids.events` interface filename.
   ///
   /// See [Linux `pids.events` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#pid).
-  pub const FILE_NAME: &'static str = "pids.events";
+  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
   /// The non-root local event filename, available since Linux 6.11.
   ///
   /// See [Linux 6.11 source](https://github.com/torvalds/linux/blob/v6.11/kernel/cgroup/pids.c).
@@ -137,6 +137,11 @@ impl PidsEvents {
 cgroup_value! { keyed PidsEvents, |_| "value", {
   max: required ParseCount => "max",
 } }
+
+crate::v2::interface::cgroup_file!(alias
+  /// Local PID controller events.
+  PidsEventsLocal, PidsEvents::LOCAL_FILE_NAME, Read, PidsEvents
+);
 
 #[cfg(test)]
 mod tests {

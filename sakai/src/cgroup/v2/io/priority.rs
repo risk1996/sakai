@@ -34,9 +34,11 @@ pub enum IoPriorityClass {
 
 cgroup_value! { display IoPriorityClass }
 
+crate::v2::interface::cgroup_file!(IoPriorityClass, "io.prio.class", ReadWrite);
+
 impl IoPriorityClass {
   /// The I/O priority policy interface filename, also present at the root.
-  pub const FILE_NAME: &'static str = "io.prio.class";
+  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
 }
 
 // Parse the kernel's single newline-terminated value with contextual errors.

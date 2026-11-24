@@ -8,6 +8,7 @@ mod task;
 
 #[cfg(target_os = "linux")]
 use super::Cgroup;
+use super::interface::cgroup_file;
 #[cfg(target_os = "linux")]
 use crate::error::Error;
 use crate::{
@@ -49,7 +50,6 @@ pub type CgroupMaxDescendants = Scalar<MaxOr<Count>, interface::CgroupMaxDescend
 /// and [Linux PSI control](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
 pub type CgroupPressure = Scalar<bool, interface::CgroupPressure>;
 
-#[cfg(target_os = "linux")]
 #[derive(Debug, thiserror::Error)]
 #[error("cgroup content {raw:?} has an invalid cgroup type: {source}")]
 struct CgroupTypeParseError {
@@ -59,6 +59,7 @@ struct CgroupTypeParseError {
 }
 
 /// A cgroup's topology state, as read from `cgroup.type` on non-root cgroups.
+/// The typed write command `()` requests conversion to a threaded cgroup.
 ///
 /// Domain cgroups contain whole processes. A threaded domain is the resource
 /// domain at the root of a threaded subtree; threaded cgroups beneath it can
@@ -94,11 +95,13 @@ pub enum CgroupType {
 
 cgroup_value! { display CgroupType }
 
+crate::v2::interface::cgroup_file!(file CgroupType, "cgroup.type", ReadWrite);
+
 impl CgroupType {
   /// The cgroup v2 `cgroup.type` interface filename.
   ///
   /// See [Linux `cgroup.type` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
-  pub const FILE_NAME: &'static str = "cgroup.type";
+  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
 }
 
 /// A controller name reported by `cgroup.controllers` or
@@ -188,7 +191,6 @@ pub enum MigrationTarget {
   Caller,
 }
 
-#[cfg(target_os = "linux")]
 impl MigrationTarget {
   fn command(self) -> Result<String, crate::error::EncodeError> {
     match self {
@@ -224,7 +226,7 @@ impl Core<'_> {
   ///
   /// Reading from a threaded cgroup returns [`Error::NotSupported`]. See also
   /// the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn procs(&self) -> Result<Vec<TaskId>, Error> { self.task_ids(TaskId::PROCS_FILE_NAME) }
+  pub fn procs(&self) -> Result<Vec<TaskId>, Error> { self.cgroup.read_value::<CgroupProcs>() }
 
   /// Reads this cgroup's thread IDs in the reader's PID namespace.
   ///
@@ -234,51 +236,49 @@ impl Core<'_> {
   /// recycled while reading. Available at the hierarchy root too. See [`TaskId`].
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn threads(&self) -> Result<Vec<TaskId>, Error> { self.task_ids(TaskId::THREADS_FILE_NAME) }
+  pub fn threads(&self) -> Result<Vec<TaskId>, Error> { self.cgroup.read_value::<CgroupThreads>() }
 
   /// Volatile populated and frozen lifecycle state; root cgroups lack this file.
   ///
   /// Reads a fresh [`CgroupEvents`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn events(&self) -> Result<CgroupEvents, Error> { self.cgroup.parse(CgroupEvents::FILE_NAME) }
+  pub fn events(&self) -> Result<CgroupEvents, Error> { self.cgroup.read_value::<CgroupEvents>() }
 
   /// Volatile descendant and subsystem counts, including at the hierarchy root.
   ///
   /// Reads a fresh [`CgroupStat`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn stat(&self) -> Result<CgroupStat, Error> { self.cgroup.parse(CgroupStat::FILE_NAME) }
+  pub fn stat(&self) -> Result<CgroupStat, Error> { self.cgroup.read_value::<CgroupStat>() }
 
   /// Reads cumulative local freezing time, including ancestor-imposed freezing.
   ///
   /// Since Linux 6.18; non-root only. See [`CgroupStatLocal`].
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn stat_local(&self) -> Result<CgroupStatLocal, Error> { self.cgroup.parse(CgroupStatLocal::FILE_NAME) }
+  pub fn stat_local(&self) -> Result<CgroupStatLocal, Error> { self.cgroup.read_value::<CgroupStatLocal>() }
 
   /// Reads this cgroup's own freeze request, excluding ancestor requests.
   ///
   /// This reports configuration, not completed freezing. See [`CgroupFreeze`].
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn freeze(&self) -> Result<CgroupFreeze, Error> { self.cgroup.parse(CgroupFreeze::FILE_NAME) }
+  pub fn freeze(&self) -> Result<CgroupFreeze, Error> { self.cgroup.read_value::<CgroupFreeze>() }
 
   /// Requests freeze or thaw. Read events to observe completion.
   /// See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
   ///
   /// # Errors
   /// See the shared [interface-write errors](crate::v2#interface-write-errors).
-  pub fn set_freeze(&self, value: bool) -> Result<(), Error> {
-    self.cgroup.write(CgroupFreeze::FILE_NAME, CgroupFreeze::new(value).encode_cgroup())
-  }
+  pub fn set_freeze(&self, value: bool) -> Result<(), Error> { self.cgroup.write_value::<CgroupFreeze>(value) }
 
   /// Reads the configured descendant depth limit, including at the root.
   ///
   /// See [`CgroupMaxDepth`] for units and ancestor restrictions.
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn max_depth(&self) -> Result<CgroupMaxDepth, Error> { self.cgroup.parse(CgroupMaxDepth::FILE_NAME) }
+  pub fn max_depth(&self) -> Result<CgroupMaxDepth, Error> { self.cgroup.read_value::<CgroupMaxDepth>() }
 
   /// Sets the maximum descendant depth or removes the limit with `max`.
   /// See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
@@ -286,7 +286,7 @@ impl Core<'_> {
   /// # Errors
   /// See the shared [interface-write errors](crate::v2#interface-write-errors).
   pub fn set_max_depth(&self, value: MaxOr<Count>) -> Result<(), Error> {
-    self.cgroup.write(CgroupMaxDepth::FILE_NAME, CgroupMaxDepth::new(value).encode_cgroup())
+    self.cgroup.write_value::<CgroupMaxDepth>(value)
   }
 
   /// Reads the configured descendant cgroup count limit, including at the root.
@@ -295,7 +295,7 @@ impl Core<'_> {
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn max_descendants(&self) -> Result<CgroupMaxDescendants, Error> {
-    self.cgroup.parse(CgroupMaxDescendants::FILE_NAME)
+    self.cgroup.read_value::<CgroupMaxDescendants>()
   }
 
   /// Sets the maximum descendant count or removes the limit with `max`.
@@ -304,7 +304,7 @@ impl Core<'_> {
   /// # Errors
   /// See the shared [interface-write errors](crate::v2#interface-write-errors).
   pub fn set_max_descendants(&self, value: MaxOr<Count>) -> Result<(), Error> {
-    self.cgroup.write(CgroupMaxDescendants::FILE_NAME, CgroupMaxDescendants::new(value).encode_cgroup())
+    self.cgroup.write_value::<CgroupMaxDescendants>(value)
   }
 
   /// Reads the local pressure accounting enable flag, including at the root.
@@ -312,7 +312,7 @@ impl Core<'_> {
   /// Since Linux 6.1; see [`CgroupPressure`] for configuration requirements.
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn pressure_enabled(&self) -> Result<CgroupPressure, Error> { self.cgroup.parse(CgroupPressure::FILE_NAME) }
+  pub fn pressure_enabled(&self) -> Result<CgroupPressure, Error> { self.cgroup.read_value::<CgroupPressure>() }
 
   /// Sets local pressure accounting. At the root, this is the system-wide switch.
   /// See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
@@ -320,7 +320,7 @@ impl Core<'_> {
   /// # Errors
   /// See the shared [interface-write errors](crate::v2#interface-write-errors).
   pub fn set_pressure_enabled(&self, value: bool) -> Result<(), Error> {
-    self.cgroup.write(CgroupPressure::FILE_NAME, CgroupPressure::new(value).encode_cgroup())
+    self.cgroup.write_value::<CgroupPressure>(value)
   }
 
   /// Configuration snapshot; the hierarchy root may lack this file.
@@ -328,22 +328,14 @@ impl Core<'_> {
   /// Reads a fresh [`CgroupType`] snapshot. See [Linux interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn kind(&self) -> Result<CgroupType, Error> {
-    let contents = self.cgroup.read(CgroupType::FILE_NAME)?;
-    contents.trim().parse().map_err(|source| Error::Parse {
-      path: self.cgroup.path().join(CgroupType::FILE_NAME),
-      source: Box::new(CgroupTypeParseError { raw: contents, source }),
-    })
-  }
+  pub fn kind(&self) -> Result<CgroupType, Error> { self.cgroup.read_value::<CgroupType>() }
 
   /// Configuration snapshot of controllers available to enable for children.
   ///
   /// See [Linux core cgroup interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn controllers(&self) -> Result<Vec<CgroupController>, Error> {
-    self.controller_list(CgroupController::CONTROLLERS_FILE_NAME)
-  }
+  pub fn controllers(&self) -> Result<Vec<CgroupController>, Error> { self.cgroup.read_value::<CgroupControllers>() }
 
   /// Configuration snapshot of controllers enabled for children.
   ///
@@ -351,7 +343,7 @@ impl Core<'_> {
   ///
   /// Errors: see the shared [interface-read errors](crate::v2#interface-read-errors).
   pub fn subtree_control(&self) -> Result<Vec<CgroupController>, Error> {
-    self.controller_list(CgroupController::SUBTREE_CONTROL_FILE_NAME)
+    self.cgroup.read_value::<CgroupSubtreeControl>()
   }
 
   /// Applies the controller actions in one kernel batch.
@@ -363,27 +355,7 @@ impl Core<'_> {
   /// The batch must contain at least one action. See the shared
   /// [interface-write errors](crate::v2#interface-write-errors).
   pub fn set_subtree_control(&self, actions: &[SubtreeControl]) -> Result<(), Error> {
-    let command = (|| {
-      let mut command = String::new();
-      for action in actions {
-        let (prefix, controller) = match action {
-          | SubtreeControl::Enable(controller) => ('+', controller),
-          | SubtreeControl::Disable(controller) => ('-', controller),
-        };
-        let name = controller.to_string();
-        super::file::check_token(&name, "controller")?;
-        if !command.is_empty() {
-          command.push(' ');
-        }
-        command.push(prefix);
-        command.push_str(&name);
-      }
-      if command.is_empty() {
-        return Err(crate::error::EncodeError { field: "controllers" });
-      }
-      Ok(command)
-    })();
-    self.cgroup.write(CgroupController::SUBTREE_CONTROL_FILE_NAME, command)
+    self.cgroup.write_value::<CgroupSubtreeControl>(actions)
   }
 
   /// Moves one process and its threads into this cgroup.
@@ -392,7 +364,7 @@ impl Core<'_> {
   /// # Errors
   /// See the shared [interface-write errors](crate::v2#interface-write-errors).
   pub fn move_process(&self, target: MigrationTarget) -> Result<(), Error> {
-    self.cgroup.write(TaskId::PROCS_FILE_NAME, target.command())
+    self.cgroup.write_value::<CgroupProcs>(target)
   }
 
   /// Moves one thread into this cgroup within its threaded domain.
@@ -401,7 +373,7 @@ impl Core<'_> {
   /// # Errors
   /// See the shared [interface-write errors](crate::v2#interface-write-errors).
   pub fn move_thread(&self, target: MigrationTarget) -> Result<(), Error> {
-    self.cgroup.write(TaskId::THREADS_FILE_NAME, target.command())
+    self.cgroup.write_value::<CgroupThreads>(target)
   }
 
   /// Converts this cgroup into a member of a threaded subtree.
@@ -409,18 +381,62 @@ impl Core<'_> {
   ///
   /// # Errors
   /// See the shared [interface-write errors](crate::v2#interface-write-errors).
-  pub fn set_threaded(&self) -> Result<(), Error> {
-    self.cgroup.write(CgroupType::FILE_NAME, CgroupType::Threaded.encode_cgroup())
-  }
+  pub fn set_threaded(&self) -> Result<(), Error> { self.cgroup.write_value::<CgroupType>(()) }
+}
 
-  fn controller_list(&self, file: &'static str) -> Result<Vec<CgroupController>, Error> {
-    Ok(self.cgroup.read(file)?.split_ascii_whitespace().map(CgroupController::from).collect())
-  }
+cgroup_file!(read CgroupType => CgroupType, |contents: &str| {
+  Ok(contents.trim().parse().map_err(|source| CgroupTypeParseError { raw: contents.into(), source })?)
+});
+cgroup_file!(write CgroupType, 'a => (), |()| CgroupType::Threaded.encode_cgroup());
 
-  fn task_ids(&self, file: &'static str) -> Result<Vec<TaskId>, Error> {
-    TaskId::parse_list(&self.cgroup.read(file)?)
-      .map_err(|source| Error::Parse { path: self.cgroup.path().join(file), source: Box::new(source) })
+cgroup_file!(alias
+  /// The cgroup's available controllers.
+  CgroupControllers, CgroupController::CONTROLLERS_FILE_NAME, Read, Vec<CgroupController>, decode_controllers
+);
+cgroup_file!(alias
+  /// Controllers enabled for children and their enable or disable actions.
+  CgroupSubtreeControl, CgroupController::SUBTREE_CONTROL_FILE_NAME, ReadWrite, Vec<CgroupController>, decode_controllers
+);
+cgroup_file!(write CgroupSubtreeControl, 'a => &'a [SubtreeControl], encode_subtree_control);
+
+fn decode_controllers(contents: &str) -> Result<Vec<CgroupController>, Box<dyn std::error::Error + Send + Sync>> {
+  Ok(contents.split_ascii_whitespace().map(CgroupController::from).collect())
+}
+
+fn encode_subtree_control(actions: &[SubtreeControl]) -> Result<String, crate::error::EncodeError> {
+  let mut command = String::new();
+  for action in actions {
+    let (prefix, controller) = match action {
+      | SubtreeControl::Enable(controller) => ('+', controller),
+      | SubtreeControl::Disable(controller) => ('-', controller),
+    };
+    let name = controller.to_string();
+    super::interface::check_token(&name, "controller")?;
+    if !command.is_empty() {
+      command.push(' ');
+    }
+    command.push(prefix);
+    command.push_str(&name);
   }
+  if command.is_empty() {
+    return Err(crate::error::EncodeError { field: "controllers" });
+  }
+  Ok(command)
+}
+
+cgroup_file!(alias
+  /// Process membership and migration.
+  CgroupProcs, TaskId::PROCS_FILE_NAME, ReadWrite, Vec<TaskId>, decode_tasks
+);
+cgroup_file!(alias
+  /// Thread membership and migration.
+  CgroupThreads, TaskId::THREADS_FILE_NAME, ReadWrite, Vec<TaskId>, decode_tasks
+);
+cgroup_file!(write CgroupProcs, 'a => MigrationTarget, MigrationTarget::command);
+cgroup_file!(write CgroupThreads, 'a => MigrationTarget, MigrationTarget::command);
+
+fn decode_tasks(contents: &str) -> Result<Vec<TaskId>, Box<dyn std::error::Error + Send + Sync>> {
+  Ok(TaskId::parse_list(contents)?)
 }
 
 #[cfg(test)]
