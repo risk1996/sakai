@@ -29,11 +29,6 @@ cgroup_value! { token Nice: ParseNice, "nice" }
 cgroup_file!(Nice, "cpu.weight.nice", ReadWrite);
 
 impl Nice {
-  /// The cgroup v2 `cpu.weight.nice` interface filename.
-  ///
-  /// See [Linux `cpu.weight.nice` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
-  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-
   fn validate_nice(nice: &i8) -> Result<(), NiceError> {
     match *nice {
       | ..=-21 => Err(NiceError::GreaterOrEqualViolated),

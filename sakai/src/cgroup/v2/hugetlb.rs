@@ -104,6 +104,13 @@ impl FromStr for PageSize {
   }
 }
 
+macro_rules! hugetlb_file {
+  ($name:ty, $suffix:literal, $mode:ident) => {
+    cgroup_file!(file $name, concat!("hugetlb.<hugepagesize>.", $suffix), $mode,
+      PageSize => |size: &PageSize| size.file_name($suffix));
+  };
+}
+
 macro_rules! scalar {
   ($name:ident, $value:ty, $suffix:literal, $field:literal, $mode:ident, $documentation:literal $(, $encode:expr)?) => {
     #[doc = $documentation]
@@ -119,15 +126,9 @@ macro_rules! scalar {
     }
 
     cgroup_value! { scalar $name, value: ParseBytes, $field }
-    cgroup_file!(file $name, $name::FILE_NAME_TEMPLATE, $mode, PageSize => |size: &PageSize| size.file_name($name::SUFFIX));
+    hugetlb_file!($name, $suffix, $mode);
     cgroup_file!(read $name => $name);
     $(cgroup_file!(write $name, 'a => $value, $encode);)?
-
-    impl $name {
-      /// Interface filename template; replace `<hugepagesize>` with a [`PageSize`] label.
-      pub const FILE_NAME_TEMPLATE: &'static str = concat!("hugetlb.<hugepagesize>.", $suffix);
-      const SUFFIX: &'static str = $suffix;
-    }
   };
 }
 
@@ -184,18 +185,8 @@ pub struct HugetlbEvents {
 }
 
 cgroup_value! { keyed HugetlbEvents, |_| "value", { max: required ParseCount => "max" } }
-cgroup_file!(file HugetlbEvents, HugetlbEvents::FILE_NAME_TEMPLATE, Read,
-  PageSize => |size: &PageSize| size.file_name(HugetlbEvents::SUFFIX));
+hugetlb_file!(HugetlbEvents, "events", Read);
 cgroup_file!(read HugetlbEvents => HugetlbEvents);
-
-impl HugetlbEvents {
-  /// Hierarchical event filename template, parameterized by [`PageSize`].
-  pub const FILE_NAME_TEMPLATE: &'static str = "hugetlb.<hugepagesize>.events";
-  /// Local event filename template, parameterized by [`PageSize`].
-  pub const LOCAL_FILE_NAME_TEMPLATE: &'static str = "hugetlb.<hugepagesize>.events.local";
-  const LOCAL_SUFFIX: &'static str = "events.local";
-  const SUFFIX: &'static str = "events";
-}
 
 /// Hierarchical in-use HugeTLB bytes and NUMA distribution for one page size.
 ///
@@ -214,15 +205,8 @@ pub struct HugetlbNumaStat {
   pub nodes: BTreeMap<u32, Bytes>,
 }
 
-cgroup_file!(file HugetlbNumaStat, HugetlbNumaStat::FILE_NAME_TEMPLATE, Read,
-  PageSize => |size: &PageSize| size.file_name(HugetlbNumaStat::SUFFIX));
+hugetlb_file!(HugetlbNumaStat, "numa_stat", Read);
 cgroup_file!(read HugetlbNumaStat => HugetlbNumaStat);
-
-impl HugetlbNumaStat {
-  /// NUMA filename template, parameterized by [`PageSize`].
-  pub const FILE_NAME_TEMPLATE: &'static str = "hugetlb.<hugepagesize>.numa_stat";
-  const SUFFIX: &'static str = "numa_stat";
-}
 
 impl HugetlbNumaStat {
   /// Encodes the stored value as canonical cgroup text.
@@ -270,8 +254,7 @@ impl FromStr for HugetlbNumaStat {
 #[non_exhaustive]
 pub struct HugetlbEventsLocal;
 
-cgroup_file!(file HugetlbEventsLocal, HugetlbEvents::LOCAL_FILE_NAME_TEMPLATE, Read,
-  PageSize => |size: &PageSize| size.file_name(HugetlbEvents::LOCAL_SUFFIX));
+hugetlb_file!(HugetlbEventsLocal, "events.local", Read);
 cgroup_file!(read HugetlbEventsLocal => HugetlbEvents);
 
 #[cfg(test)]

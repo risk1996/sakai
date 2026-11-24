@@ -50,6 +50,8 @@ impl WriteMode for mode::ReadWrite {}
 /// permission checks still apply.
 pub trait CgroupFile: sealed::File {
   /// Exact filename, or its template when a key is required.
+  ///
+  /// Use [`Self::filename`] to resolve a template for a specific key.
   const FILE_NAME: &'static str;
   /// Access supported by this declaration.
   type Mode: AccessMode;

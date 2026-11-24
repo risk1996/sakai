@@ -58,13 +58,6 @@ cgroup_file!(write IoMax, 'a => IoMaxCommand<'a>, |command| match command {
   | IoMaxCommand::Update(device, update) => update.encode_command(device),
 });
 
-impl IoMax {
-  /// The cgroup v2 `io.max` interface filename.
-  ///
-  /// See [Linux `io.max` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
-  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-}
-
 /// Read and write bandwidth and IOPS limits for a block device.
 ///
 /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).

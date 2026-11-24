@@ -37,13 +37,6 @@ cgroup_value! { keyed CgroupEvents, |_| "value", {
 } }
 cgroup_file!(CgroupEvents, "cgroup.events", Read);
 
-impl CgroupEvents {
-  /// The cgroup v2 `cgroup.events` interface filename.
-  ///
-  /// See [Linux `cgroup.events` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
-  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-}
-
 /// A stored snapshot of local freezer accounting from `cgroup.stat.local`.
 ///
 /// Records cumulative time between effective freeze and thaw requests, including
@@ -68,11 +61,6 @@ cgroup_value! { keyed CgroupStatLocal, |_| "value", {
   frozen_time: required ParseMicroseconds => "frozen_usec",
 } }
 cgroup_file!(CgroupStatLocal, "cgroup.stat.local", Read);
-
-impl CgroupStatLocal {
-  /// The non-root local freezer statistics filename, since Linux 6.18.
-  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-}
 
 /// A point-in-time snapshot of `cgroup.stat` object counts.
 ///
@@ -114,11 +102,6 @@ pub struct CgroupStat {
 cgroup_file!(CgroupStat, "cgroup.stat", Read);
 
 impl CgroupStat {
-  /// The cgroup v2 `cgroup.stat` interface filename.
-  ///
-  /// See [Linux `cgroup.stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
-  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-
   fn parse_subsystems(
     raw: &str,
     fields: &KeyedFields<'_>,

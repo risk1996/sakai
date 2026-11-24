@@ -19,6 +19,7 @@ mod weight;
 mod weight_nice;
 
 cgroup_file!(alias
-  /// CPU pressure snapshots.
-  CpuPressure, Pressure::CPU_FILE_NAME, Read, Pressure
+  /// CPU pressure snapshots from `cpu.pressure`.
+  /// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
+  CpuPressure, "cpu.pressure", Read, Pressure
 );

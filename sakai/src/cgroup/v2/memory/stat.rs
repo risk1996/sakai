@@ -35,11 +35,6 @@ pub struct MemoryStat {
 cgroup_file!(MemoryStat, "memory.stat", Read);
 
 impl MemoryStat {
-  /// The cgroup v2 `memory.stat` interface filename.
-  ///
-  /// See [Linux `memory.stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-
   fn insert(&mut self, raw: &str, key: &str, value: &str) -> Result<(), ParseError<ParseValueError>> {
     if let Ok(field) = MemoryStatByteField::from_str(key) {
       self.bytes.insert(field, Bytes::parse_field(raw, field.into(), value)?);

@@ -47,7 +47,7 @@ fn parse_ranges(raw: &str, field: &'static str) -> Result<Vec<RangeInclusive<u32
 }
 
 macro_rules! placement_list {
-  ($(#[$doc:meta])* $name:ident, $field:literal, $configured:ident, $file:literal, $effective:literal) => {
+  ($(#[$doc:meta])* $name:ident, $field:literal, $file:literal) => {
     $(#[$doc])*
     #[derive(Debug, Clone, PartialEq, Eq, Default)]
     #[non_exhaustive]
@@ -59,19 +59,11 @@ macro_rules! placement_list {
       pub ranges: Vec<RangeInclusive<u32>>,
     }
 
-    cgroup_file!(file $name, $name::$configured, ReadWrite);
+    cgroup_file!(file $name, $file, ReadWrite);
     cgroup_file!(read $name => $name);
     cgroup_file!(write $name, 'a => &'a $name, |value: &$name| placement_command(value.encode_cgroup()));
 
     impl $name {
-      /// The configured placement interface filename; absent at the hierarchy root.
-      /// See [Linux cpuset interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpuset-interface-files).
-      pub const $configured: &'static str = $file;
-
-      /// The effective placement interface filename, including at the hierarchy root.
-      /// See [Linux cpuset interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpuset-interface-files).
-      pub const EFFECTIVE_FILE_NAME: &'static str = $effective;
-
       /// Iterates the stored IDs in ascending order without allocating an expanded list.
       ///
       /// This inspects the snapshot only. Iterating a large range can take a long time.
@@ -123,6 +115,7 @@ placement_list!(
   /// comma-separated decimal IDs and inclusive ranges, in ascending order
   /// without overlap; an empty file is valid. For `cpuset.cpus`, emptiness means
   /// inheritance from the nearest nonempty ancestor (or all available CPUs).
+  /// The configured interface is absent at the hierarchy root.
   /// For `cpuset.cpus.effective`, emptiness means no grant. Effective CPUs can differ from the
   /// request, including falling back to the parent's grant if none of the
   /// requested CPUs can be granted. Configuration changes affect either list;
@@ -141,25 +134,8 @@ placement_list!(
   /// ```
   CpuList,
   "cpus",
-  CPUS_FILE_NAME,
-  "cpuset.cpus",
-  "cpuset.cpus.effective"
+  "cpuset.cpus"
 );
-
-impl CpuList {
-  /// CPUs available for exclusive partition allocation, absent at the root.
-  ///
-  /// Since Linux 6.7; see the [Linux 6.7 source](https://github.com/torvalds/linux/blob/v6.7/kernel/cgroup/cpuset.c).
-  pub const EXCLUSIVE_EFFECTIVE_FILE_NAME: &'static str = "cpuset.cpus.exclusive.effective";
-  /// Exclusive CPU request for partition allocation, absent at the root.
-  ///
-  /// Since Linux 6.7; see the [Linux 6.7 source](https://github.com/torvalds/linux/blob/v6.7/kernel/cgroup/cpuset.c).
-  pub const EXCLUSIVE_FILE_NAME: &'static str = "cpuset.cpus.exclusive";
-  /// CPUs in isolated partitions, available only at the hierarchy root.
-  ///
-  /// Since Linux 6.8; see the [Linux 6.8 source](https://github.com/torvalds/linux/blob/v6.8/kernel/cgroup/cpuset.c).
-  pub const ISOLATED_FILE_NAME: &'static str = "cpuset.cpus.isolated";
-}
 
 placement_list!(
   /// A snapshot of configured or effective NUMA memory-node IDs for one cgroup.
@@ -168,6 +144,7 @@ placement_list!(
   /// accepts comma-separated decimal IDs and inclusive ranges, in ascending
   /// order without overlap; an empty file is valid. Configured emptiness means
   /// inheritance from the nearest nonempty ancestor (or all available nodes).
+  /// The configured interface is absent at the hierarchy root.
   /// Effective emptiness means no grant. Effective nodes can differ from the
   /// request, including falling back to the parent's grant if none of the
   /// requested nodes can be granted. Configuration changes affect either list;
@@ -176,9 +153,7 @@ placement_list!(
   /// See [Linux cpuset interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpuset-interface-files).
   MemoryNodeList,
   "mems",
-  MEMS_FILE_NAME,
-  "cpuset.mems",
-  "cpuset.mems.effective"
+  "cpuset.mems"
 );
 
 #[cfg(test)]

@@ -30,8 +30,10 @@
 - Be concise, avoid repetition, automate as much as possible:
   - use `strum` for common operations with enums.
   - Put stable domain identifiers on their owning struct or enum as associated constants.
-    Cgroup interface filenames are public `FILE_NAME` constants; shared result types
-    use descriptive names such as `Pressure::CPU_FILE_NAME`.
+    Declare cgroup interface filenames through `CgroupFile::FILE_NAME` on the
+    file type. Shared values such as `Pressure` can be decoded by several file
+    types. For keyed interfaces, the constant is a template and `filename`
+    resolves it for a given key.
   - Name meaningful numeric values and repeated operational strings, such as unit
     conversion factors, timeouts, and cache paths. Prefer typed quantities and
     the narrowest useful visibility; public constants must benefit callers.

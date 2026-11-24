@@ -35,13 +35,6 @@ pub struct IoStat {
 cgroup_value! { device_rows IoStat, devices: IoDeviceStat, Device::parse_lines }
 cgroup_file!(IoStat, "io.stat", Read);
 
-impl IoStat {
-  /// The cgroup v2 `io.stat` interface filename.
-  ///
-  /// See [Linux `io.stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
-  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-}
-
 /// Cumulative byte and operation counters for one block device.
 ///
 /// Absent fields are not assumed to be zero.

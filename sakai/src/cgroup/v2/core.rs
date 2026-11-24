@@ -97,13 +97,6 @@ cgroup_file!(read CgroupType => CgroupType, |contents: &str| {
 });
 cgroup_file!(write CgroupType, 'a => (), |()| CgroupType::Threaded.encode_cgroup());
 
-impl CgroupType {
-  /// The cgroup v2 `cgroup.type` interface filename.
-  ///
-  /// See [Linux `cgroup.type` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
-  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-}
-
 /// A controller name reported by `cgroup.controllers` or
 /// `cgroup.subtree_control`.
 ///
@@ -164,24 +157,15 @@ pub enum CgroupController {
 
 cgroup_file!(alias
   /// The cgroup's available controllers.
-  CgroupControllers, CgroupController::CONTROLLERS_FILE_NAME, Read, Vec<CgroupController>, decode_controllers
+  /// See [Linux `cgroup.controllers` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
+  CgroupControllers, "cgroup.controllers", Read, Vec<CgroupController>, decode_controllers
 );
 cgroup_file!(alias
   /// Controllers enabled for children and their enable or disable actions.
-  CgroupSubtreeControl, CgroupController::SUBTREE_CONTROL_FILE_NAME, ReadWrite, Vec<CgroupController>, decode_controllers
+  /// See [Linux `cgroup.subtree_control` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
+  CgroupSubtreeControl, "cgroup.subtree_control", ReadWrite, Vec<CgroupController>, decode_controllers
 );
 cgroup_file!(write CgroupSubtreeControl, 'a => &'a [SubtreeControl], encode_subtree_control);
-
-impl CgroupController {
-  /// The cgroup v2 `cgroup.controllers` interface filename.
-  ///
-  /// See [Linux `cgroup.controllers` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
-  pub const CONTROLLERS_FILE_NAME: &'static str = "cgroup.controllers";
-  /// The cgroup v2 `cgroup.subtree_control` interface filename.
-  ///
-  /// See [Linux `cgroup.subtree_control` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
-  pub const SUBTREE_CONTROL_FILE_NAME: &'static str = "cgroup.subtree_control";
-}
 
 /// One controller change to submit to `cgroup.subtree_control`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -205,12 +189,14 @@ pub enum MigrationTarget {
 
 cgroup_file!(alias
   /// Process membership and migration.
-  CgroupProcs, TaskId::PROCS_FILE_NAME, ReadWrite, Vec<TaskId>, decode_tasks
+  /// See [Linux `cgroup.procs` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
+  CgroupProcs, "cgroup.procs", ReadWrite, Vec<TaskId>, decode_tasks
 );
 cgroup_file!(write CgroupProcs, 'a => MigrationTarget, MigrationTarget::command);
 cgroup_file!(alias
   /// Thread membership and migration.
-  CgroupThreads, TaskId::THREADS_FILE_NAME, ReadWrite, Vec<TaskId>, decode_tasks
+  /// See [Linux `cgroup.threads` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
+  CgroupThreads, "cgroup.threads", ReadWrite, Vec<TaskId>, decode_tasks
 );
 cgroup_file!(write CgroupThreads, 'a => MigrationTarget, MigrationTarget::command);
 
@@ -259,7 +245,7 @@ mod tests {
 
   use super::{CgroupController::*, *};
   #[cfg(target_os = "linux")]
-  use crate::Cgroup;
+  use crate::{Cgroup, v2::CgroupFile};
 
   #[test]
   fn parses_configuration_flags_and_descendant_limits() {
@@ -305,8 +291,8 @@ mod tests {
       (CgroupPressure::FILE_NAME, "1\n"),
       (CgroupMaxDepth::FILE_NAME, "max\n"),
       (CgroupMaxDescendants::FILE_NAME, "3\n"),
-      (TaskId::PROCS_FILE_NAME, "42\n0\n7\n42\n"),
-      (TaskId::THREADS_FILE_NAME, "42\n43\n7\n"),
+      (CgroupProcs::FILE_NAME, "42\n0\n7\n42\n"),
+      (CgroupThreads::FILE_NAME, "42\n43\n7\n"),
       (CgroupStatLocal::FILE_NAME, "frozen_usec 123456\n"),
     ] {
       assert_eq!(assert_ok!(std::fs::read_to_string(cgroup.path().join(name))), expected);

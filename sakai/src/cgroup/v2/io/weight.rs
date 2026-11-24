@@ -53,13 +53,6 @@ cgroup_file!(write IoWeight, 'a => IoWeightCommand, |command| Ok(match command {
 }));
 
 impl IoWeight {
-  /// The cgroup v2 `io.weight` interface filename.
-  ///
-  /// See [Linux `io.weight` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
-  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-}
-
-impl IoWeight {
   /// Encodes the stored value as canonical cgroup text.
   ///
   /// # Errors

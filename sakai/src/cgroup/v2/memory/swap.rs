@@ -81,13 +81,6 @@ cgroup_value! { keyed SwapEvents, |key| match key {
 } }
 cgroup_file!(SwapEvents, "memory.swap.events", Read);
 
-impl SwapEvents {
-  /// The cgroup v2 `memory.swap.events` interface filename.
-  ///
-  /// See [Linux `memory.swap.events` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-}
-
 #[cfg(test)]
 mod tests {
   use indoc::indoc;

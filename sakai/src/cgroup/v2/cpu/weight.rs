@@ -69,13 +69,6 @@ cgroup_file!(file CpuWeight, "cpu.weight", ReadWrite);
 cgroup_file!(read CpuWeight => CpuWeight);
 cgroup_file!(write CpuWeight, 'a => Weight, |weight| CpuWeight::Shares(weight).encode_cgroup());
 
-impl CpuWeight {
-  /// The cgroup v2 `cpu.weight` interface filename.
-  ///
-  /// See [Linux `cpu.weight` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
-  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct ParseCpuWeight;
 

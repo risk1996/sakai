@@ -31,11 +31,6 @@ pub struct DmemCapacity {
 cgroup_value! { map DmemCapacity, regions: ParseBytes, "bytes" }
 cgroup_file!(DmemCapacity, "dmem.capacity", Read);
 
-impl DmemCapacity {
-  /// The root-only cgroup v2 capacity interface filename, since Linux 6.14.
-  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-}
-
 /// A volatile snapshot of device-memory usage for this cgroup and descendants.
 ///
 /// Amounts are bytes, not counts of device or system pages. Zero means a
@@ -58,11 +53,6 @@ pub struct DmemCurrent {
 cgroup_value! { map DmemCurrent, regions: ParseBytes, "bytes" }
 cgroup_file!(DmemCurrent, "dmem.current", Read);
 
-impl DmemCurrent {
-  /// The cgroup v2 current device-memory usage filename, since Linux 6.14.
-  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-}
-
 /// Historical maximum device-memory usage by region for this cgroup and descendants.
 ///
 /// Each finite value is bytes. `max` retains the kernel's architecture-dependent
@@ -83,11 +73,6 @@ pub struct DmemPeak {
 
 cgroup_value! { map DmemPeak, regions: ParseBytes, "bytes" }
 cgroup_file!(DmemPeak, "dmem.peak", Read);
-
-impl DmemPeak {
-  /// The non-root historical device-memory peak filename, since Linux 7.3.
-  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-}
 
 /// A configuration snapshot from `dmem.max`, `dmem.min`, or `dmem.low`.
 ///
@@ -112,30 +97,21 @@ pub struct DmemLimits {
 cgroup_value! { map DmemLimits, regions: ParseBytes, "bytes" }
 cgroup_file!(alias
   /// Device-memory min by region.
-  DmemMin, DmemLimits::MIN_FILE_NAME, ReadWrite, DmemLimits
+  DmemMin, "dmem.min", ReadWrite, DmemLimits
 );
 cgroup_file!(write DmemMin, 'a => (&'a str, MaxOr<Bytes>), encode_region);
 
 cgroup_file!(alias
   /// Device-memory low by region.
-  DmemLow, DmemLimits::LOW_FILE_NAME, ReadWrite, DmemLimits
+  DmemLow, "dmem.low", ReadWrite, DmemLimits
 );
 cgroup_file!(write DmemLow, 'a => (&'a str, MaxOr<Bytes>), encode_region);
 
 cgroup_file!(alias
   /// Device-memory max by region.
-  DmemMax, DmemLimits::MAX_FILE_NAME, ReadWrite, DmemLimits
+  DmemMax, "dmem.max", ReadWrite, DmemLimits
 );
 cgroup_file!(write DmemMax, 'a => (&'a str, MaxOr<Bytes>), encode_region);
-
-impl DmemLimits {
-  /// The non-root best-effort eviction protection filename, since Linux 6.14.
-  pub const LOW_FILE_NAME: &'static str = "dmem.low";
-  /// The non-root hard device-memory limit filename, since Linux 6.14.
-  pub const MAX_FILE_NAME: &'static str = "dmem.max";
-  /// The non-root hard eviction protection filename, since Linux 6.14.
-  pub const MIN_FILE_NAME: &'static str = "dmem.min";
-}
 
 fn encode_region((region, value): (&str, MaxOr<Bytes>)) -> Result<String, crate::error::EncodeError> {
   super::interface::encode_keyed::<ParseBytes>(region, "region", &value, "bytes")
@@ -147,12 +123,12 @@ mod tests {
   use uom::si::information::byte;
 
   use super::*;
-  #[cfg(target_os = "linux")]
-  use crate::Cgroup;
   use crate::parse::tests::{
     Cases,
     Failure::{Excess, Invalid, Missing},
   };
+  #[cfg(target_os = "linux")]
+  use crate::{Cgroup, v2::CgroupFile};
 
   fn regions(values: &[(&str, u64)]) -> BTreeMap<String, Bytes> {
     values.iter().map(|(name, value)| ((*name).into(), Bytes::new::<byte>(*value))).collect()
@@ -166,9 +142,9 @@ mod tests {
       cgroup.check_fixture(DmemCapacity::FILE_NAME, true, || cgroup.read_value::<DmemCapacity>());
       cgroup.check_fixture(DmemCurrent::FILE_NAME, true, || cgroup.read_value::<DmemCurrent>());
       cgroup.check_fixture(DmemPeak::FILE_NAME, true, || cgroup.read_value::<DmemPeak>());
-      cgroup.check_fixture(DmemLimits::MIN_FILE_NAME, true, || cgroup.read_value::<DmemMin>());
-      cgroup.check_fixture(DmemLimits::LOW_FILE_NAME, true, || cgroup.read_value::<DmemLow>());
-      cgroup.check_fixture(DmemLimits::MAX_FILE_NAME, true, || cgroup.read_value::<DmemMax>());
+      cgroup.check_fixture(DmemMin::FILE_NAME, true, || cgroup.read_value::<DmemMin>());
+      cgroup.check_fixture(DmemLow::FILE_NAME, true, || cgroup.read_value::<DmemLow>());
+      cgroup.check_fixture(DmemMax::FILE_NAME, true, || cgroup.read_value::<DmemMax>());
     }
   }
 

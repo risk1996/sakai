@@ -33,11 +33,6 @@ pub struct MiscCapacity {
 cgroup_value! { map MiscCapacity, resources: ParseCount, "value" }
 cgroup_file!(MiscCapacity, "misc.capacity", Read);
 
-impl MiscCapacity {
-  /// The cgroup v2 `misc.capacity` interface filename.
-  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-}
-
 /// Current hierarchical miscellaneous resource usage.
 ///
 /// Values count resource units keyed by kernel resource names. This stored
@@ -57,11 +52,6 @@ pub struct MiscCurrent {
 
 cgroup_value! { map MiscCurrent, resources: ParseCount, "value" }
 cgroup_file!(MiscCurrent, "misc.current", Read);
-
-impl MiscCurrent {
-  /// The cgroup v2 `misc.current` interface filename.
-  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-}
 
 /// Historical maximum hierarchical miscellaneous resource usage.
 ///
@@ -83,11 +73,6 @@ pub struct MiscPeak {
 
 cgroup_value! { map MiscPeak, resources: ParseCount, "value" }
 cgroup_file!(MiscPeak, "misc.peak", Read);
-
-impl MiscPeak {
-  /// The cgroup v2 `misc.peak` interface filename.
-  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-}
 
 /// Configured hierarchical miscellaneous resource limits.
 ///
@@ -112,11 +97,6 @@ cgroup_file!(read MiscMax => MiscMax);
 cgroup_file!(write MiscMax, 'a => (&'a str, MaxOr<Count>), |(resource, value)| {
   super::interface::encode_keyed::<ParseCount>(resource, "resource", &value, "limit")
 });
-
-impl MiscMax {
-  /// The cgroup v2 `misc.max` interface filename.
-  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-}
 
 /// Resource limit or platform-capacity failures from `misc.events` or `misc.events.local`.
 ///
@@ -144,15 +124,8 @@ pub struct MiscEvents {
 cgroup_file!(MiscEvents, "misc.events", Read);
 cgroup_file!(alias
   /// Local miscellaneous resource events.
-  MiscEventsLocal, MiscEvents::LOCAL_FILE_NAME, Read, MiscEvents
+  MiscEventsLocal, "misc.events.local", Read, MiscEvents
 );
-
-impl MiscEvents {
-  /// Hierarchical miscellaneous-resource event interface filename.
-  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-  /// Local miscellaneous-resource event interface filename.
-  pub const LOCAL_FILE_NAME: &'static str = "misc.events.local";
-}
 
 impl MiscEvents {
   /// Encodes the stored value as canonical cgroup text.
@@ -199,12 +172,12 @@ mod tests {
   use assertables::assert_ok;
 
   use super::*;
-  #[cfg(target_os = "linux")]
-  use crate::Cgroup;
   use crate::parse::tests::{
     Cases,
     Failure::{Excess, Invalid, Missing},
   };
+  #[cfg(target_os = "linux")]
+  use crate::{Cgroup, v2::CgroupFile};
 
   #[test]
   fn parses_named_resources_limits_and_event_suffixes() {
@@ -266,7 +239,7 @@ mod tests {
       group.check_fixture(MiscPeak::FILE_NAME, true, || group.read_value::<MiscPeak>());
       group.check_fixture(MiscMax::FILE_NAME, true, || group.read_value::<MiscMax>());
       group.check_fixture(MiscEvents::FILE_NAME, true, || group.read_value::<MiscEvents>());
-      group.check_fixture(MiscEvents::LOCAL_FILE_NAME, true, || group.read_value::<MiscEventsLocal>());
+      group.check_fixture(MiscEventsLocal::FILE_NAME, true, || group.read_value::<MiscEventsLocal>());
     }
   }
 }
