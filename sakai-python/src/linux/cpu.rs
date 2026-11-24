@@ -50,25 +50,25 @@ impl CpuReader {
   /// Read the allowed CPU bandwidth burst in nanoseconds.
   fn max_burst(&self, py: Python<'_>) -> PyResult<Quantity<sakai::Time>> {
     PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::cpu::CpuMaxBurst>)
-      .map(|burst| burst.value().into())
+      .map(|burst| burst.value.into())
   }
 
   /// Read whether this cgroup is configured for idle CPU scheduling.
   fn idle(&self, py: Python<'_>) -> PyResult<bool> {
-    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::cpu::CpuIdle>).map(|idle| idle.value())
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::cpu::CpuIdle>).map(|idle| idle.value)
   }
 
   /// Read the minimum utilization clamp as a ratio from zero to one.
   fn uclamp_min(&self, py: Python<'_>) -> PyResult<Quantity<sakai::Ratio>> {
     PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::cpu::CpuUclampMin>)
-      .map(|clamp| clamp.value().into())
+      .map(|clamp| clamp.value.into())
   }
 
   /// Read the maximum utilization clamp as `max` or a concrete ratio.
   #[gen_stub(override_return_type(type_repr = "MaxOr[Ratio]"))]
   fn uclamp_max(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::cpu::CpuUclampMax>)
-      .map(|clamp| MaxOr::from_ratio(clamp.value()))
+      .map(|clamp| MaxOr::from_ratio(clamp.value))
   }
 
   /// Read CPU pressure-stall averages and cumulative times.
@@ -89,9 +89,7 @@ pub(super) struct CpuStat {
 }
 
 impl From<CoreCpuStat> for CpuStat {
-  fn from(value: CoreCpuStat) -> Self {
-    Self { time: value.time().into(), bandwidth: value.bandwidth().map(Into::into) }
-  }
+  fn from(value: CoreCpuStat) -> Self { Self { time: value.time.into(), bandwidth: value.bandwidth.map(Into::into) } }
 }
 
 /// Throttling of this cgroup's own runqueues, including inherited bandwidth limits.
@@ -104,7 +102,7 @@ pub(super) struct CpuStatLocal {
 }
 
 impl From<CoreCpuStatLocal> for CpuStatLocal {
-  fn from(value: CoreCpuStatLocal) -> Self { Self { throttled: value.throttled().map(|time| time.into()) } }
+  fn from(value: CoreCpuStatLocal) -> Self { Self { throttled: value.throttled.map(|time| time.into()) } }
 }
 
 /// CPU usage times in nanoseconds.
@@ -129,11 +127,11 @@ pub(super) struct CpuTimeStat {
 impl From<CoreCpuTimeStat> for CpuTimeStat {
   fn from(value: CoreCpuTimeStat) -> Self {
     Self {
-      usage: value.usage().into(),
-      user: value.user().into(),
-      system: value.system().into(),
-      nice: value.nice().map(|time| time.into()),
-      force_idle: value.force_idle().map(|time| time.into()),
+      usage: value.usage.into(),
+      user: value.user.into(),
+      system: value.system.into(),
+      nice: value.nice.map(|time| time.into()),
+      force_idle: value.force_idle.map(|time| time.into()),
     }
   }
 }
@@ -159,10 +157,10 @@ pub(super) struct CpuBandwidthStat {
 impl From<CoreCpuBandwidthStat> for CpuBandwidthStat {
   fn from(value: CoreCpuBandwidthStat) -> Self {
     Self {
-      nr_periods: value.nr_periods().into(),
-      nr_throttled: value.nr_throttled().into(),
-      throttled: value.throttled().into(),
-      burst: value.burst().map(Into::into),
+      nr_periods: value.nr_periods.into(),
+      nr_throttled: value.nr_throttled.into(),
+      throttled: value.throttled.into(),
+      burst: value.burst.map(Into::into),
     }
   }
 }
@@ -179,7 +177,7 @@ pub(super) struct CpuBurstStat {
 }
 
 impl From<CoreCpuBurstStat> for CpuBurstStat {
-  fn from(value: CoreCpuBurstStat) -> Self { Self { nr_bursts: value.nr_bursts().into(), burst: value.burst().into() } }
+  fn from(value: CoreCpuBurstStat) -> Self { Self { nr_bursts: value.nr_bursts.into(), burst: value.burst.into() } }
 }
 
 /// This cgroup's CPU quota and period, independent of ancestor limits.

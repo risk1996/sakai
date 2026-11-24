@@ -329,30 +329,24 @@ impl AsFd for EventPoller {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[non_exhaustive]
 pub struct ChangeNotification {
-  modified: bool,
-  removed: bool,
-  overflowed: bool,
-}
-
-impl ChangeNotification {
   /// Whether a write or kernel content notification was observed.
   ///
   /// A write can leave the parsed value unchanged; this is not a value diff.
-  pub fn modified(&self) -> bool { self.modified }
-
+  pub modified: bool,
   /// Whether the kernel reported removal or watch invalidation, including unmounting.
   ///
   /// The watcher becomes terminal and does not follow a replacement interface.
   /// Cgroup interface removal does not guarantee an inotify event; `false`
   /// does not establish that the interface still exists.
-  pub fn removed(&self) -> bool { self.removed }
-
+  pub removed: bool,
   /// Whether the kernel inotify queue overflowed and notifications were lost.
   ///
   /// Reread the configuration; notification history is incomplete. A watcher
   /// whose removal event was lost may need to be recreated by the caller.
-  pub fn overflowed(&self) -> bool { self.overflowed }
+  pub overflowed: bool,
+}
 
+impl ChangeNotification {
   fn include(&mut self, flags: inotify::ReadFlags) {
     self.modified |= flags.contains(inotify::ReadFlags::MODIFY);
     self.removed |=
@@ -624,7 +618,7 @@ mod tests {
       actual.include(flags);
       assert_eq!(actual, expected);
       assert_eq!(
-        (actual.modified(), actual.removed(), actual.overflowed()),
+        (actual.modified, actual.removed, actual.overflowed),
         (expected.modified, expected.removed, expected.overflowed)
       );
     }

@@ -49,6 +49,9 @@ macro_rules! placement_list {
     #[non_exhaustive]
     pub struct $name {
       /// Inclusive ID ranges, in ascending order without overlap.
+      ///
+      /// Single IDs have equal endpoints. Storage is proportional to the number
+      /// of ranges, not the number of IDs.
       pub ranges: Vec<RangeInclusive<u32>>,
     }
 
@@ -60,13 +63,6 @@ macro_rules! placement_list {
       /// The effective placement interface filename, including at the hierarchy root.
       /// See [Linux cpuset interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpuset-interface-files).
       pub const EFFECTIVE_FILE_NAME: &'static str = $effective;
-
-      /// Inspects the stored ascending, non-overlapping inclusive ID ranges.
-      ///
-      /// Single IDs have equal endpoints. Storage is proportional to the number
-      /// of ranges, not the number of IDs. This getter performs no kernel I/O.
-      #[must_use]
-      pub fn ranges(&self) -> &[RangeInclusive<u32>] { &self.ranges }
 
       /// Iterates the stored IDs in ascending order without allocating an expanded list.
       ///

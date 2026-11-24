@@ -32,8 +32,12 @@ pub struct Weight(u16);
 #[non_exhaustive]
 pub struct IoWeight {
   /// Default weight for devices without an override.
+  ///
+  /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   pub default: Weight,
   /// Explicit per-device weight overrides.
+  ///
+  /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   pub devices: BTreeMap<Device, Weight>,
 }
 
@@ -45,18 +49,6 @@ impl IoWeight {
   ///
   /// See [Linux `io.weight` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-
-  /// Returns the default scheduling weight.
-  ///
-  /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
-  #[must_use]
-  pub const fn default_weight(&self) -> Weight { self.default }
-
-  /// Returns explicit per-device scheduling-weight overrides.
-  ///
-  /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
-  #[must_use]
-  pub const fn devices(&self) -> &BTreeMap<Device, Weight> { &self.devices }
 }
 
 const DEFAULT_WEIGHT_KEY: &str = "default";
@@ -105,6 +97,7 @@ impl ParseCgroup<ParseWeight> for Weight {
 
 /// Changes the default weight or one device override in `io.weight`.
 #[derive(Debug, Clone, Copy)]
+#[non_exhaustive]
 pub enum IoWeightCommand {
   /// Sets the default weight.
   Default(Weight),

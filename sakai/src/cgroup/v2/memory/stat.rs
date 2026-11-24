@@ -17,9 +17,18 @@ use crate::{
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[non_exhaustive]
 pub struct MemoryStat {
-  bytes: BTreeMap<MemoryStatByteField, Bytes>,
-  pages: BTreeMap<MemoryStatPageField, Pages>,
-  counts: BTreeMap<MemoryStatCountField, Count>,
+  /// Memory amounts measured in bytes.
+  ///
+  /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
+  pub bytes: BTreeMap<MemoryStatByteField, Bytes>,
+  /// Quantities measured in pages; page size is not assumed.
+  ///
+  /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
+  pub pages: BTreeMap<MemoryStatPageField, Pages>,
+  /// Event and object counts.
+  ///
+  /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
+  pub counts: BTreeMap<MemoryStatCountField, Count>,
 }
 
 crate::v2::interface::cgroup_file!(MemoryStat, "memory.stat", Read);
@@ -29,24 +38,6 @@ impl MemoryStat {
   ///
   /// See [Linux `memory.stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-
-  /// Returns memory amounts measured in bytes.
-  ///
-  /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-  #[must_use]
-  pub const fn bytes(&self) -> &BTreeMap<MemoryStatByteField, Bytes> { &self.bytes }
-
-  /// Returns quantities measured in pages; page size is not assumed.
-  ///
-  /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-  #[must_use]
-  pub const fn pages(&self) -> &BTreeMap<MemoryStatPageField, Pages> { &self.pages }
-
-  /// Returns event and object counts.
-  ///
-  /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-  #[must_use]
-  pub const fn counts(&self) -> &BTreeMap<MemoryStatCountField, Count> { &self.counts }
 
   fn insert(&mut self, raw: &str, key: &str, value: &str) -> Result<(), ParseError<ParseValueError>> {
     if let Ok(field) = MemoryStatByteField::from_str(key) {

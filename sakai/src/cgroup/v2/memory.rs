@@ -60,12 +60,12 @@ pub type MemoryOomGroup = Scalar<bool, interface::MemoryOomGroup>;
 ///
 /// let current = Consumer::parse::<MemoryCurrent>("42");
 /// Consumer::hashable(current);
-/// let _: Bytes = current.value();
-/// let _: MaxOr<Bytes> = Consumer::parse::<MemoryMax>("max").value();
-/// let _: Count = Consumer::parse::<PidsCurrent>("1").value();
-/// let _: bool = Consumer::parse::<CpuIdle>("0").value();
-/// let _: Time = Consumer::parse::<CpuMaxBurst>("10").value();
-/// let _: MaxOr<Ratio> = Consumer::parse::<CpuUclampMax>("max").value();
+/// let _: Bytes = current.value;
+/// let _: MaxOr<Bytes> = Consumer::parse::<MemoryMax>("max").value;
+/// let _: Count = Consumer::parse::<PidsCurrent>("1").value;
+/// let _: bool = Consumer::parse::<CpuIdle>("0").value;
+/// let _: Time = Consumer::parse::<CpuMaxBurst>("10").value;
+/// let _: MaxOr<Ratio> = Consumer::parse::<CpuUclampMax>("max").value;
 /// assert_eq!(MemoryCurrent::FILE_NAME, "memory.current");
 /// ```
 ///

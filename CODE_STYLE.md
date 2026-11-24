@@ -7,8 +7,9 @@
 - Prefer pure functions and immutable values. Local mutation is appropriate for
   parser builders, ordered fallback, and resource management when it makes
   ownership and validation clearer than a functional expression.
-- Use `&self` for read-only instance methods, including getters, predicates,
-  and derived-metric convenience functions, even when the receiver is `Copy`.
+- Expose cgroup snapshot data as public fields. Use `&self` for read-only
+  instance methods such as predicates and derived-metric functions, even when
+  the receiver is `Copy`.
   Borrowing expresses inspection and avoids whole-receiver copies without
   relying on inlining or release optimizations; those copies can remain in
   debug builds and calls across crate boundaries. The convention also remains
@@ -56,7 +57,7 @@
   documented too, so the exported API has no missing rustdoc.
 - Use plain language to explain behavior, units, valid ranges, and whether
   values describe this cgroup or its descendants. Explain snapshot volatility
-  and that getters inspect stored snapshots while interface reads perform fresh I/O.
+  and that interface reads perform fresh I/O.
   Document errors for fallible readers, including missing interfaces, unsupported
   operations, invalid contents, and other operating-system failures. Distinguish
   missing optional counters from measured zero values.

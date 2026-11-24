@@ -56,23 +56,12 @@ impl CpusetPartition {
 
   /// Tests whether the stored snapshot describes an invalid partition root.
   ///
-  /// Members are not invalid roots. This getter performs no kernel I/O.
+  /// Members return false.
   #[must_use]
   pub const fn is_invalid(&self) -> bool {
     match self {
       | Self::Member | Self::Root | Self::Isolated => false,
       | Self::RootInvalid { .. } | Self::IsolatedInvalid { .. } => true,
-    }
-  }
-
-  /// Inspects the stored diagnostic reason, without parentheses or kernel I/O.
-  ///
-  /// `None` means no reason was reported; it does not imply a valid partition.
-  #[must_use]
-  pub fn reason(&self) -> Option<&str> {
-    match self {
-      | Self::Member | Self::Root | Self::Isolated => None,
-      | Self::RootInvalid { reason } | Self::IsolatedInvalid { reason } => reason.as_deref(),
     }
   }
 }

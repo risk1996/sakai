@@ -27,9 +27,9 @@ use crate::{
 /// use uom::si::{frequency::hertz, information_rate::byte_per_second};
 ///
 /// let limits: IoMax = "8:0 rbps=1 wbps=max riops=1 wiops=max".parse()?;
-/// let device = limits.devices().get(&Device::new(8, 0)).expect("reported device");
-/// let MaxOr::Value(bandwidth) = device.read_bandwidth() else { panic!("finite bandwidth") };
-/// let MaxOr::Value(iops) = device.read_iops() else { panic!("finite IOPS") };
+/// let device = limits.devices.get(&Device::new(8, 0)).expect("reported device");
+/// let MaxOr::Value(bandwidth) = device.read_bandwidth else { panic!("finite bandwidth") };
+/// let MaxOr::Value(iops) = device.read_iops else { panic!("finite IOPS") };
 /// assert_eq!(bandwidth.get::<byte_per_second>(), 1);
 /// assert_eq!(iops.get::<hertz>(), 1);
 /// # Ok::<(), sakai::error::ParseError<sakai::error::ParseValueError>>(())
@@ -40,6 +40,8 @@ use crate::{
 #[non_exhaustive]
 pub struct IoMax {
   /// Configured limits by block device.
+  ///
+  /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   pub devices: BTreeMap<Device, IoDeviceMax>,
 }
 
@@ -51,12 +53,6 @@ impl IoMax {
   ///
   /// See [Linux `io.max` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-
-  /// Returns each reported device's configured limits.
-  ///
-  /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
-  #[must_use]
-  pub const fn devices(&self) -> &BTreeMap<Device, IoDeviceMax> { &self.devices }
 }
 
 /// Read and write bandwidth and IOPS limits for a block device.
@@ -66,39 +62,21 @@ impl IoMax {
 #[non_exhaustive]
 pub struct IoDeviceMax {
   /// Read bandwidth limit in bytes per second.
+  ///
+  /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   pub read_bandwidth: MaxOr<BytesPerSecond>,
   /// Write bandwidth limit in bytes per second.
+  ///
+  /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   pub write_bandwidth: MaxOr<BytesPerSecond>,
   /// Read I/O operations per second.
+  ///
+  /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   pub read_iops: MaxOr<OperationsPerSecond>,
   /// Write I/O operations per second.
+  ///
+  /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   pub write_iops: MaxOr<OperationsPerSecond>,
-}
-
-impl IoDeviceMax {
-  /// Read bandwidth limit in bytes per second (`rbps`).
-  ///
-  /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
-  #[must_use]
-  pub const fn read_bandwidth(&self) -> MaxOr<BytesPerSecond> { self.read_bandwidth }
-
-  /// Write bandwidth limit in bytes per second (`wbps`).
-  ///
-  /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
-  #[must_use]
-  pub const fn write_bandwidth(&self) -> MaxOr<BytesPerSecond> { self.write_bandwidth }
-
-  /// Read operation limit in operations per second (`riops`).
-  ///
-  /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
-  #[must_use]
-  pub const fn read_iops(&self) -> MaxOr<OperationsPerSecond> { self.read_iops }
-
-  /// Write operation limit in operations per second (`wiops`).
-  ///
-  /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
-  #[must_use]
-  pub const fn write_iops(&self) -> MaxOr<OperationsPerSecond> { self.write_iops }
 }
 
 const READ_BANDWIDTH: &str = "rbps";
@@ -120,6 +98,7 @@ cgroup_value! { device_rows IoMax, devices: IoDeviceMax, Device::parse_lines }
 /// limit. Supply at least one field when using [`IoMaxCommand::Update`].
 /// See [Linux I/O limits](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub struct IoMaxUpdate {
   /// New read bandwidth in bytes per second, if supplied.
   pub read_bandwidth: Option<MaxOr<BytesPerSecond>>,
@@ -178,6 +157,7 @@ impl EncodeCgroup<ParseIops> for OperationsPerSecond {
 
 /// A complete or partial limit change for one device in `io.max`.
 #[derive(Debug, Clone, Copy)]
+#[non_exhaustive]
 pub enum IoMaxCommand<'a> {
   /// Replaces all four limits for the device.
   Set(Device, &'a IoDeviceMax),

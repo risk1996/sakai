@@ -21,8 +21,17 @@ use crate::{
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[non_exhaustive]
 pub struct Pressure {
-  some: PressureLine,
-  full: Option<PressureLine>,
+  /// Pressure during which at least one task was stalled.
+  ///
+  /// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
+  pub some: PressureLine,
+  /// Pressure during which all non-idle tasks were stalled.
+  ///
+  /// CPU PSI before Linux 5.13 does not report this line. `None` means the
+  /// line was absent; it does not mean zero stall time.
+  ///
+  /// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
+  pub full: Option<PressureLine>,
 }
 
 impl Pressure {
@@ -38,21 +47,6 @@ impl Pressure {
   ///
   /// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
   pub const MEMORY_FILE_NAME: &'static str = "memory.pressure";
-
-  /// Returns pressure during which at least one task was stalled.
-  ///
-  /// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
-  #[must_use]
-  pub const fn some(&self) -> PressureLine { self.some }
-
-  /// Returns pressure during which all non-idle tasks were stalled.
-  ///
-  /// CPU PSI before Linux 5.13 does not report this line. `None` means the
-  /// line was absent; it does not mean zero stall time.
-  ///
-  /// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
-  #[must_use]
-  pub const fn full(&self) -> Option<PressureLine> { self.full }
 }
 
 /// A set of rolling averages and cumulative stall time from PSI.
@@ -65,36 +59,22 @@ impl Pressure {
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[non_exhaustive]
 pub struct PressureLine {
-  avg10: Ratio,
-  avg60: Ratio,
-  avg300: Ratio,
-  total: Time,
-}
-
-impl PressureLine {
-  /// Returns the exponentially weighted stalled-time ratio with a 10-second averaging period.
+  /// Exponentially weighted stalled-time ratio with a 10-second averaging period.
   ///
   /// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
-  #[must_use]
-  pub const fn avg10(&self) -> Ratio { self.avg10 }
-
-  /// Returns the exponentially weighted stalled-time ratio with a 60-second averaging period.
+  pub avg10: Ratio,
+  /// Exponentially weighted stalled-time ratio with a 60-second averaging period.
   ///
   /// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
-  #[must_use]
-  pub const fn avg60(&self) -> Ratio { self.avg60 }
-
-  /// Returns the exponentially weighted stalled-time ratio with a 300-second averaging period.
+  pub avg60: Ratio,
+  /// Exponentially weighted stalled-time ratio with a 300-second averaging period.
   ///
   /// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
-  #[must_use]
-  pub const fn avg300(&self) -> Ratio { self.avg300 }
-
-  /// Returns cumulative stall time, converted from kernel microseconds to [`Time`].
+  pub avg300: Ratio,
+  /// Cumulative stall time, converted from kernel microseconds to [`Time`].
   ///
   /// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
-  #[must_use]
-  pub const fn total(&self) -> Time { self.total }
+  pub total: Time,
 }
 
 cgroup_value! { fields PressureLine, {
@@ -151,7 +131,10 @@ impl FromStr for Pressure {
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[non_exhaustive]
 pub struct IrqPressure {
-  full: PressureLine,
+  /// Interrupt pressure, the only line reported by this interface.
+  ///
+  /// See the [Linux interrupt PSI implementation](https://github.com/torvalds/linux/blob/v6.1/kernel/sched/psi.c).
+  pub full: PressureLine,
 }
 
 impl IrqPressure {
@@ -159,12 +142,6 @@ impl IrqPressure {
   ///
   /// Since Linux 6.1; see the [Linux 6.1 cgroup implementation](https://github.com/torvalds/linux/blob/v6.1/kernel/cgroup/cgroup.c).
   pub const FILE_NAME: &'static str = "irq.pressure";
-
-  /// Returns interrupt pressure, the only line reported by this interface.
-  ///
-  /// See the [Linux interrupt PSI implementation](https://github.com/torvalds/linux/blob/v6.1/kernel/sched/psi.c).
-  #[must_use]
-  pub const fn full(&self) -> PressureLine { self.full }
 }
 
 impl IrqPressure {

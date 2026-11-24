@@ -32,8 +32,14 @@ mod weight;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
 pub struct Device {
-  major: u32,
-  minor: u32,
+  /// Major device number.
+  ///
+  /// See [`Device`] and [makedev(3)](https://man7.org/linux/man-pages/man3/makedev.3.html).
+  pub major: u32,
+  /// Minor device number.
+  ///
+  /// See [`Device`] and [makedev(3)](https://man7.org/linux/man-pages/man3/makedev.3.html).
+  pub minor: u32,
 }
 
 cgroup_value! { display Device }
@@ -46,18 +52,6 @@ impl Device {
   /// See [`Device`] and [makedev(3)](https://man7.org/linux/man-pages/man3/makedev.3.html).
   #[must_use]
   pub const fn new(major: u32, minor: u32) -> Self { Self { major, minor } }
-
-  /// Returns the major device number.
-  ///
-  /// See [`Device`] and [makedev(3)](https://man7.org/linux/man-pages/man3/makedev.3.html).
-  #[must_use]
-  pub const fn major(&self) -> u32 { self.major }
-
-  /// Returns the minor device number.
-  ///
-  /// See [`Device`] and [makedev(3)](https://man7.org/linux/man-pages/man3/makedev.3.html).
-  #[must_use]
-  pub const fn minor(&self) -> u32 { self.minor }
 
   fn parse(raw: &str, value: &str) -> Result<Self, ParseError<ParseValueError>> {
     let (major, minor) = value

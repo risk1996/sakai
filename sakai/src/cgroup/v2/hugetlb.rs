@@ -107,7 +107,7 @@ macro_rules! scalar {
   ($name:ident, $value:ty, $suffix:literal, $field:literal, $documentation:literal) => {
     #[doc = $documentation]
     ///
-    /// Values can change between reads. Getters inspect the stored snapshot.
+    /// Values can change between reads.
     /// See [Linux HugeTLB accounting](https://docs.kernel.org/admin-guide/cgroup-v1/hugetlb.html)
     /// and [v2 source](https://github.com/torvalds/linux/blob/v5.15/mm/hugetlb_cgroup.c).
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -121,10 +121,6 @@ macro_rules! scalar {
       /// Interface filename template; replace `<hugepagesize>` with a [`PageSize`] label.
       pub const FILE_NAME_TEMPLATE: &'static str = concat!("hugetlb.<hugepagesize>.", $suffix);
       const SUFFIX: &'static str = $suffix;
-
-      /// Returns the stored byte quantity or limit without performing I/O.
-      #[must_use]
-      pub const fn value(&self) -> $value { self.value }
     }
 
     cgroup_value! { scalar $name, value: ParseBytes, $field }
@@ -167,7 +163,8 @@ scalar!(
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub struct HugetlbEvents {
-  max: Count,
+  /// Stored count of allocation failures caused by a HugeTLB limit.
+  pub max: Count,
 }
 
 impl HugetlbEvents {
@@ -177,10 +174,6 @@ impl HugetlbEvents {
   pub const LOCAL_FILE_NAME_TEMPLATE: &'static str = "hugetlb.<hugepagesize>.events.local";
   const LOCAL_SUFFIX: &'static str = "events.local";
   const SUFFIX: &'static str = "events";
-
-  /// Returns the stored count of allocation failures caused by a HugeTLB limit.
-  #[must_use]
-  pub const fn max(&self) -> Count { self.max }
 }
 
 cgroup_value! { keyed HugetlbEvents, |_| "value", { max: required ParseCount => "max" } }
@@ -196,22 +189,16 @@ cgroup_value! { keyed HugetlbEvents, |_| "value", { max: required ParseCount => 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct HugetlbNumaStat {
-  total: Bytes,
-  nodes: BTreeMap<u32, Bytes>,
+  /// Stored hierarchical usage in bytes across all NUMA nodes.
+  pub total: Bytes,
+  /// Stored in-use bytes keyed by NUMA node ID.
+  pub nodes: BTreeMap<u32, Bytes>,
 }
 
 impl HugetlbNumaStat {
   /// NUMA filename template, parameterized by [`PageSize`].
   pub const FILE_NAME_TEMPLATE: &'static str = "hugetlb.<hugepagesize>.numa_stat";
   const SUFFIX: &'static str = "numa_stat";
-
-  /// Returns stored hierarchical usage in bytes across all NUMA nodes.
-  #[must_use]
-  pub const fn total(&self) -> Bytes { self.total }
-
-  /// Returns stored in-use bytes keyed by NUMA node ID.
-  #[must_use]
-  pub const fn nodes(&self) -> &BTreeMap<u32, Bytes> { &self.nodes }
 }
 
 const NUMA_TOTAL: &str = "total";
@@ -289,6 +276,7 @@ crate::v2::interface::cgroup_file!(file HugetlbEventsLocal, HugetlbEvents::LOCAL
 crate::v2::interface::cgroup_file!(read HugetlbEventsLocal => HugetlbEvents);
 
 /// Local HugeTLB allocation failures for a given page size.
+#[non_exhaustive]
 pub struct HugetlbEventsLocal;
 
 #[cfg(test)]

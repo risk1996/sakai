@@ -26,11 +26,11 @@ pub(super) struct IrqPressure {
 }
 
 impl From<CoreIrqPressure> for IrqPressure {
-  fn from(value: CoreIrqPressure) -> Self { Self { full: value.full().into() } }
+  fn from(value: CoreIrqPressure) -> Self { Self { full: value.full.into() } }
 }
 
 impl From<CorePressure> for Pressure {
-  fn from(value: CorePressure) -> Self { Self { some: value.some().into(), full: value.full().map(Into::into) } }
+  fn from(value: CorePressure) -> Self { Self { some: value.some.into(), full: value.full.map(Into::into) } }
 }
 
 /// Pressure averages as ratios and cumulative stall time in nanoseconds.
@@ -51,10 +51,10 @@ pub(super) struct PressureLine {
 impl From<CorePressureLine> for PressureLine {
   fn from(value: CorePressureLine) -> Self {
     Self {
-      avg10: value.avg10().into(),
-      avg60: value.avg60().into(),
-      avg300: value.avg300().into(),
-      total: value.total().into(),
+      avg10: value.avg10.into(),
+      avg60: value.avg60.into(),
+      avg300: value.avg300.into(),
+      total: value.total.into(),
     }
   }
 }

@@ -115,7 +115,7 @@ pub(super) struct RdmaCurrent {
 }
 
 impl From<CoreRdmaCurrent> for RdmaCurrent {
-  fn from(value: CoreRdmaCurrent) -> Self { Self { devices: devices(value.devices()) } }
+  fn from(value: CoreRdmaCurrent) -> Self { Self { devices: devices(&value.devices) } }
 }
 
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
@@ -152,7 +152,7 @@ pub(super) struct RdmaDeviceCurrent {
 
 impl From<CoreRdmaDeviceCurrent> for RdmaDeviceCurrent {
   fn from(value: CoreRdmaDeviceCurrent) -> Self {
-    Self { hca_handle: value.hca_handle().into(), hca_object: value.hca_object().into() }
+    Self { hca_handle: value.hca_handle.into(), hca_object: value.hca_object.into() }
   }
 }
 
@@ -168,7 +168,7 @@ pub(super) struct RdmaMax {
 }
 
 impl From<CoreRdmaMax> for RdmaMax {
-  fn from(value: CoreRdmaMax) -> Self { Self { devices: devices(value.devices()) } }
+  fn from(value: CoreRdmaMax) -> Self { Self { devices: devices(&value.devices) } }
 }
 
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
@@ -201,7 +201,7 @@ pub(super) struct RdmaDeviceMax {
 
 impl From<CoreRdmaDeviceMax> for RdmaDeviceMax {
   fn from(value: CoreRdmaDeviceMax) -> Self {
-    Self { hca_handle: MaxOr::from_count(value.hca_handle()), hca_object: MaxOr::from_count(value.hca_object()) }
+    Self { hca_handle: MaxOr::from_count(value.hca_handle), hca_object: MaxOr::from_count(value.hca_object) }
   }
 }
 
@@ -220,7 +220,7 @@ pub(super) struct RdmaEvents {
 }
 
 impl From<CoreRdmaEvents> for RdmaEvents {
-  fn from(value: CoreRdmaEvents) -> Self { Self { devices: devices(value.devices()) } }
+  fn from(value: CoreRdmaEvents) -> Self { Self { devices: devices(&value.devices) } }
 }
 
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
@@ -252,7 +252,7 @@ pub(super) struct RdmaDeviceEvents {
 
 impl From<CoreRdmaDeviceEvents> for RdmaDeviceEvents {
   fn from(value: CoreRdmaDeviceEvents) -> Self {
-    Self { hca_handle: value.hca_handle().into(), hca_object: value.hca_object().into() }
+    Self { hca_handle: value.hca_handle.into(), hca_object: value.hca_object.into() }
   }
 }
 
@@ -277,13 +277,11 @@ pub(super) struct RdmaResourceEvents {
 }
 
 impl From<CoreRdmaResourceEvents> for RdmaResourceEvents {
-  fn from(value: CoreRdmaResourceEvents) -> Self {
-    Self { max: value.max().into(), alloc_fail: value.alloc_fail().into() }
-  }
+  fn from(value: CoreRdmaResourceEvents) -> Self { Self { max: value.max.into(), alloc_fail: value.alloc_fail.into() } }
 }
 
 fn devices<T: Copy, O: From<T>>(values: &BTreeMap<CoreRdmaDevice, T>) -> BTreeMap<DeviceKey, O> {
-  values.iter().map(|(device, value)| ((device.name().to_owned(), device.index()), (*value).into())).collect()
+  values.iter().map(|(device, value)| ((device.name.clone(), device.index), (*value).into())).collect()
 }
 
 #[cfg(test)]

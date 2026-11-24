@@ -18,13 +18,13 @@ use crate::{
 /// use; these amounts are not guarantees of allocatable cgroup memory. An empty
 /// map means no regions were reported. Region membership can change between
 /// reads; arbitrary driver-defined names are retained without interpretation.
-/// Getters inspect this stored snapshot without I/O.
 ///
 /// Since Linux 6.14; see [Linux DMEM](https://www.kernel.org/doc/html/v6.14/admin-guide/cgroup-v2.html#dmem).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[non_exhaustive]
 pub struct DmemCapacity {
-  regions: BTreeMap<String, Bytes>,
+  /// Capacities in bytes keyed by opaque region name.
+  pub regions: BTreeMap<String, Bytes>,
 }
 
 crate::v2::interface::cgroup_file!(DmemCapacity, "dmem.capacity", Read);
@@ -32,10 +32,6 @@ crate::v2::interface::cgroup_file!(DmemCapacity, "dmem.capacity", Read);
 impl DmemCapacity {
   /// The root-only cgroup v2 capacity interface filename, since Linux 6.14.
   pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-
-  /// Returns capacities in bytes keyed by opaque region name.
-  #[must_use]
-  pub const fn regions(&self) -> &BTreeMap<String, Bytes> { &self.regions }
 }
 
 cgroup_value! { map DmemCapacity, regions: ParseBytes, "bytes" }
@@ -48,15 +44,14 @@ cgroup_value! { map DmemCapacity, regions: ParseBytes, "bytes" }
 /// that token is retained as [`MaxOr::Max`], rather than interpreted as an
 /// unlimited configured limit. The sentinel depends on the kernel architecture
 /// and system page size. See [Linux output formatting](https://github.com/torvalds/linux/blob/v6.14/kernel/cgroup/dmem.c).
-/// An empty map is valid. Region names and usage can change between reads;
-/// getters inspect this stored snapshot without I/O. Separately read capacity
-/// and configuration values need not describe the same instant.
+/// An empty map is valid. Region names and usage can change between reads.
+/// Separately read usage, capacity, and configuration may describe different instants.
 ///
 /// Since Linux 6.14; see [Linux DMEM](https://www.kernel.org/doc/html/v6.14/admin-guide/cgroup-v2.html#dmem).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[non_exhaustive]
 pub struct DmemCurrent {
-  /// Configured byte amounts or `max` by region.
+  /// Hierarchical usage in bytes or the kernel's `max` sentinel by region.
   pub regions: BTreeMap<String, MaxOr<Bytes>>,
 }
 
@@ -65,10 +60,6 @@ crate::v2::interface::cgroup_file!(DmemCurrent, "dmem.current", Read);
 impl DmemCurrent {
   /// The cgroup v2 current device-memory usage filename, since Linux 6.14.
   pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-
-  /// Returns byte usage or the kernel's `max` sentinel by opaque region name.
-  #[must_use]
-  pub const fn regions(&self) -> &BTreeMap<String, MaxOr<Bytes>> { &self.regions }
 }
 
 cgroup_value! { map DmemCurrent, regions: ParseBytes, "bytes" }
@@ -79,7 +70,7 @@ cgroup_value! { map DmemCurrent, regions: ParseBytes, "bytes" }
 /// `PAGE_COUNTER_MAX` sentinel, as in [`DmemCurrent`]. Independent region peaks
 /// include transient charges later canceled by ancestor-limit failures. Region
 /// removal removes its history. Empty maps are valid; absent regions differ
-/// from measured zero. Getters inspect this stored snapshot without I/O.
+/// from measured zero.
 /// Reading never resets peaks; the hierarchy root lacks this interface.
 ///
 /// Since Linux 7.3; see [Linux 7.3 source](https://github.com/torvalds/linux/blob/v7.3/kernel/cgroup/dmem.c)
@@ -87,7 +78,8 @@ cgroup_value! { map DmemCurrent, regions: ParseBytes, "bytes" }
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[non_exhaustive]
 pub struct DmemPeak {
-  regions: BTreeMap<String, MaxOr<Bytes>>,
+  /// Historical byte peaks or the kernel's `max` sentinel by region name.
+  pub regions: BTreeMap<String, MaxOr<Bytes>>,
 }
 
 crate::v2::interface::cgroup_file!(DmemPeak, "dmem.peak", Read);
@@ -95,10 +87,6 @@ crate::v2::interface::cgroup_file!(DmemPeak, "dmem.peak", Read);
 impl DmemPeak {
   /// The non-root historical device-memory peak filename, since Linux 7.3.
   pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-
-  /// Returns historical byte peaks or the kernel's `max` sentinel by region name.
-  #[must_use]
-  pub const fn regions(&self) -> &BTreeMap<String, MaxOr<Bytes>> { &self.regions }
 }
 
 cgroup_value! { map DmemPeak, regions: ParseBytes, "bytes" }
@@ -112,14 +100,15 @@ cgroup_value! { map DmemPeak, regions: ParseBytes, "bytes" }
 /// protection depends on ancestor protection and sibling demand; these are
 /// configured values, not calculated effective protections. Zero is valid.
 /// The files are absent at the root. An empty map is valid; region names and
-/// configuration may change between reads. Getters inspect stored values.
+/// configuration may change between reads.
 ///
 /// Since Linux 6.14; see [Linux DMEM](https://www.kernel.org/doc/html/v6.14/admin-guide/cgroup-v2.html#dmem)
 /// and the [versioned implementation](https://github.com/torvalds/linux/blob/v6.14/kernel/cgroup/dmem.c).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[non_exhaustive]
 pub struct DmemLimits {
-  regions: BTreeMap<String, MaxOr<Bytes>>,
+  /// Configured byte amounts or `max`, keyed by opaque region name.
+  pub regions: BTreeMap<String, MaxOr<Bytes>>,
 }
 
 impl DmemLimits {
@@ -129,10 +118,6 @@ impl DmemLimits {
   pub const MAX_FILE_NAME: &'static str = "dmem.max";
   /// The non-root hard eviction protection filename, since Linux 6.14.
   pub const MIN_FILE_NAME: &'static str = "dmem.min";
-
-  /// Returns configured byte amounts or `max`, keyed by opaque region name.
-  #[must_use]
-  pub const fn regions(&self) -> &BTreeMap<String, MaxOr<Bytes>> { &self.regions }
 }
 
 cgroup_value! { map DmemLimits, regions: ParseBytes, "bytes" }

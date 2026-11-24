@@ -75,10 +75,6 @@ crate::v2::interface::cgroup_file!(read IoCostQos => IoCostQos);
 impl IoCostQos {
   /// The root-only I/O cost QoS interface filename.
   pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-
-  /// Inspects stored per-device parameters without kernel I/O.
-  #[must_use]
-  pub const fn devices(&self) -> &BTreeMap<Device, IoDeviceCostQos> { &self.devices }
 }
 
 /// I/O cost controller enablement, latency targets, and scaling bounds for a device.
@@ -103,40 +99,6 @@ pub struct IoDeviceCostQos {
   pub min_scaling: Ratio,
   /// Maximum issue-rate scaling as a ratio from 0.01 to 100.
   pub max_scaling: Ratio,
-}
-
-impl IoDeviceCostQos {
-  /// Whether weight-based I/O cost control is enabled for the device.
-  #[must_use]
-  pub const fn enabled(&self) -> bool { self.enabled }
-
-  /// Whether the kernel or user controls the reported QoS parameters.
-  #[must_use]
-  pub const fn control(&self) -> IoCostControl { self.control }
-
-  /// Read completion latency percentile, from zero to one; zero disables its use.
-  #[must_use]
-  pub const fn read_percentile(&self) -> Ratio { self.read_percentile }
-
-  /// Read latency threshold, converted from kernel microseconds.
-  #[must_use]
-  pub const fn read_latency(&self) -> Time { self.read_latency }
-
-  /// Write completion latency percentile, from zero to one; zero disables its use.
-  #[must_use]
-  pub const fn write_percentile(&self) -> Ratio { self.write_percentile }
-
-  /// Write latency threshold, converted from kernel microseconds.
-  #[must_use]
-  pub const fn write_latency(&self) -> Time { self.write_latency }
-
-  /// Minimum I/O issue-rate scaling, from 0.01 to 100 (1% to 10,000%).
-  #[must_use]
-  pub const fn min_scaling(&self) -> Ratio { self.min_scaling }
-
-  /// Maximum I/O issue-rate scaling, from 0.01 to 100 (1% to 10,000%).
-  #[must_use]
-  pub const fn max_scaling(&self) -> Ratio { self.max_scaling }
 }
 
 cgroup_value! { fields IoDeviceCostQos, {
@@ -186,10 +148,6 @@ crate::v2::interface::cgroup_file!(read IoCostModel => IoCostModel);
 impl IoCostModel {
   /// The root-only I/O cost model interface filename.
   pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-
-  /// Inspects stored per-device models without kernel I/O.
-  #[must_use]
-  pub const fn devices(&self) -> &BTreeMap<Device, IoDeviceCostModel> { &self.devices }
 }
 
 /// Device cost-model rates, with sequential and random IOPS measured for 4 KiB I/O.
@@ -214,40 +172,6 @@ pub struct IoDeviceCostModel {
   pub write_sequential_iops: OperationsPerSecond,
   /// Maximum random 4 KiB writes per second.
   pub write_random_iops: OperationsPerSecond,
-}
-
-impl IoDeviceCostModel {
-  /// Whether the kernel or user controls the reported model parameters.
-  #[must_use]
-  pub const fn control(&self) -> IoCostControl { self.control }
-
-  /// The device's cost model.
-  #[must_use]
-  pub const fn model(&self) -> IoCostModelName { self.model }
-
-  /// Maximum sequential read throughput used by the model, in bytes per second.
-  #[must_use]
-  pub const fn read_bandwidth(&self) -> BytesPerSecond { self.read_bandwidth }
-
-  /// Maximum sequential 4 KiB read operations per second used by the model.
-  #[must_use]
-  pub const fn read_sequential_iops(&self) -> OperationsPerSecond { self.read_sequential_iops }
-
-  /// Maximum random 4 KiB read operations per second used by the model.
-  #[must_use]
-  pub const fn read_random_iops(&self) -> OperationsPerSecond { self.read_random_iops }
-
-  /// Maximum sequential write throughput used by the model, in bytes per second.
-  #[must_use]
-  pub const fn write_bandwidth(&self) -> BytesPerSecond { self.write_bandwidth }
-
-  /// Maximum sequential 4 KiB write operations per second used by the model.
-  #[must_use]
-  pub const fn write_sequential_iops(&self) -> OperationsPerSecond { self.write_sequential_iops }
-
-  /// Maximum random 4 KiB write operations per second used by the model.
-  #[must_use]
-  pub const fn write_random_iops(&self) -> OperationsPerSecond { self.write_random_iops }
 }
 
 cgroup_value! { fields IoDeviceCostModel, {

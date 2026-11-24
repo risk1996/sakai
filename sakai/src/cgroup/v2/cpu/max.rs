@@ -64,6 +64,7 @@ cgroup_value! {
 }
 
 /// Quota-only command for `cpu.max`. The kernel keeps the existing period.
+#[non_exhaustive]
 pub struct CpuQuota;
 
 crate::v2::interface::cgroup_file!(file CpuQuota, CpuMax::FILE_NAME, Write);

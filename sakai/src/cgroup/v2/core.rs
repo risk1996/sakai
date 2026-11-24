@@ -172,6 +172,7 @@ impl CgroupController {
 
 /// One controller change to submit to `cgroup.subtree_control`.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum SubtreeControl {
   /// Enables this controller for child cgroups.
   Enable(CgroupController),
@@ -181,6 +182,7 @@ pub enum SubtreeControl {
 
 /// A task to migrate, interpreted in the writer's PID namespace.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum MigrationTarget {
   /// A process or thread ID. Zero is rejected; use [`Self::Caller`] explicitly.
   Id(TaskId),

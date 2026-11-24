@@ -494,13 +494,13 @@ mod tests {
       assert_eq!(current, assert_ok!("12".parse::<PidsCurrent>()));
       assert_eq!(max, assert_ok!("10".parse::<PidsMax>()));
       assert_eq!(events, assert_ok!("max 3".parse::<PidsEvents>()));
-      assert_eq!(events.max().value, 3);
-      assert!(state.populated());
-      assert_eq!(state.frozen(), frozen);
-      assert_eq!(stat.descendants().value, 2);
-      assert_eq!(stat.dying_descendants().value, 1);
-      assert_eq!(!stat.subsystems().is_empty(), has_subsystems);
-      assert_eq!(!stat.dying_subsystems().is_empty(), has_subsystems);
+      assert_eq!(events.max.value, 3);
+      assert!(state.populated);
+      assert_eq!(state.frozen, frozen);
+      assert_eq!(stat.descendants.value, 2);
+      assert_eq!(stat.dying_descendants.value, 1);
+      assert_eq!(!stat.subsystems.is_empty(), has_subsystems);
+      assert_eq!(!stat.dying_subsystems.is_empty(), has_subsystems);
     }
   }
 

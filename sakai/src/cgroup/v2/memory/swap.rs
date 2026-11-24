@@ -54,9 +54,18 @@ pub type SwapHigh = Scalar<MaxOr<Bytes>, interface::SwapHigh>;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub struct SwapEvents {
-  high: Option<Count>,
-  max: Count,
-  fail: Count,
+  /// Times swap usage exceeded the high threshold, when reported.
+  ///
+  /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
+  pub high: Option<Count>,
+  /// Times a swap allocation failed at the max boundary.
+  ///
+  /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
+  pub max: Count,
+  /// Swap allocation failures from the limit or system-wide exhaustion.
+  ///
+  /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
+  pub fail: Count,
 }
 
 crate::v2::interface::cgroup_file!(SwapEvents, "memory.swap.events", Read);
@@ -66,24 +75,6 @@ impl SwapEvents {
   ///
   /// See [Linux `memory.swap.events` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-
-  /// Times swap usage exceeded the high threshold, when reported.
-  ///
-  /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-  #[must_use]
-  pub const fn high(&self) -> Option<Count> { self.high }
-
-  /// Times a swap allocation failed at the max boundary.
-  ///
-  /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-  #[must_use]
-  pub const fn max(&self) -> Count { self.max }
-
-  /// Swap allocation failures from the limit or system-wide exhaustion.
-  ///
-  /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-  #[must_use]
-  pub const fn fail(&self) -> Count { self.fail }
 }
 
 cgroup_value! { keyed SwapEvents, |key| match key {

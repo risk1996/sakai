@@ -25,7 +25,10 @@ use crate::{
 #[derive(Debug, Clone, PartialEq, Default)]
 #[non_exhaustive]
 pub struct IoStat {
-  devices: BTreeMap<Device, IoDeviceStat>,
+  /// Byte and operation counters for each reported device.
+  ///
+  /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
+  pub devices: BTreeMap<Device, IoDeviceStat>,
 }
 
 crate::v2::interface::cgroup_file!(IoStat, "io.stat", Read);
@@ -35,12 +38,6 @@ impl IoStat {
   ///
   /// See [Linux `io.stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-
-  /// Returns the byte and operation counters for each reported device.
-  ///
-  /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
-  #[must_use]
-  pub const fn devices(&self) -> &BTreeMap<Device, IoDeviceStat> { &self.devices }
 }
 
 /// Cumulative byte and operation counters for one block device.
@@ -51,146 +48,90 @@ impl IoStat {
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 #[non_exhaustive]
 pub struct IoDeviceStat {
-  read_bytes: Option<Bytes>,
-  write_bytes: Option<Bytes>,
-  discard_bytes: Option<Bytes>,
-  read_operations: Option<Count>,
-  write_operations: Option<Count>,
-  discard_operations: Option<Count>,
-  delay_usage: Option<DelayUsage>,
-  delay: Option<Time>,
-  depth: Option<MaxOr<Count>>,
-  average_latency: Option<Time>,
-  latency_window: Option<Time>,
-  missed: Option<Count>,
-  total: Option<Count>,
-  cost_usage: Option<Time>,
-  cost_wait: Option<Time>,
-  cost_indebt: Option<Time>,
-  cost_indelay: Option<Time>,
-  cost_vrate: Option<Ratio>,
-}
-
-impl IoDeviceStat {
   /// Cumulative bytes read (`rbytes`).
   ///
   /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
-  #[must_use]
-  pub const fn read_bytes(&self) -> Option<Bytes> { self.read_bytes }
-
+  pub read_bytes: Option<Bytes>,
   /// Cumulative bytes written (`wbytes`).
   ///
   /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
-  #[must_use]
-  pub const fn write_bytes(&self) -> Option<Bytes> { self.write_bytes }
-
+  pub write_bytes: Option<Bytes>,
   /// Cumulative bytes discarded (`dbytes`), when reported.
   ///
   /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
-  #[must_use]
-  pub const fn discard_bytes(&self) -> Option<Bytes> { self.discard_bytes }
-
+  pub discard_bytes: Option<Bytes>,
   /// Cumulative read operations (`rios`).
   ///
   /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
-  #[must_use]
-  pub const fn read_operations(&self) -> Option<Count> { self.read_operations }
-
+  pub read_operations: Option<Count>,
   /// Cumulative write operations (`wios`).
   ///
   /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
-  #[must_use]
-  pub const fn write_operations(&self) -> Option<Count> { self.write_operations }
-
+  pub write_operations: Option<Count>,
   /// Cumulative discard operations (`dios`), when reported.
   ///
   /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
-  #[must_use]
-  pub const fn discard_operations(&self) -> Option<Count> { self.discard_operations }
-
+  pub discard_operations: Option<Count>,
   /// Delay-control indicator (`use_delay`), when kernel debug statistics are enabled.
   ///
   /// See [`DelayUsage`] and [Linux I/O latency](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-latency).
-  #[must_use]
-  pub const fn delay_usage(&self) -> Option<DelayUsage> { self.delay_usage }
-
+  pub delay_usage: Option<DelayUsage>,
   /// Current artificial delay (`delay_nsec`), already in kernel nanoseconds.
   ///
   /// This is a changing delay amount, not cumulative stall time.
   /// See [Linux I/O latency](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-latency).
-  #[must_use]
-  pub const fn delay(&self) -> Option<Time> { self.delay }
-
+  pub delay: Option<Time>,
   /// Current queue-depth limit (`depth`), preserving `max` when unrestricted.
   ///
   /// Reported only with I/O latency debug statistics enabled.
   /// See [Linux I/O latency fields](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-latency-interface-files).
-  #[must_use]
-  pub const fn depth(&self) -> Option<MaxOr<Count>> { self.depth }
-
+  pub depth: Option<MaxOr<Count>>,
   /// Exponential moving average latency (`avg_lat`), converted from microseconds.
   ///
   /// Reported for rotational devices with I/O latency debug statistics enabled.
   /// See [Linux I/O latency fields](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-latency-interface-files).
-  #[must_use]
-  pub const fn average_latency(&self) -> Option<Time> { self.average_latency }
-
+  pub average_latency: Option<Time>,
   /// Sampling window (`win`), converted from kernel milliseconds.
   ///
   /// Reported for rotational devices; idle periods can extend the current window.
   /// See [Linux I/O latency fields](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-latency-interface-files).
-  #[must_use]
-  pub const fn latency_window(&self) -> Option<Time> { self.latency_window }
-
+  pub latency_window: Option<Time>,
   /// Non-rotational I/Os exceeding their target in the current window (`missed`).
   ///
   /// This live window counter can reset between reads; it is not cumulative.
   /// See [Linux I/O latency fields](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-latency-interface-files).
-  #[must_use]
-  pub const fn missed(&self) -> Option<Count> { self.missed }
-
+  pub missed: Option<Count>,
   /// Non-rotational I/Os accounted in the current window (`total`).
   ///
   /// This live window counter can reset between reads; it is not cumulative.
   /// See [Linux I/O latency fields](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-latency-interface-files).
-  #[must_use]
-  pub const fn total(&self) -> Option<Count> { self.total }
-
+  pub total: Option<Count>,
   /// Cumulative hierarchical modeled I/O usage (`cost.usage`), converted from microseconds.
   ///
   /// Requires enabled I/O cost control. This is modeled cost, not elapsed device service time.
   /// See the [Linux cost statistics source](https://github.com/torvalds/linux/blob/v5.10/block/blk-iocost.c).
-  #[must_use]
-  pub const fn cost_usage(&self) -> Option<Time> { self.cost_usage }
-
+  pub cost_usage: Option<Time>,
   /// Cumulative hierarchical I/O cost wait time (`cost.wait`), converted from microseconds.
   ///
   /// Requires enabled I/O cost control and kernel debug statistics.
   /// See the [Linux cost statistics source](https://github.com/torvalds/linux/blob/v5.10/block/blk-iocost.c).
-  #[must_use]
-  pub const fn cost_wait(&self) -> Option<Time> { self.cost_wait }
-
+  pub cost_wait: Option<Time>,
   /// Cumulative hierarchical time in I/O cost debt (`cost.indebt`), converted from microseconds.
   ///
   /// Requires enabled I/O cost control and kernel debug statistics.
   /// See the [Linux cost statistics source](https://github.com/torvalds/linux/blob/v5.10/block/blk-iocost.c).
-  #[must_use]
-  pub const fn cost_indebt(&self) -> Option<Time> { self.cost_indebt }
-
+  pub cost_indebt: Option<Time>,
   /// Cumulative hierarchical I/O cost delay time (`cost.indelay`), converted from microseconds.
   ///
   /// Requires enabled I/O cost control and kernel debug statistics.
   /// See the [Linux cost statistics source](https://github.com/torvalds/linux/blob/v5.10/block/blk-iocost.c).
-  #[must_use]
-  pub const fn cost_indelay(&self) -> Option<Time> { self.cost_indelay }
-
+  pub cost_indelay: Option<Time>,
   /// Current device virtual-time rate (`cost.vrate`), stored as a dimensionless ratio.
   ///
   /// Emitted only at the root with enabled I/O cost control. For example,
   /// kernel `150.00` (150%) becomes 1.5; this is not a measured bandwidth.
   /// See the [Linux cost statistics source](https://github.com/torvalds/linux/blob/v5.10/block/blk-iocost.c).
-  #[must_use]
-  pub const fn cost_vrate(&self) -> Option<Ratio> { self.cost_vrate }
+  pub cost_vrate: Option<Ratio>,
 }
 
 /// The kernel's signed `use_delay` debug indicator.

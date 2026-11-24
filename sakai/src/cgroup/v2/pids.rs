@@ -49,7 +49,10 @@ pub type PidsMax = Scalar<MaxOr<Count>, interface::PidsMax>;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub struct PidsEvents {
-  max: Count,
+  /// Number of occurrences of the process limit being hit.
+  ///
+  /// See [Linux pid interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#pid).
+  pub max: Count,
 }
 
 crate::v2::interface::cgroup_file!(PidsEvents, "pids.events", Read);
@@ -63,12 +66,6 @@ impl PidsEvents {
   ///
   /// See [Linux 6.11 source](https://github.com/torvalds/linux/blob/v6.11/kernel/cgroup/pids.c).
   pub const LOCAL_FILE_NAME: &'static str = "pids.events.local";
-
-  /// Number of occurrences of the process limit being hit.
-  ///
-  /// See [Linux pid interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#pid).
-  #[must_use]
-  pub const fn max(&self) -> Count { self.max }
 }
 
 cgroup_value! { keyed PidsEvents, |_| "value", {

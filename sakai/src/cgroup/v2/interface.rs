@@ -17,10 +17,13 @@ pub mod mode {
   use super::{AccessMode, sealed};
 
   /// An interface exposed for reading.
+  #[non_exhaustive]
   pub struct Read;
   /// An interface exposed for writing.
+  #[non_exhaustive]
   pub struct Write;
   /// An interface exposed for reading and writing.
+  #[non_exhaustive]
   pub struct ReadWrite;
 
   impl sealed::Mode for Read {}
@@ -92,6 +95,7 @@ impl<F: FileCommand<Mode: WriteMode>> WritableFile for F {}
 macro_rules! cgroup_file {
   (alias $(#[$doc:meta])* $file:ident, $name:expr, $mode:ident, $value:ty $(, $decode:expr)?) => {
     $(#[$doc])*
+    #[non_exhaustive]
     pub struct $file;
     $crate::v2::interface::cgroup_file!(file $file, $name, $mode);
     $crate::v2::interface::cgroup_file!(read $file => $value $(, $decode)?);

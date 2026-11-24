@@ -39,16 +39,6 @@ impl RdmaDevice {
   /// Preserve `None` when the kernel omitted the index; it differs from zero.
   #[must_use]
   pub fn new(name: impl Into<String>, index: Option<u32>) -> Self { Self { name: name.into(), index } }
-
-  /// Returns the stored adapter name, which can be shared across namespaces.
-  #[must_use]
-  pub fn name(&self) -> &str { &self.name }
-
-  /// Returns the reported system-wide device index, or `None` when omitted.
-  ///
-  /// Inspects this record without performing I/O or resolving a device.
-  #[must_use]
-  pub const fn index(&self) -> Option<u32> { self.index }
 }
 
 const HANDLE_MAX: &str = "hca_handle.max";
@@ -98,7 +88,8 @@ impl EncodeCgroup<UsageCount> for Count {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[non_exhaustive]
 pub struct RdmaCurrent {
-  devices: BTreeMap<RdmaDevice, RdmaDeviceCurrent>,
+  /// Stored per-device HCA counts without performing I/O.
+  pub devices: BTreeMap<RdmaDevice, RdmaDeviceCurrent>,
 }
 
 crate::v2::interface::cgroup_file!(RdmaCurrent, "rdma.current", Read);
@@ -110,10 +101,6 @@ impl RdmaCurrent {
   ///
   /// See the [Linux 7.2 implementation](https://github.com/torvalds/linux/blob/v7.2/kernel/cgroup/rdma.c).
   pub const PEAK_FILE_NAME: &'static str = "rdma.peak";
-
-  /// Returns stored per-device HCA counts without performing I/O.
-  #[must_use]
-  pub const fn devices(&self) -> &BTreeMap<RdmaDevice, RdmaDeviceCurrent> { &self.devices }
 }
 
 /// Hierarchical HCA handle and object counts for one RDMA device.
@@ -127,18 +114,10 @@ impl RdmaCurrent {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct RdmaDeviceCurrent {
-  hca_handle: Count,
-  hca_object: Count,
-}
-
-impl RdmaDeviceCurrent {
-  /// Returns the stored number of HCA handles.
-  #[must_use]
-  pub const fn hca_handle(&self) -> Count { self.hca_handle }
-
-  /// Returns the stored number of HCA objects.
-  #[must_use]
-  pub const fn hca_object(&self) -> Count { self.hca_object }
+  /// Stored number of HCA handles.
+  pub hca_handle: Count,
+  /// Stored number of HCA objects.
+  pub hca_object: Count,
 }
 
 cgroup_value! { fields RdmaDeviceCurrent, {
@@ -170,10 +149,6 @@ crate::v2::interface::cgroup_file!(read RdmaMax => RdmaMax);
 impl RdmaMax {
   /// The cgroup v2 `rdma.max` interface filename.
   pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-
-  /// Returns stored per-device limits without performing I/O.
-  #[must_use]
-  pub const fn devices(&self) -> &BTreeMap<RdmaDevice, RdmaDeviceMax> { &self.devices }
 }
 
 /// HCA handle and object limits for one RDMA device, measured in counts.
@@ -186,16 +161,6 @@ pub struct RdmaDeviceMax {
   pub hca_handle: MaxOr<Count>,
   /// HCA object limit, or `max` for no limit here.
   pub hca_object: MaxOr<Count>,
-}
-
-impl RdmaDeviceMax {
-  /// Returns the stored HCA handle limit, or `max` for no limit here.
-  #[must_use]
-  pub const fn hca_handle(&self) -> MaxOr<Count> { self.hca_handle }
-
-  /// Returns the stored HCA object limit, or `max` for no limit here.
-  #[must_use]
-  pub const fn hca_object(&self) -> MaxOr<Count> { self.hca_object }
 }
 
 cgroup_value! { fields RdmaDeviceMax, {
@@ -216,7 +181,8 @@ cgroup_value! { device_rows RdmaMax, devices: RdmaDeviceMax, parse_devices }
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[non_exhaustive]
 pub struct RdmaEvents {
-  devices: BTreeMap<RdmaDevice, RdmaDeviceEvents>,
+  /// Stored per-device event counters without performing I/O.
+  pub devices: BTreeMap<RdmaDevice, RdmaDeviceEvents>,
 }
 
 crate::v2::interface::cgroup_file!(RdmaEvents, "rdma.events", Read);
@@ -226,10 +192,6 @@ impl RdmaEvents {
   pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
   /// The local `rdma.events.local` filename, available since Linux 7.2.
   pub const LOCAL_FILE_NAME: &'static str = "rdma.events.local";
-
-  /// Returns stored per-device event counters without performing I/O.
-  #[must_use]
-  pub const fn devices(&self) -> &BTreeMap<RdmaDevice, RdmaDeviceEvents> { &self.devices }
 }
 
 /// Allocation events for both resource types of one RDMA device.
@@ -239,19 +201,13 @@ impl RdmaEvents {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct RdmaDeviceEvents {
-  hca_handle: RdmaResourceEvents,
-  hca_object: RdmaResourceEvents,
+  /// Stored HCA handle allocation-event counters.
+  pub hca_handle: RdmaResourceEvents,
+  /// Stored HCA object allocation-event counters.
+  pub hca_object: RdmaResourceEvents,
 }
 
 impl RdmaDeviceEvents {
-  /// Returns stored HCA handle allocation-event counters.
-  #[must_use]
-  pub const fn hca_handle(&self) -> RdmaResourceEvents { self.hca_handle }
-
-  /// Returns stored HCA object allocation-event counters.
-  #[must_use]
-  pub const fn hca_object(&self) -> RdmaResourceEvents { self.hca_object }
-
   fn encode_fields(&self, output: &mut String, prefix: &str, delimiter: char) -> Result<(), crate::error::EncodeError> {
     for (key, value) in [
       (HANDLE_MAX, &self.hca_handle.max),
@@ -285,24 +241,16 @@ impl RdmaDeviceEvents {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct RdmaResourceEvents {
-  max: Count,
-  alloc_fail: Count,
-}
-
-impl RdmaResourceEvents {
   /// Counts failures against this cgroup's own resource limit.
   ///
   /// Local counts include requests from descendants rejected by this limit.
   /// Hierarchical counts also include descendant cgroups' own limit events.
-  #[must_use]
-  pub const fn max(&self) -> Count { self.max }
-
+  pub max: Count,
   /// Counts allocation requests rejected by this cgroup's or an ancestor's limit.
   ///
   /// Local counts include requests originating in this cgroup. Hierarchical
   /// counts additionally include requests originating in descendants.
-  #[must_use]
-  pub const fn alloc_fail(&self) -> Count { self.alloc_fail }
+  pub alloc_fail: Count,
 }
 
 cgroup_value! { device_rows RdmaEvents, devices: RdmaDeviceEvents, parse_devices }
@@ -346,7 +294,7 @@ crate::v2::interface::cgroup_file!(alias
 crate::v2::interface::cgroup_file!(write RdmaMax, 'a => (&'a RdmaDevice, &'a RdmaDeviceMax), encode_device_max);
 
 fn encode_device_max((device, value): (&RdmaDevice, &RdmaDeviceMax)) -> Result<String, crate::error::EncodeError> {
-  super::interface::check_token(device.name(), "device").and_then(|()| {
+  super::interface::check_token(&device.name, "device").and_then(|()| {
     let mut command = device.to_string();
     value.encode_fields(&mut command, " ", '=')?;
     Ok(command)
@@ -567,8 +515,8 @@ mod tests {
       Cases::<RdmaEvents>::check([(events.as_str(), Err(Invalid("index", index)))]);
     }
     let key = RdmaDevice::new("rxe0", Some(0));
-    assert_eq!(key.name(), "rxe0");
-    assert_eq!(key.index(), Some(0));
+    assert_eq!(key.name, "rxe0");
+    assert_eq!(key.index, Some(0));
     assert_ne!(key, RdmaDevice::new("rxe0", None));
   }
 

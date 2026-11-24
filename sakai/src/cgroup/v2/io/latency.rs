@@ -22,6 +22,8 @@ use crate::{
 #[non_exhaustive]
 pub struct IoLatency {
   /// Configured latency targets by block device.
+  ///
+  /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   pub devices: BTreeMap<Device, NonZeroTime>,
 }
 
@@ -33,12 +35,6 @@ impl IoLatency {
   ///
   /// See [Linux `io.latency` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-
-  /// Returns configured latency targets keyed by block device.
-  ///
-  /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
-  #[must_use]
-  pub const fn devices(&self) -> &BTreeMap<Device, NonZeroTime> { &self.devices }
 }
 
 const TARGET: &str = "target";

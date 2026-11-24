@@ -195,9 +195,9 @@ impl CgroupFixture {
   /// Creates a child in vmtest's fresh, disposable cgroup2 hierarchy.
   fn create() -> io::Result<Self> {
     let cgroup = CgroupPath::current().map_err(io::Error::other)?;
-    match cgroup.is_read_only() {
+    match cgroup.read_only {
       | true => {
-        let status = Command::new("mount").args(["-o", "remount,rw"]).arg(cgroup.mount_point()).status()?;
+        let status = Command::new("mount").args(["-o", "remount,rw"]).arg(&cgroup.mount_point).status()?;
         match status.success() {
           | true => {},
           | false => {
@@ -386,17 +386,17 @@ fn parses_live_delegated_controller_interfaces() {
     | Err(error) if error.kind() == io::ErrorKind::NotFound => {},
     | Err(error) => panic!("failed to read {weight_path:?}: {error}"),
   }
-  assert_eq!(assert_ok!(reader.read_value::<PidsCurrent>()).value().value, 0);
-  assert_eq!(assert_ok!(reader.read_value::<PidsMax>()).value(), MaxOr::Max);
+  assert_eq!(assert_ok!(reader.read_value::<PidsCurrent>()).value.value, 0);
+  assert_eq!(assert_ok!(reader.read_value::<PidsMax>()).value, MaxOr::Max);
   for limit in ["0", "10", "max"] {
     fixture
       .configure(PidsMax::FILE_NAME, limit, assert_ok!(limit.parse::<PidsMax>()), || reader.read_value::<PidsMax>());
   }
-  assert_eq!(assert_ok!(reader.read_value::<PidsEvents>()).max().value, 0);
+  assert_eq!(assert_ok!(reader.read_value::<PidsEvents>()).max.value, 0);
   let events = assert_ok!(reader.read_value::<CgroupEvents>());
-  assert!(!events.populated());
-  assert_eq!(events.frozen(), Some(false));
-  assert_eq!(assert_ok!(reader.read_value::<CgroupStat>()).descendants().value, 0);
+  assert!(!events.populated);
+  assert_eq!(events.frozen, Some(false));
+  assert_eq!(assert_ok!(reader.read_value::<CgroupStat>()).descendants.value, 0);
   assert!(
     assert_ok!(reader.read_value::<CgroupControllers>()).contains(&CgroupController::Memory),
     "vmtest kernel must provide the memory controller"
@@ -425,16 +425,16 @@ fn parses_live_delegated_controller_interfaces() {
   // No process joins the fixture, so its usage is stable across these reads.
   let current_contents = assert_ok!(fs::read_to_string(fixture.path.join(MemoryCurrent::FILE_NAME)));
   let current_bytes = assert_ok!(current_contents.trim().parse::<u64>());
-  assert_eq!(assert_ok!(reader.read_value::<MemoryCurrent>()).value().get::<byte>(), current_bytes);
+  assert_eq!(assert_ok!(reader.read_value::<MemoryCurrent>()).value.get::<byte>(), current_bytes);
 
-  assert_eq!(assert_ok!(reader.read_value::<MemoryMax>()).value(), MaxOr::Max);
-  assert_eq!(assert_ok!(reader.read_value::<MemoryHigh>()).value(), MaxOr::Max);
-  assert_eq!(assert_ok!(reader.read_value::<MemoryLow>()).value(), MaxOr::Value(Bytes::new::<byte>(0)));
-  assert_eq!(assert_ok!(reader.read_value::<MemoryMin>()).value(), MaxOr::Value(Bytes::new::<byte>(0)));
-  assert!(!assert_ok!(reader.read_value::<MemoryOomGroup>()).value());
+  assert_eq!(assert_ok!(reader.read_value::<MemoryMax>()).value, MaxOr::Max);
+  assert_eq!(assert_ok!(reader.read_value::<MemoryHigh>()).value, MaxOr::Max);
+  assert_eq!(assert_ok!(reader.read_value::<MemoryLow>()).value, MaxOr::Value(Bytes::new::<byte>(0)));
+  assert_eq!(assert_ok!(reader.read_value::<MemoryMin>()).value, MaxOr::Value(Bytes::new::<byte>(0)));
+  assert!(!assert_ok!(reader.read_value::<MemoryOomGroup>()).value);
   for (input, expected) in [("1", true), ("0", false)] {
     fixture.configure(MemoryOomGroup::FILE_NAME, input, expected, || {
-      reader.read_value::<MemoryOomGroup>().map(|value| value.value())
+      reader.read_value::<MemoryOomGroup>().map(|value| value.value)
     });
   }
   for limit in [MaxOr::Value(Bytes::new::<byte>(67_108_864)), MaxOr::Max] {
@@ -442,19 +442,19 @@ fn parses_live_delegated_controller_interfaces() {
     assert_eq!(assert_ok!(reader.read_value::<MemoryMax>()).value, limit);
   }
   fixture.configure(MemoryHigh::FILE_NAME, "33554432", MaxOr::Value(Bytes::new::<byte>(33_554_432)), || {
-    reader.read_value::<MemoryHigh>().map(|value| value.value())
+    reader.read_value::<MemoryHigh>().map(|value| value.value)
   });
   fixture.configure(MemoryLow::FILE_NAME, "16777216", MaxOr::Value(Bytes::new::<byte>(16_777_216)), || {
-    reader.read_value::<MemoryLow>().map(|value| value.value())
+    reader.read_value::<MemoryLow>().map(|value| value.value)
   });
   fixture.configure(MemoryMin::FILE_NAME, "8388608", MaxOr::Value(Bytes::new::<byte>(8_388_608)), || {
-    reader.read_value::<MemoryMin>().map(|value| value.value())
+    reader.read_value::<MemoryMin>().map(|value| value.value)
   });
   for file in [MemoryLow::FILE_NAME, MemoryMin::FILE_NAME] {
     assert_ok!(fs::write(fixture.path.join(file), "max"));
   }
-  assert_eq!(assert_ok!(reader.read_value::<MemoryLow>()).value(), MaxOr::Max);
-  assert_eq!(assert_ok!(reader.read_value::<MemoryMin>()).value(), MaxOr::Max);
+  assert_eq!(assert_ok!(reader.read_value::<MemoryLow>()).value, MaxOr::Max);
+  assert_eq!(assert_ok!(reader.read_value::<MemoryMin>()).value, MaxOr::Max);
   assert_eq!(assert_ok!(reader.read_value::<CgroupType>()), CgroupType::Domain);
   assert_ok!(reader.read_value::<CgroupControllers>());
   assert_ok!(reader.read_value::<CgroupSubtreeControl>());
@@ -476,15 +476,15 @@ fn parses_live_delegated_controller_interfaces() {
       | false => "0",
     }));
     assert!(assert_ok!(events.wait(notification_timeout)));
-    assert_eq!(assert_ok!(notification_group.read_value::<CgroupEvents>()).frozen(), Some(frozen));
+    assert_eq!(assert_ok!(notification_group.read_value::<CgroupEvents>()).frozen, Some(frozen));
     assert!(!assert_ok!(events.wait(Some(Duration::ZERO))));
   }
   for contents in ["25000 100000", "max 100000"] {
     assert_ok!(fs::write(notification_path.join(CpuMax::FILE_NAME), contents));
     let change = assert_ok!(configuration.wait(notification_timeout)).expect("configuration notification");
-    assert!(change.modified());
-    assert!(!change.removed());
-    assert!(!change.overflowed());
+    assert!(change.modified);
+    assert!(!change.removed);
+    assert!(!change.overflowed);
     assert_eq!(assert_ok!(notification_group.read_value::<CpuMax>()), assert_ok!(contents.parse::<CpuMax>()));
     assert_eq!(assert_ok!(fs::read_to_string(notification_path.join(CpuMax::FILE_NAME))).trim(), contents);
     assert_eq!(assert_ok!(configuration.wait(Some(Duration::ZERO))), None);
@@ -495,7 +495,7 @@ fn parses_live_delegated_controller_interfaces() {
   // Kernfs internal removal need not emit an inotify deletion event. A
   // notification, when supplied by the kernel, must describe watch removal.
   match assert_ok!(configuration.wait(Some(Duration::ZERO))) {
-    | Some(change) => assert!(change.removed()),
+    | Some(change) => assert!(change.removed),
     | None => {},
   }
 }
@@ -615,7 +615,7 @@ fn reads_remaining_controllers_and_reports_unavailable_interfaces() {
   };
   assert_ok!(check_remaining_controllers(&group));
   let membership = assert_ok!(CgroupPath::current());
-  let root = assert_ok!(Cgroup::from_path(membership.mount_point()));
+  let root = assert_ok!(Cgroup::from_path(&membership.mount_point));
   assert_ok!(check_remaining_controllers(&root));
 }
 
