@@ -48,7 +48,8 @@ impl HugetlbReader {
   /// hugetlb.<page_size>.current and returns a Bytes quantity.
   fn current(&self, py: Python<'_>, page_size: &str) -> PyResult<Quantity<sakai::Bytes>> {
     let size = Self::size(page_size)?;
-    PythonError::read(py, &self.owner, move |owner| owner.hugetlb().current(&size)).map(|value| value.value().into())
+    PythonError::read(py, &self.owner, move |owner| owner.read_file::<sakai::v2::hugetlb::HugetlbCurrent>(&size))
+      .map(|value| value.value().into())
   }
 
   /// Read the faulted HugeTLB limit for page_size as MaxOr[Bytes] in bytes.
@@ -58,7 +59,7 @@ impl HugetlbReader {
   #[gen_stub(override_return_type(type_repr = "MaxOr[Bytes]"))]
   fn max(&self, py: Python<'_>, page_size: &str) -> PyResult<MaxOr> {
     let size = Self::size(page_size)?;
-    PythonError::read(py, &self.owner, move |owner| owner.hugetlb().max(&size))
+    PythonError::read(py, &self.owner, move |owner| owner.read_file::<sakai::v2::hugetlb::HugetlbMax>(&size))
       .map(|value| MaxOr::from_bytes(value.value()))
   }
 
@@ -69,8 +70,10 @@ impl HugetlbReader {
   /// only unused reservations. Usage is volatile.
   fn reserved_current(&self, py: Python<'_>, page_size: &str) -> PyResult<Quantity<sakai::Bytes>> {
     let size = Self::size(page_size)?;
-    PythonError::read(py, &self.owner, move |owner| owner.hugetlb().reserved_current(&size))
-      .map(|value| value.value().into())
+    PythonError::read(py, &self.owner, move |owner| {
+      owner.read_file::<sakai::v2::hugetlb::HugetlbReservedCurrent>(&size)
+    })
+    .map(|value| value.value().into())
   }
 
   /// Read the reservation-accounting limit for page_size as MaxOr[Bytes] in bytes.
@@ -80,7 +83,7 @@ impl HugetlbReader {
   #[gen_stub(override_return_type(type_repr = "MaxOr[Bytes]"))]
   fn reserved_max(&self, py: Python<'_>, page_size: &str) -> PyResult<MaxOr> {
     let size = Self::size(page_size)?;
-    PythonError::read(py, &self.owner, move |owner| owner.hugetlb().reserved_max(&size))
+    PythonError::read(py, &self.owner, move |owner| owner.read_file::<sakai::v2::hugetlb::HugetlbReservedMax>(&size))
       .map(|value| MaxOr::from_bytes(value.value()))
   }
 
@@ -89,7 +92,7 @@ impl HugetlbReader {
   /// Both fault and reservation limits contribute to hugetlb.<page_size>.events.
   fn events(&self, py: Python<'_>, page_size: &str) -> PyResult<HugetlbEvents> {
     let size = Self::size(page_size)?;
-    PythonError::read(py, &self.owner, move |owner| owner.hugetlb().events(&size)).map(Into::into)
+    PythonError::read(py, &self.owner, move |owner| owner.read_file::<CoreHugetlbEvents>(&size)).map(Into::into)
   }
 
   /// Read cumulative HugeTLB limit failures originating in this cgroup alone.
@@ -97,7 +100,8 @@ impl HugetlbReader {
   /// This reads hugetlb.<page_size>.events.local; descendant failures are excluded.
   fn events_local(&self, py: Python<'_>, page_size: &str) -> PyResult<HugetlbEvents> {
     let size = Self::size(page_size)?;
-    PythonError::read(py, &self.owner, move |owner| owner.hugetlb().events_local(&size)).map(Into::into)
+    PythonError::read(py, &self.owner, move |owner| owner.read_file::<sakai::v2::hugetlb::HugetlbEventsLocal>(&size))
+      .map(Into::into)
   }
 
   /// Read active HugeTLB bytes for page_size by NUMA node, including descendants.
@@ -108,7 +112,7 @@ impl HugetlbReader {
   /// https://github.com/torvalds/linux/blob/v5.17/mm/hugetlb_cgroup.c
   fn numa_stat(&self, py: Python<'_>, page_size: &str) -> PyResult<HugetlbNumaStat> {
     let size = Self::size(page_size)?;
-    PythonError::read(py, &self.owner, move |owner| owner.hugetlb().numa_stat(&size)).map(Into::into)
+    PythonError::read(py, &self.owner, move |owner| owner.read_file::<CoreHugetlbNumaStat>(&size)).map(Into::into)
   }
 }
 

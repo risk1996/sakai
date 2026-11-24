@@ -19,11 +19,13 @@ pub struct CpuStat {
   bandwidth: Option<CpuBandwidthStat>,
 }
 
+crate::v2::interface::cgroup_file!(CpuStat, "cpu.stat", Read);
+
 impl CpuStat {
   /// The cgroup v2 `cpu.stat` interface filename.
   ///
   /// See [Linux `cpu.stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
-  pub const FILE_NAME: &'static str = "cpu.stat";
+  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
 
   /// Returns CPU usage times.
   ///
@@ -52,11 +54,13 @@ pub struct CpuStatLocal {
   throttled: Option<Time>,
 }
 
+crate::v2::interface::cgroup_file!(CpuStatLocal, "cpu.stat.local", Read);
+
 impl CpuStatLocal {
   /// The cgroup v2 `cpu.stat.local` interface filename.
   ///
   /// See [Linux `cpu.stat.local` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
-  pub const FILE_NAME: &'static str = "cpu.stat.local";
+  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
 
   /// Returns throttling of this cgroup's own runqueues, when reported.
   ///

@@ -38,14 +38,18 @@ use crate::{
 /// See [Linux `io.max` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct IoMax {
-  devices: BTreeMap<Device, IoDeviceMax>,
+  /// Configured limits by block device.
+  pub devices: BTreeMap<Device, IoDeviceMax>,
 }
+
+crate::v2::interface::cgroup_file!(file IoMax, "io.max", ReadWrite);
+crate::v2::interface::cgroup_file!(read IoMax => IoMax);
 
 impl IoMax {
   /// The cgroup v2 `io.max` interface filename.
   ///
   /// See [Linux `io.max` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
-  pub const FILE_NAME: &'static str = "io.max";
+  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
 
   /// Returns each reported device's configured limits.
   ///
@@ -59,10 +63,14 @@ impl IoMax {
 /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct IoDeviceMax {
-  read_bandwidth: MaxOr<BytesPerSecond>,
-  write_bandwidth: MaxOr<BytesPerSecond>,
-  read_iops: MaxOr<OperationsPerSecond>,
-  write_iops: MaxOr<OperationsPerSecond>,
+  /// Read bandwidth limit in bytes per second.
+  pub read_bandwidth: MaxOr<BytesPerSecond>,
+  /// Write bandwidth limit in bytes per second.
+  pub write_bandwidth: MaxOr<BytesPerSecond>,
+  /// Read I/O operations per second.
+  pub read_iops: MaxOr<OperationsPerSecond>,
+  /// Write I/O operations per second.
+  pub write_iops: MaxOr<OperationsPerSecond>,
 }
 
 impl IoDeviceMax {
@@ -91,14 +99,56 @@ impl IoDeviceMax {
   pub const fn write_iops(&self) -> MaxOr<OperationsPerSecond> { self.write_iops }
 }
 
+const READ_BANDWIDTH: &str = "rbps";
+const WRITE_BANDWIDTH: &str = "wbps";
+const READ_IOPS: &str = "riops";
+const WRITE_IOPS: &str = "wiops";
 cgroup_value! { fields IoDeviceMax, {
-  read_bandwidth: required ParseBandwidth => "rbps",
-  write_bandwidth: required ParseBandwidth => "wbps",
-  read_iops: required ParseIops => "riops",
-  write_iops: required ParseIops => "wiops",
+  read_bandwidth: required ParseBandwidth => READ_BANDWIDTH,
+  write_bandwidth: required ParseBandwidth => WRITE_BANDWIDTH,
+  read_iops: required ParseIops => READ_IOPS,
+  write_iops: required ParseIops => WRITE_IOPS,
 } }
 
 cgroup_value! { device_rows IoMax, devices: IoDeviceMax, Device::parse_lines }
+
+/// A partial update to one device's `io.max` limits.
+///
+/// Omit a field to retain its kernel value. Use [`MaxOr::Max`] to clear a
+/// limit. Supply at least one field when using [`IoMaxCommand::Update`].
+/// See [Linux I/O limits](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct IoMaxUpdate {
+  /// New read bandwidth in bytes per second, if supplied.
+  pub read_bandwidth: Option<MaxOr<BytesPerSecond>>,
+  /// New write bandwidth in bytes per second, if supplied.
+  pub write_bandwidth: Option<MaxOr<BytesPerSecond>>,
+  /// New read operations per second, if supplied.
+  pub read_iops: Option<MaxOr<OperationsPerSecond>>,
+  /// New write operations per second, if supplied.
+  pub write_iops: Option<MaxOr<OperationsPerSecond>>,
+}
+
+impl IoMaxUpdate {
+  fn encode_command(&self, device: Device) -> Result<String, crate::error::EncodeError> {
+    let mut command = device.to_string();
+    let start = command.len();
+    for (key, field) in [(READ_BANDWIDTH, self.read_bandwidth), (WRITE_BANDWIDTH, self.write_bandwidth)] {
+      if let Some(value) = field {
+        crate::parse::encode_pair::<ParseBandwidth, _>(&mut command, " ", '=', key, &value)?;
+      }
+    }
+    for (key, field) in [(READ_IOPS, self.read_iops), (WRITE_IOPS, self.write_iops)] {
+      if let Some(value) = field {
+        crate::parse::encode_pair::<ParseIops, _>(&mut command, " ", '=', key, &value)?;
+      }
+    }
+    if command.len() == start {
+      return Err(crate::error::EncodeError { field: "limits" });
+    }
+    Ok(command)
+  }
+}
 
 pub(super) struct ParseBandwidth;
 
@@ -124,8 +174,28 @@ impl EncodeCgroup<ParseIops> for OperationsPerSecond {
   fn encode_token(&self, output: &mut String) -> Option<()> { write!(output, "{}", self.get::<hertz>()).ok() }
 }
 
+/// A complete or partial limit change for one device in `io.max`.
+#[derive(Debug, Clone, Copy)]
+pub enum IoMaxCommand<'a> {
+  /// Replaces all four limits for the device.
+  Set(Device, &'a IoDeviceMax),
+  /// Changes only the supplied limits for the device.
+  Update(Device, &'a IoMaxUpdate),
+}
+
+crate::v2::interface::cgroup_file!(write IoMax, 'a => IoMaxCommand<'a>, |command| match command {
+  | IoMaxCommand::Set(device, limits) => {
+    let mut command = device.to_string();
+    limits.encode_fields(&mut command, " ", '=')?;
+    Ok(command)
+  },
+  | IoMaxCommand::Update(device, update) => update.encode_command(device),
+});
+
 #[cfg(test)]
 mod tests {
+  use assertables::{assert_err, assert_ok};
+
   use super::*;
   use crate::parse::tests::{
     Cases,
@@ -140,6 +210,18 @@ mod tests {
         iops.map(|value| value.map_or(MaxOr::Max, |value| MaxOr::Value(OperationsPerSecond::new::<hertz>(value))));
       Self { read_bandwidth, write_bandwidth, read_iops, write_iops }
     }
+  }
+
+  #[test]
+  fn encodes_only_the_requested_device_limits() {
+    let device = Device::new(8, 16);
+    let update = IoMaxUpdate {
+      read_bandwidth: Some(MaxOr::Max),
+      write_iops: Some(MaxOr::Value(OperationsPerSecond::new::<hertz>(50))),
+      ..IoMaxUpdate::default()
+    };
+    assert_eq!(assert_ok!(update.encode_command(device)), "8:16 rbps=max wiops=50");
+    assert_eq!(assert_err!(IoMaxUpdate::default().encode_command(device)).field(), "limits");
   }
 
   #[test]

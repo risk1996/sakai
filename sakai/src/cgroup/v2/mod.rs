@@ -1,8 +1,24 @@
-//! Typed snapshots and read-only handles for the unified cgroup v2 hierarchy.
+//! Typed snapshots and handles for the unified cgroup v2 hierarchy.
 //!
-//! Snapshots implement string parsing on any OS. Handles and borrowed
-//! controller readers are available on Linux. See the
+//! Snapshots implement string parsing on any OS. Typed file I/O is available on Linux. See the
 //! [Linux cgroup v2 guide](https://docs.kernel.org/admin-guide/cgroup-v2.html).
+//!
+//! Each interface declares a [`CgroupFile`] and a mode from [`mode`]. The
+//! mode describes the operations exposed by Sakai. For example, pressure
+//! snapshots are readable, and installing a PSI trigger would require a
+//! separate descriptor-scoped API.
+//!
+//! On Linux, the typed operations are also available directly on the handle.
+//!
+//! ```no_run
+//! #[cfg(target_os = "linux")]
+//! fn restore_limit(
+//!   cgroup: &sakai::Cgroup,
+//!   limit: &sakai::v2::cpu::CpuMax,
+//! ) -> Result<(), sakai::Error> {
+//!   cgroup.write_value::<sakai::v2::cpu::CpuMax>(limit)
+//! }
+//! ```
 //!
 //! # Interface-read errors
 //!
@@ -16,9 +32,23 @@
 //!   operation, diagnostic path, and source error.
 //!
 //! Reader-specific availability and root exemptions are documented on each interface.
+//!
+//! # Interface-write errors
+//!
+//! Setters encode a full command before opening the interface. They report
+//! [`crate::Error::Encode`] for values that cannot be expressed as a command,
+//! [`crate::Error::FileMissing`] for an absent interface, and
+//! [`crate::Error::NotSupported`] when the kernel reports an unsupported
+//! operation. Other failures, including kernel rejection, permission errors,
+//! a read-only mount, and incomplete writes, return [`crate::Error::Operation`].
+//! A successful write means the kernel accepted the command. A separate read
+//! can observe kernel normalization or a concurrent change.
 
 #[cfg(target_os = "linux")]
 pub use handle::Cgroup;
+pub use interface::{
+  AccessMode, CgroupFile, FileCommand, FileValue, ReadMode, ReadableFile, WritableFile, WriteMode, mode,
+};
 #[cfg(target_os = "linux")]
 pub use path::{CgroupPath, CgroupPathError};
 
@@ -39,5 +69,6 @@ pub mod rdma;
 mod file;
 #[cfg(target_os = "linux")]
 mod handle;
+pub(crate) mod interface;
 #[cfg(target_os = "linux")]
 mod path;

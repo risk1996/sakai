@@ -48,7 +48,7 @@ impl RdmaReader {
   /// InterfaceMissingError; invalid contents raise CgroupParseError; other read
   /// failures retain the interface path and operating-system cause.
   fn current(&self, py: Python<'_>) -> PyResult<RdmaCurrent> {
-    PythonError::read(py, &self.owner, |owner| owner.rdma().current()).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<CoreRdmaCurrent>).map(Into::into)
   }
 
   /// Read configured per-device HCA limits as MaxOr[Count] resource counts.
@@ -58,7 +58,7 @@ impl RdmaReader {
   /// rdma.max raises InterfaceMissingError; invalid contents raise CgroupParseError;
   /// other failures retain the interface path and operating-system cause.
   fn max(&self, py: Python<'_>) -> PyResult<RdmaMax> {
-    PythonError::read(py, &self.owner, |owner| owner.rdma().max()).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<CoreRdmaMax>).map(Into::into)
   }
 
   /// Read per-device hierarchical resource high-water marks, in counts.
@@ -69,7 +69,7 @@ impl RdmaReader {
   /// invalid contents raise CgroupParseError; other failures preserve their cause.
   /// See https://github.com/torvalds/linux/blob/v7.2/kernel/cgroup/rdma.c.
   fn peak(&self, py: Python<'_>) -> PyResult<RdmaCurrent> {
-    PythonError::read(py, &self.owner, |owner| owner.rdma().peak()).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::rdma::RdmaPeak>).map(Into::into)
   }
 
   /// Read hierarchical per-resource allocation-failure event counts.
@@ -80,7 +80,7 @@ impl RdmaReader {
   /// CgroupParseError; other failures preserve the operating-system cause.
   /// See https://github.com/torvalds/linux/blob/v7.2/kernel/cgroup/rdma.c.
   fn events(&self, py: Python<'_>) -> PyResult<RdmaEvents> {
-    PythonError::read(py, &self.owner, |owner| owner.rdma().events()).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<CoreRdmaEvents>).map(Into::into)
   }
 
   /// Read local per-resource allocation-failure event counts.
@@ -92,7 +92,7 @@ impl RdmaReader {
   /// raise CgroupParseError; other failures preserve the operating-system cause.
   /// See https://github.com/torvalds/linux/blob/v7.2/kernel/cgroup/rdma.c.
   fn events_local(&self, py: Python<'_>) -> PyResult<RdmaEvents> {
-    PythonError::read(py, &self.owner, |owner| owner.rdma().events_local()).map(Into::into)
+    PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::rdma::RdmaEventsLocal>).map(Into::into)
   }
 }
 

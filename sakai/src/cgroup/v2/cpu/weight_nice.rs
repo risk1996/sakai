@@ -23,11 +23,13 @@ use crate::{
 )]
 pub struct Nice(i8);
 
+crate::v2::interface::cgroup_file!(Nice, "cpu.weight.nice", ReadWrite);
+
 impl Nice {
   /// The cgroup v2 `cpu.weight.nice` interface filename.
   ///
   /// See [Linux `cpu.weight.nice` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
-  pub const FILE_NAME: &'static str = "cpu.weight.nice";
+  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
 }
 
 cgroup_value! { token Nice: ParseNice, "nice" }

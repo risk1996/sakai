@@ -17,11 +17,13 @@ pub struct MemoryEvents {
   counts: MemoryEventCounts,
 }
 
+crate::v2::interface::cgroup_file!(MemoryEvents, "memory.events", Read);
+
 impl MemoryEvents {
   /// The cgroup v2 `memory.events` interface filename.
   ///
   /// See [Linux `memory.events` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-  pub const FILE_NAME: &'static str = "memory.events";
+  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
 
   /// Encodes the stored counters as canonical cgroup text.
   ///
@@ -54,11 +56,13 @@ pub struct MemoryEventsLocal {
   counts: MemoryEventCounts,
 }
 
+crate::v2::interface::cgroup_file!(MemoryEventsLocal, "memory.events.local", Read);
+
 impl MemoryEventsLocal {
   /// The cgroup v2 `memory.events.local` interface filename.
   ///
   /// See [Linux `memory.events.local` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-  pub const FILE_NAME: &'static str = "memory.events.local";
+  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
 
   /// Encodes the stored counters as canonical cgroup text.
   ///

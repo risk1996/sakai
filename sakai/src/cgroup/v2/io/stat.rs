@@ -27,11 +27,13 @@ pub struct IoStat {
   devices: BTreeMap<Device, IoDeviceStat>,
 }
 
+crate::v2::interface::cgroup_file!(IoStat, "io.stat", Read);
+
 impl IoStat {
   /// The cgroup v2 `io.stat` interface filename.
   ///
   /// See [Linux `io.stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
-  pub const FILE_NAME: &'static str = "io.stat";
+  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
 
   /// Returns the byte and operation counters for each reported device.
   ///

@@ -21,11 +21,13 @@ pub struct MemoryStat {
   counts: BTreeMap<MemoryStatCountField, Count>,
 }
 
+crate::v2::interface::cgroup_file!(MemoryStat, "memory.stat", Read);
+
 impl MemoryStat {
   /// The cgroup v2 `memory.stat` interface filename.
   ///
   /// See [Linux `memory.stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-  pub const FILE_NAME: &'static str = "memory.stat";
+  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
 
   /// Returns memory amounts measured in bytes.
   ///

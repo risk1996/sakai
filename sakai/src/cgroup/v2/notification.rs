@@ -91,7 +91,7 @@ pub enum ConfigurationInterface {
   #[strum(serialize = "cgroup.type")]
   CgroupType,
   /// Controllers enabled for child cgroups.
-  /// See [`super::core::Core::subtree_control`] for the snapshot reader.
+  /// See [`super::core::CgroupSubtreeControl`] for the snapshot reader.
   #[strum(serialize = "cgroup.subtree_control")]
   CgroupSubtreeControl,
   /// CPU quota and period in microseconds, including an unlimited quota.
