@@ -125,7 +125,7 @@ pub type FractionalEventRate = uom::si::f64::Frequency;
 ///
 /// See [Linux CPU bandwidth units](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
 #[nutype(
-  validate(with = NonZeroTime::validate_time, error = NonZeroTimeError),
+  validate(predicate = |time: &Time| time.get::<nanosecond>() != 0),
   derive(Debug, Clone, Copy, PartialEq, Eq, Hash, AsRef),
 )]
 #[non_exhaustive]
@@ -135,14 +135,6 @@ const _: () = {
   assert!(align_of::<NonZeroTime>() == align_of::<Time>());
 };
 
-/// An invalid [`NonZeroTime`] duration.
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[non_exhaustive]
-pub enum NonZeroTimeError {
-  /// The duration is zero.
-  #[error("NonZeroTime failed the predicate test.")]
-  PredicateViolated,
-}
 impl NonZeroTime {
   /// Calculates an event rate over this nonzero elapsed duration.
   ///
@@ -166,10 +158,6 @@ impl NonZeroTime {
     let elapsed = uom::si::f64::Time::new::<nanosecond>(self.as_ref().get::<nanosecond>() as f64);
     FractionalEventRate::new::<uom::si::frequency::hertz>(count.value as f64 / elapsed.get::<uom::si::time::second>())
   }
-
-  fn validate_time(time: &Time) -> Result<(), NonZeroTimeError> {
-    if time.get::<nanosecond>() == 0 { Err(NonZeroTimeError::PredicateViolated) } else { Ok(()) }
-  }
 }
 
 /// A dimensionless ratio stored as an `f64` to preserve fractional values.
@@ -184,7 +172,7 @@ mod tests {
   use uom::si::time::{microsecond, millisecond, nanosecond, second};
 
   use super::*;
-  use crate::parse::{ParseCgroup, ParsePercent};
+  use crate::parse::{ParseCgroup, Percent};
 
   #[test]
   fn count_has_dimensionally_typed_rates() {
@@ -216,7 +204,7 @@ mod tests {
   #[test]
   fn fractional_ratios_preserve_kernel_percentages() {
     for (input, expected) in [("12.34", 0.1234), ("0.01", 0.0001), ("100.00", 1.0)] {
-      let parsed = assert_ok!(<Ratio as ParseCgroup<ParsePercent>>::parse_cgroup(input));
+      let parsed = assert_ok!(<Ratio as ParseCgroup<Percent>>::parse_cgroup(input));
       assert_in_delta!(parsed.get::<uom::si::ratio::ratio>(), expected, f64::EPSILON);
     }
   }

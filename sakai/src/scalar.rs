@@ -5,7 +5,7 @@ use std::{any::type_name, fmt, marker::PhantomData, str::FromStr};
 use crate::{
   error::{EncodeError, ParseError, ParseValueError},
   limit::MaxOr,
-  parse::{EncodeCgroup, ParseBoolean, ParseBytes, ParseCgroup, ParseCount, ParseMicroseconds, ParsePercent, Parser},
+  parse::{EncodeCgroup, ParseBoolean, ParseBytes, ParseCgroup, ParseCount, ParseMicroseconds, Parser, Percent},
   unit::{Bytes, Count, Ratio, Time},
   v2::{CgroupFile, ReadableFile, WritableFile},
 };
@@ -59,7 +59,7 @@ impl ScalarValue for Time {
   type Encoding = ParseMicroseconds;
 }
 impl ScalarValue for Ratio {
-  type Encoding = ParsePercent;
+  type Encoding = Percent;
 }
 impl<T: ScalarValue> ScalarValue for MaxOr<T> {
   type Encoding = T::Encoding;

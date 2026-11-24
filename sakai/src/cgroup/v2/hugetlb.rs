@@ -36,7 +36,10 @@ use crate::{
 ///
 /// See [Linux HugeTLB filenames](https://github.com/torvalds/linux/blob/v5.15/mm/hugetlb_cgroup.c).
 #[nutype(
-  validate(with = PageSize::validate_size, error = PageSizeError),
+  validate(predicate = |size: &Bytes| {
+    let bytes = size.get::<byte>();
+    bytes >= PageSize::KIBIBYTE && bytes.is_power_of_two()
+  }),
   derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, AsRef)
 )]
 #[non_exhaustive]
@@ -49,21 +52,7 @@ impl PageSize {
   const KIBIBYTE: u64 = 1 << 10;
   const MEBIBYTE: u64 = 1 << 20;
 
-  fn validate_size(size: &Bytes) -> Result<(), PageSizeError> {
-    let bytes = size.get::<byte>();
-    if bytes >= Self::KIBIBYTE && bytes.is_power_of_two() { Ok(()) } else { Err(PageSizeError::PredicateViolated) }
-  }
-
   fn file_name(&self, suffix: &str) -> String { format!("hugetlb.{self}.{suffix}") }
-}
-
-/// An invalid HugeTLB [`PageSize`].
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[non_exhaustive]
-pub enum PageSizeError {
-  /// The size in bytes is below 1 KiB or is not a power of two.
-  #[error("PageSize failed the predicate test.")]
-  PredicateViolated,
 }
 
 impl fmt::Display for PageSize {

@@ -9,7 +9,7 @@ use super::{
 };
 use crate::{
   error::ParseValueError,
-  parse::{EncodeCgroup, ParseBoolean, ParseCgroup, ParseMicroseconds, ParsePercent, cgroup_value},
+  parse::{EncodeCgroup, ParseBoolean, ParseCgroup, ParseMicroseconds, Percent, cgroup_value},
   unit::{BytesPerSecond, OperationsPerSecond, Ratio, Time},
   v2::interface::cgroup_file,
 };
@@ -102,20 +102,18 @@ pub struct IoDeviceCostQos {
 cgroup_value! { fields IoDeviceCostQos, {
   enabled: required ParseBoolean => "enable",
   control: required IoCostControl => "ctrl",
-  read_percentile: required ParsePercent => "rpct",
+  read_percentile: required Percent => "rpct",
   read_latency: required ParseMicroseconds => "rlat",
-  write_percentile: required ParsePercent => "wpct",
+  write_percentile: required Percent => "wpct",
   write_latency: required ParseMicroseconds => "wlat",
-  min_scaling: required ParseScalingPercent => "min",
-  max_scaling: required ParseScalingPercent => "max",
+  min_scaling: required ScalingPercent => "min",
+  max_scaling: required ScalingPercent => "max",
 } }
-
-struct ParseScalingPercent;
 
 #[nutype(validate(finite, greater_or_equal = 1.0, less_or_equal = 10_000.0), derive(Debug, Clone, Copy))]
 struct ScalingPercent(f64);
 
-impl ParseCgroup<ParseScalingPercent> for Ratio {
+impl ParseCgroup<ScalingPercent> for Ratio {
   type Error = ParseValueError;
 
   fn parse_cgroup(value: &str) -> Result<Self, Self::Error> {
@@ -186,7 +184,7 @@ impl EncodeCgroup<IoCostModelName> for IoCostModelName {
   fn encode_token(&self, output: &mut String) -> Option<()> { write!(output, "{self}").ok() }
 }
 
-impl EncodeCgroup<ParseScalingPercent> for Ratio {
+impl EncodeCgroup<ScalingPercent> for Ratio {
   fn encode_token(&self, output: &mut String) -> Option<()> {
     crate::parse::encode_percent(self, output, |value| ScalingPercent::try_new(value).is_ok())
   }

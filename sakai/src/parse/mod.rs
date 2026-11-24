@@ -209,14 +209,11 @@ impl EncodeCgroup<ParseBytes> for Bytes {
   fn encode_token(&self, output: &mut String) -> Option<()> { write!(output, "{}", self.get::<byte>()).ok() }
 }
 
-/// A zero-sized marker for cgroup percentages encoded as decimal percents.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) struct ParsePercent;
-
+/// A cgroup percentage encoded as a decimal from 0 through 100.
 #[nutype(validate(finite, greater_or_equal = 0.0, less_or_equal = 100.0), derive(Debug, Clone, Copy, PartialEq))]
-struct Percent(f64);
+pub(crate) struct Percent(f64);
 
-impl ParseCgroup<ParsePercent> for Ratio {
+impl ParseCgroup<Percent> for Ratio {
   type Error = ParseValueError;
 
   fn parse_cgroup(value: &str) -> Result<Self, Self::Error> {
@@ -226,7 +223,7 @@ impl ParseCgroup<ParsePercent> for Ratio {
   }
 }
 
-impl EncodeCgroup<ParsePercent> for Ratio {
+impl EncodeCgroup<Percent> for Ratio {
   fn encode_token(&self, output: &mut String) -> Option<()> {
     encode_percent(self, output, |value| Percent::try_new(value).is_ok())
   }
