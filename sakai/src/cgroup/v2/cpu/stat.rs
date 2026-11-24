@@ -4,6 +4,7 @@ use crate::{
   error::{ParseError, ParseValueError},
   parse::{EncodeCgroup, KeyedFields, ParseCgroup, ParseMicroseconds, cgroup_value},
   unit::{Count, Time},
+  v2::interface::cgroup_file,
 };
 
 /// CPU usage counters from a cgroup's `cpu.stat` file.
@@ -26,13 +27,29 @@ pub struct CpuStat {
   pub bandwidth: Option<CpuBandwidthStat>,
 }
 
-crate::v2::interface::cgroup_file!(CpuStat, "cpu.stat", Read);
+cgroup_file!(CpuStat, "cpu.stat", Read);
 
 impl CpuStat {
   /// The cgroup v2 `cpu.stat` interface filename.
   ///
   /// See [Linux `cpu.stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
   pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
+}
+
+impl CpuStat {
+  /// Encodes the stored snapshot as canonical cgroup text.
+  ///
+  /// # Errors
+  ///
+  /// Returns an error if a field cannot be represented exactly.
+  pub fn encode_cgroup(&self) -> Result<String, crate::error::EncodeError> {
+    let mut output = self.time.encode_cgroup()?;
+    if let Some(bandwidth) = &self.bandwidth {
+      output.push('\n');
+      output.push_str(&bandwidth.encode_cgroup()?);
+    }
+    Ok(output)
+  }
 }
 
 /// Runqueue throttling in `cpu.stat.local`, including ancestor bandwidth limits.
@@ -53,33 +70,16 @@ pub struct CpuStatLocal {
   pub throttled: Option<Time>,
 }
 
-crate::v2::interface::cgroup_file!(CpuStatLocal, "cpu.stat.local", Read);
+cgroup_value! { keyed CpuStatLocal, CpuStatField::label, {
+  throttled: optional ParseMicroseconds => CpuStatField::ThrottledUsec,
+} }
+cgroup_file!(CpuStatLocal, "cpu.stat.local", Read);
 
 impl CpuStatLocal {
   /// The cgroup v2 `cpu.stat.local` interface filename.
   ///
   /// See [Linux `cpu.stat.local` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
   pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-}
-
-cgroup_value! { keyed CpuStatLocal, CpuStatField::label, {
-  throttled: optional ParseMicroseconds => CpuStatField::ThrottledUsec,
-} }
-
-impl CpuStat {
-  /// Encodes the stored snapshot as canonical cgroup text.
-  ///
-  /// # Errors
-  ///
-  /// Returns an error if a field cannot be represented exactly.
-  pub fn encode_cgroup(&self) -> Result<String, crate::error::EncodeError> {
-    let mut output = self.time.encode_cgroup()?;
-    if let Some(bandwidth) = &self.bandwidth {
-      output.push('\n');
-      output.push_str(&bandwidth.encode_cgroup()?);
-    }
-    Ok(output)
-  }
 }
 
 /// CPU usage times from a cgroup's `cpu.stat` file.
@@ -112,6 +112,14 @@ pub struct CpuTimeStat {
   /// `None` means the counter was not reported, rather than measured zero.
   pub force_idle: Option<Time>,
 }
+
+cgroup_value! { keyed CpuTimeStat, CpuStatField::label, {
+  usage: required ParseMicroseconds => CpuStatField::UsageUsec,
+  user: required ParseMicroseconds => CpuStatField::UserUsec,
+  system: required ParseMicroseconds => CpuStatField::SystemUsec,
+  nice: optional ParseMicroseconds => CpuStatField::NiceUsec,
+  force_idle: optional ParseMicroseconds => CpuStatField::ForceIdleUsec,
+} }
 
 /// CPU bandwidth counters from a cgroup's `cpu.stat` file.
 ///
@@ -148,6 +156,13 @@ pub struct CpuBandwidthStat {
   pub burst: Option<CpuBurstStat>,
 }
 
+cgroup_value! { keyed CpuBandwidthStat, CpuStatField::label, {
+  burst: group CpuBurstStat => CpuStatField::bandwidth_burst_fields(),
+  nr_periods: required ParseBandwidthCount => CpuStatField::NrPeriods,
+  nr_throttled: required ParseBandwidthCount => CpuStatField::NrThrottled,
+  throttled: required ParseMicroseconds => CpuStatField::ThrottledUsec,
+} }
+
 /// CPU burst counters from a cgroup's `cpu.stat` file.
 ///
 /// See [Linux `cpu.stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
@@ -165,6 +180,11 @@ pub struct CpuBurstStat {
   /// See [Linux CPU interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
   pub burst: Time,
 }
+
+cgroup_value! { keyed CpuBurstStat, CpuStatField::label, {
+  nr_bursts: required ParseBandwidthCount => CpuStatField::NrBursts,
+  burst: required ParseMicroseconds => CpuStatField::BurstUsec,
+} }
 
 struct ParseBandwidthCount;
 
@@ -203,26 +223,6 @@ impl FromStr for CpuStat {
     })
   }
 }
-
-cgroup_value! { keyed CpuTimeStat, CpuStatField::label, {
-  usage: required ParseMicroseconds => CpuStatField::UsageUsec,
-  user: required ParseMicroseconds => CpuStatField::UserUsec,
-  system: required ParseMicroseconds => CpuStatField::SystemUsec,
-  nice: optional ParseMicroseconds => CpuStatField::NiceUsec,
-  force_idle: optional ParseMicroseconds => CpuStatField::ForceIdleUsec,
-} }
-
-cgroup_value! { keyed CpuBandwidthStat, CpuStatField::label, {
-  burst: group CpuBurstStat => CpuStatField::bandwidth_burst_fields(),
-  nr_periods: required ParseBandwidthCount => CpuStatField::NrPeriods,
-  nr_throttled: required ParseBandwidthCount => CpuStatField::NrThrottled,
-  throttled: required ParseMicroseconds => CpuStatField::ThrottledUsec,
-} }
-
-cgroup_value! { keyed CpuBurstStat, CpuStatField::label, {
-  nr_bursts: required ParseBandwidthCount => CpuStatField::NrBursts,
-  burst: required ParseMicroseconds => CpuStatField::BurstUsec,
-} }
 
 #[derive(
   Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, strum::EnumString, strum::Display, strum::IntoStaticStr,

@@ -4,6 +4,7 @@ use crate::{
   error::{ParseError, ParseValueError},
   parse::{ParseCount, cgroup_value},
   unit::Count,
+  v2::interface::cgroup_file,
 };
 
 /// A point-in-time snapshot of hierarchical `memory.events` counters.
@@ -21,7 +22,7 @@ pub struct MemoryEvents {
   pub counts: MemoryEventCounts,
 }
 
-crate::v2::interface::cgroup_file!(MemoryEvents, "memory.events", Read);
+cgroup_file!(MemoryEvents, "memory.events", Read);
 
 impl MemoryEvents {
   /// The cgroup v2 `memory.events` interface filename.
@@ -58,7 +59,7 @@ pub struct MemoryEventsLocal {
   pub counts: MemoryEventCounts,
 }
 
-crate::v2::interface::cgroup_file!(MemoryEventsLocal, "memory.events.local", Read);
+cgroup_file!(MemoryEventsLocal, "memory.events.local", Read);
 
 impl MemoryEventsLocal {
   /// The cgroup v2 `memory.events.local` interface filename.

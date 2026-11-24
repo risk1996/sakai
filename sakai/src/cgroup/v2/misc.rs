@@ -12,6 +12,7 @@ use crate::{
   limit::MaxOr,
   parse::{KeyedFields, ParseCgroup, ParseCount, cgroup_value},
   unit::Count,
+  v2::interface::cgroup_file,
 };
 
 /// Machine-wide available miscellaneous resource capacities.
@@ -29,14 +30,13 @@ pub struct MiscCapacity {
   pub resources: BTreeMap<String, Count>,
 }
 
-crate::v2::interface::cgroup_file!(MiscCapacity, "misc.capacity", Read);
+cgroup_value! { map MiscCapacity, resources: ParseCount, "value" }
+cgroup_file!(MiscCapacity, "misc.capacity", Read);
 
 impl MiscCapacity {
   /// The cgroup v2 `misc.capacity` interface filename.
   pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
 }
-
-cgroup_value! { map MiscCapacity, resources: ParseCount, "value" }
 
 /// Current hierarchical miscellaneous resource usage.
 ///
@@ -55,14 +55,13 @@ pub struct MiscCurrent {
   pub resources: BTreeMap<String, Count>,
 }
 
-crate::v2::interface::cgroup_file!(MiscCurrent, "misc.current", Read);
+cgroup_value! { map MiscCurrent, resources: ParseCount, "value" }
+cgroup_file!(MiscCurrent, "misc.current", Read);
 
 impl MiscCurrent {
   /// The cgroup v2 `misc.current` interface filename.
   pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
 }
-
-cgroup_value! { map MiscCurrent, resources: ParseCount, "value" }
 
 /// Historical maximum hierarchical miscellaneous resource usage.
 ///
@@ -82,14 +81,13 @@ pub struct MiscPeak {
   pub resources: BTreeMap<String, Count>,
 }
 
-crate::v2::interface::cgroup_file!(MiscPeak, "misc.peak", Read);
+cgroup_value! { map MiscPeak, resources: ParseCount, "value" }
+cgroup_file!(MiscPeak, "misc.peak", Read);
 
 impl MiscPeak {
   /// The cgroup v2 `misc.peak` interface filename.
   pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
 }
-
-cgroup_value! { map MiscPeak, resources: ParseCount, "value" }
 
 /// Configured hierarchical miscellaneous resource limits.
 ///
@@ -108,15 +106,17 @@ pub struct MiscMax {
   pub resources: BTreeMap<String, MaxOr<Count>>,
 }
 
-crate::v2::interface::cgroup_file!(file MiscMax, "misc.max", ReadWrite);
-crate::v2::interface::cgroup_file!(read MiscMax => MiscMax);
+cgroup_value! { map MiscMax, resources: ParseCount, "value" }
+cgroup_file!(file MiscMax, "misc.max", ReadWrite);
+cgroup_file!(read MiscMax => MiscMax);
+cgroup_file!(write MiscMax, 'a => (&'a str, MaxOr<Count>), |(resource, value)| {
+  super::interface::encode_keyed::<ParseCount>(resource, "resource", &value, "limit")
+});
 
 impl MiscMax {
   /// The cgroup v2 `misc.max` interface filename.
   pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
 }
-
-cgroup_value! { map MiscMax, resources: ParseCount, "value" }
 
 /// Resource limit or platform-capacity failures from `misc.events` or `misc.events.local`.
 ///
@@ -141,7 +141,11 @@ pub struct MiscEvents {
   pub resources: BTreeMap<String, Count>,
 }
 
-crate::v2::interface::cgroup_file!(MiscEvents, "misc.events", Read);
+cgroup_file!(MiscEvents, "misc.events", Read);
+cgroup_file!(alias
+  /// Local miscellaneous resource events.
+  MiscEventsLocal, MiscEvents::LOCAL_FILE_NAME, Read, MiscEvents
+);
 
 impl MiscEvents {
   /// Hierarchical miscellaneous-resource event interface filename.
@@ -149,8 +153,6 @@ impl MiscEvents {
   /// Local miscellaneous-resource event interface filename.
   pub const LOCAL_FILE_NAME: &'static str = "misc.events.local";
 }
-
-const EVENT_SUFFIX: &str = ".max";
 
 impl MiscEvents {
   /// Encodes the stored value as canonical cgroup text.
@@ -171,6 +173,8 @@ impl MiscEvents {
   }
 }
 
+const EVENT_SUFFIX: &str = ".max";
+
 impl FromStr for MiscEvents {
   type Err = ParseError<ParseValueError>;
 
@@ -189,15 +193,6 @@ impl FromStr for MiscEvents {
     Ok(Self { resources })
   }
 }
-
-crate::v2::interface::cgroup_file!(alias
-  /// Local miscellaneous resource events.
-  MiscEventsLocal, MiscEvents::LOCAL_FILE_NAME, Read, MiscEvents
-);
-
-crate::v2::interface::cgroup_file!(write MiscMax, 'a => (&'a str, MaxOr<Count>), |(resource, value)| {
-  super::interface::encode_keyed::<ParseCount>(resource, "resource", &value, "limit")
-});
 
 #[cfg(test)]
 mod tests {

@@ -8,6 +8,7 @@ use crate::{
   limit::MaxOr,
   parse::{EncodeCgroup, ParseCgroup, cgroup_value},
   unit::{BytesPerSecond, OperationsPerSecond},
+  v2::interface::cgroup_file,
 };
 
 /// A configuration snapshot of per-device `io.max` limits.
@@ -45,8 +46,17 @@ pub struct IoMax {
   pub devices: BTreeMap<Device, IoDeviceMax>,
 }
 
-crate::v2::interface::cgroup_file!(file IoMax, "io.max", ReadWrite);
-crate::v2::interface::cgroup_file!(read IoMax => IoMax);
+cgroup_value! { device_rows IoMax, devices: IoDeviceMax, Device::parse_lines }
+cgroup_file!(file IoMax, "io.max", ReadWrite);
+cgroup_file!(read IoMax => IoMax);
+cgroup_file!(write IoMax, 'a => IoMaxCommand<'a>, |command| match command {
+  | IoMaxCommand::Set(device, limits) => {
+    let mut command = device.to_string();
+    limits.encode_fields(&mut command, " ", '=')?;
+    Ok(command)
+  },
+  | IoMaxCommand::Update(device, update) => update.encode_command(device),
+});
 
 impl IoMax {
   /// The cgroup v2 `io.max` interface filename.
@@ -79,10 +89,6 @@ pub struct IoDeviceMax {
   pub write_iops: MaxOr<OperationsPerSecond>,
 }
 
-const READ_BANDWIDTH: &str = "rbps";
-const WRITE_BANDWIDTH: &str = "wbps";
-const READ_IOPS: &str = "riops";
-const WRITE_IOPS: &str = "wiops";
 cgroup_value! { fields IoDeviceMax, {
   read_bandwidth: required ParseBandwidth => READ_BANDWIDTH,
   write_bandwidth: required ParseBandwidth => WRITE_BANDWIDTH,
@@ -90,7 +96,10 @@ cgroup_value! { fields IoDeviceMax, {
   write_iops: required ParseIops => WRITE_IOPS,
 } }
 
-cgroup_value! { device_rows IoMax, devices: IoDeviceMax, Device::parse_lines }
+const READ_BANDWIDTH: &str = "rbps";
+const WRITE_BANDWIDTH: &str = "wbps";
+const READ_IOPS: &str = "riops";
+const WRITE_IOPS: &str = "wiops";
 
 /// A partial update to one device's `io.max` limits.
 ///
@@ -164,15 +173,6 @@ pub enum IoMaxCommand<'a> {
   /// Changes only the supplied limits for the device.
   Update(Device, &'a IoMaxUpdate),
 }
-
-crate::v2::interface::cgroup_file!(write IoMax, 'a => IoMaxCommand<'a>, |command| match command {
-  | IoMaxCommand::Set(device, limits) => {
-    let mut command = device.to_string();
-    limits.encode_fields(&mut command, " ", '=')?;
-    Ok(command)
-  },
-  | IoMaxCommand::Update(device, update) => update.encode_command(device),
-});
 
 #[cfg(test)]
 mod tests {

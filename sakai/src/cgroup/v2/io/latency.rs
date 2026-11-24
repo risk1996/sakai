@@ -5,6 +5,7 @@ use crate::{
   error::{ParseError, ParseValueError},
   parse::ParseNonZeroMicroseconds,
   unit::NonZeroTime,
+  v2::interface::cgroup_file,
 };
 
 /// A configuration snapshot of per-device `io.latency` protection targets.
@@ -27,8 +28,9 @@ pub struct IoLatency {
   pub devices: BTreeMap<Device, NonZeroTime>,
 }
 
-crate::v2::interface::cgroup_file!(file IoLatency, "io.latency", ReadWrite);
-crate::v2::interface::cgroup_file!(read IoLatency => IoLatency);
+cgroup_file!(file IoLatency, "io.latency", ReadWrite);
+cgroup_file!(read IoLatency => IoLatency);
+cgroup_file!(write IoLatency, 'a => (Device, Option<NonZeroTime>), encode_target);
 
 impl IoLatency {
   /// The cgroup v2 `io.latency` interface filename.
@@ -36,8 +38,6 @@ impl IoLatency {
   /// See [Linux `io.latency` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
 }
-
-const TARGET: &str = "target";
 
 impl IoLatency {
   /// Encodes the stored value as canonical cgroup text.
@@ -58,6 +58,8 @@ impl IoLatency {
   }
 }
 
+const TARGET: &str = "target";
+
 impl FromStr for IoLatency {
   type Err = ParseError<ParseValueError>;
 
@@ -67,8 +69,6 @@ impl FromStr for IoLatency {
     })
   }
 }
-
-crate::v2::interface::cgroup_file!(write IoLatency, 'a => (Device, Option<NonZeroTime>), encode_target);
 
 fn encode_target((device, target): (Device, Option<NonZeroTime>)) -> Result<String, crate::error::EncodeError> {
   let mut command = device.to_string();

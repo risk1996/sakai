@@ -9,6 +9,7 @@ use crate::{
   error::{ParseError, ParseValueError},
   parse::{EncodeCgroup, ParseBytes, ParseCgroup, ParseCount, ParsePages},
   unit::{Bytes, Count, Pages},
+  v2::interface::cgroup_file,
 };
 
 /// A point-in-time, per-node breakdown for this cgroup and its descendants.
@@ -38,9 +39,7 @@ pub struct MemoryNumaStat {
   pub counts: BTreeMap<MemoryStatCountField, BTreeMap<u32, Count>>,
 }
 
-const NODE_PREFIX: char = 'N';
-
-crate::v2::interface::cgroup_file!(MemoryNumaStat, "memory.numa_stat", Read);
+cgroup_file!(MemoryNumaStat, "memory.numa_stat", Read);
 
 impl MemoryNumaStat {
   /// The cgroup v2 `memory.numa_stat` interface filename.
@@ -121,6 +120,8 @@ impl MemoryNumaStat {
     Ok(output)
   }
 }
+
+const NODE_PREFIX: char = 'N';
 
 impl FromStr for MemoryNumaStat {
   type Err = ParseError<ParseValueError>;

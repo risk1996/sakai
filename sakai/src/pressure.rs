@@ -4,6 +4,7 @@ use crate::{
   error::{ParseError, ParseValueError},
   parse::{KeyedFields, ParseMicroseconds, ParsePercent, cgroup_value},
   unit::{Ratio, Time},
+  v2::interface::cgroup_file,
 };
 
 /// Pressure stall information from a cgroup `*.pressure` file.
@@ -49,6 +50,37 @@ impl Pressure {
   pub const MEMORY_FILE_NAME: &'static str = "memory.pressure";
 }
 
+impl Pressure {
+  /// Encodes the stored snapshot as canonical cgroup text.
+  ///
+  /// # Errors
+  ///
+  /// Returns an error if a field cannot be represented exactly.
+  pub fn encode_cgroup(&self) -> Result<String, crate::error::EncodeError> {
+    let mut output = PressureKind::Some.to_string();
+    self.some.encode_fields(&mut output, " ", '=')?;
+    if let Some(full) = &self.full {
+      output.push('\n');
+      output.push_str(&PressureKind::Full.to_string());
+      full.encode_fields(&mut output, " ", '=')?;
+    }
+    Ok(output)
+  }
+}
+
+impl FromStr for Pressure {
+  type Err = ParseError<ParseValueError>;
+
+  fn from_str(contents: &str) -> Result<Self, Self::Err> {
+    let lines = parse_lines(contents)?;
+
+    Ok(Self {
+      some: lines.get(&PressureKind::Some).copied().ok_or_else(|| ParseError::missing(contents, "some"))?,
+      full: lines.get(&PressureKind::Full).copied(),
+    })
+  }
+}
+
 /// A set of rolling averages and cumulative stall time from PSI.
 ///
 /// Averages are exponentially weighted percentages parsed as [`Ratio`]; a
@@ -84,37 +116,6 @@ cgroup_value! { fields PressureLine, {
   total: required ParseMicroseconds => PressureField::Total,
 } }
 
-impl Pressure {
-  /// Encodes the stored snapshot as canonical cgroup text.
-  ///
-  /// # Errors
-  ///
-  /// Returns an error if a field cannot be represented exactly.
-  pub fn encode_cgroup(&self) -> Result<String, crate::error::EncodeError> {
-    let mut output = PressureKind::Some.to_string();
-    self.some.encode_fields(&mut output, " ", '=')?;
-    if let Some(full) = &self.full {
-      output.push('\n');
-      output.push_str(&PressureKind::Full.to_string());
-      full.encode_fields(&mut output, " ", '=')?;
-    }
-    Ok(output)
-  }
-}
-
-impl FromStr for Pressure {
-  type Err = ParseError<ParseValueError>;
-
-  fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    let lines = parse_lines(contents)?;
-
-    Ok(Self {
-      some: lines.get(&PressureKind::Some).copied().ok_or_else(|| ParseError::missing(contents, "some"))?,
-      full: lines.get(&PressureKind::Full).copied(),
-    })
-  }
-}
-
 /// Interrupt pressure from the cgroup v2 `irq.pressure` interface.
 ///
 /// Unlike CPU, memory, and I/O pressure, interrupt pressure reports only a
@@ -136,6 +137,8 @@ pub struct IrqPressure {
   /// See the [Linux interrupt PSI implementation](https://github.com/torvalds/linux/blob/v6.1/kernel/sched/psi.c).
   pub full: PressureLine,
 }
+
+cgroup_file!(IrqPressure, IrqPressure::FILE_NAME, Read);
 
 impl IrqPressure {
   /// The cgroup v2 `irq.pressure` interface filename.
@@ -296,5 +299,3 @@ mod tests {
     ]);
   }
 }
-
-crate::v2::interface::cgroup_file!(IrqPressure, IrqPressure::FILE_NAME, Read);

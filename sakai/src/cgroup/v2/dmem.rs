@@ -10,6 +10,7 @@ use crate::{
   limit::MaxOr,
   parse::{ParseBytes, cgroup_value},
   unit::Bytes,
+  v2::interface::cgroup_file,
 };
 
 /// A snapshot of registered device-memory region capacities in bytes.
@@ -27,14 +28,13 @@ pub struct DmemCapacity {
   pub regions: BTreeMap<String, Bytes>,
 }
 
-crate::v2::interface::cgroup_file!(DmemCapacity, "dmem.capacity", Read);
+cgroup_value! { map DmemCapacity, regions: ParseBytes, "bytes" }
+cgroup_file!(DmemCapacity, "dmem.capacity", Read);
 
 impl DmemCapacity {
   /// The root-only cgroup v2 capacity interface filename, since Linux 6.14.
   pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
 }
-
-cgroup_value! { map DmemCapacity, regions: ParseBytes, "bytes" }
 
 /// A volatile snapshot of device-memory usage for this cgroup and descendants.
 ///
@@ -55,14 +55,13 @@ pub struct DmemCurrent {
   pub regions: BTreeMap<String, MaxOr<Bytes>>,
 }
 
-crate::v2::interface::cgroup_file!(DmemCurrent, "dmem.current", Read);
+cgroup_value! { map DmemCurrent, regions: ParseBytes, "bytes" }
+cgroup_file!(DmemCurrent, "dmem.current", Read);
 
 impl DmemCurrent {
   /// The cgroup v2 current device-memory usage filename, since Linux 6.14.
   pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
 }
-
-cgroup_value! { map DmemCurrent, regions: ParseBytes, "bytes" }
 
 /// Historical maximum device-memory usage by region for this cgroup and descendants.
 ///
@@ -82,14 +81,13 @@ pub struct DmemPeak {
   pub regions: BTreeMap<String, MaxOr<Bytes>>,
 }
 
-crate::v2::interface::cgroup_file!(DmemPeak, "dmem.peak", Read);
+cgroup_value! { map DmemPeak, regions: ParseBytes, "bytes" }
+cgroup_file!(DmemPeak, "dmem.peak", Read);
 
 impl DmemPeak {
   /// The non-root historical device-memory peak filename, since Linux 7.3.
   pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
 }
-
-cgroup_value! { map DmemPeak, regions: ParseBytes, "bytes" }
 
 /// A configuration snapshot from `dmem.max`, `dmem.min`, or `dmem.low`.
 ///
@@ -111,6 +109,25 @@ pub struct DmemLimits {
   pub regions: BTreeMap<String, MaxOr<Bytes>>,
 }
 
+cgroup_value! { map DmemLimits, regions: ParseBytes, "bytes" }
+cgroup_file!(alias
+  /// Device-memory min by region.
+  DmemMin, DmemLimits::MIN_FILE_NAME, ReadWrite, DmemLimits
+);
+cgroup_file!(write DmemMin, 'a => (&'a str, MaxOr<Bytes>), encode_region);
+
+cgroup_file!(alias
+  /// Device-memory low by region.
+  DmemLow, DmemLimits::LOW_FILE_NAME, ReadWrite, DmemLimits
+);
+cgroup_file!(write DmemLow, 'a => (&'a str, MaxOr<Bytes>), encode_region);
+
+cgroup_file!(alias
+  /// Device-memory max by region.
+  DmemMax, DmemLimits::MAX_FILE_NAME, ReadWrite, DmemLimits
+);
+cgroup_file!(write DmemMax, 'a => (&'a str, MaxOr<Bytes>), encode_region);
+
 impl DmemLimits {
   /// The non-root best-effort eviction protection filename, since Linux 6.14.
   pub const LOW_FILE_NAME: &'static str = "dmem.low";
@@ -119,29 +136,6 @@ impl DmemLimits {
   /// The non-root hard eviction protection filename, since Linux 6.14.
   pub const MIN_FILE_NAME: &'static str = "dmem.min";
 }
-
-cgroup_value! { map DmemLimits, regions: ParseBytes, "bytes" }
-
-crate::v2::interface::cgroup_file!(alias
-  /// Device-memory min by region.
-  DmemMin, DmemLimits::MIN_FILE_NAME, ReadWrite, DmemLimits
-);
-
-crate::v2::interface::cgroup_file!(write DmemMin, 'a => (&'a str, MaxOr<Bytes>), encode_region);
-
-crate::v2::interface::cgroup_file!(alias
-  /// Device-memory low by region.
-  DmemLow, DmemLimits::LOW_FILE_NAME, ReadWrite, DmemLimits
-);
-
-crate::v2::interface::cgroup_file!(write DmemLow, 'a => (&'a str, MaxOr<Bytes>), encode_region);
-
-crate::v2::interface::cgroup_file!(alias
-  /// Device-memory max by region.
-  DmemMax, DmemLimits::MAX_FILE_NAME, ReadWrite, DmemLimits
-);
-
-crate::v2::interface::cgroup_file!(write DmemMax, 'a => (&'a str, MaxOr<Bytes>), encode_region);
 
 fn encode_region((region, value): (&str, MaxOr<Bytes>)) -> Result<String, crate::error::EncodeError> {
   super::interface::encode_keyed::<ParseBytes>(region, "region", &value, "bytes")

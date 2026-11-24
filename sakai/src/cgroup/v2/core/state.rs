@@ -5,6 +5,7 @@ use crate::{
   error::{ParseError, ParseValueError},
   parse::{KeyedFields, ParseBoolean, ParseCgroup, ParseCount, ParseMicroseconds, cgroup_value},
   unit::{Count, Time},
+  v2::interface::cgroup_file,
 };
 
 /// A point-in-time snapshot of `cgroup.events` lifecycle state.
@@ -30,7 +31,11 @@ pub struct CgroupEvents {
   pub frozen: Option<bool>,
 }
 
-crate::v2::interface::cgroup_file!(CgroupEvents, "cgroup.events", Read);
+cgroup_value! { keyed CgroupEvents, |_| "value", {
+  populated: required ParseBoolean => "populated",
+  frozen: optional ParseBoolean => "frozen",
+} }
+cgroup_file!(CgroupEvents, "cgroup.events", Read);
 
 impl CgroupEvents {
   /// The cgroup v2 `cgroup.events` interface filename.
@@ -38,11 +43,6 @@ impl CgroupEvents {
   /// See [Linux `cgroup.events` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
   pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
 }
-
-cgroup_value! { keyed CgroupEvents, |_| "value", {
-  populated: required ParseBoolean => "populated",
-  frozen: optional ParseBoolean => "frozen",
-} }
 
 /// A stored snapshot of local freezer accounting from `cgroup.stat.local`.
 ///
@@ -64,16 +64,15 @@ pub struct CgroupStatLocal {
   pub frozen_time: Time,
 }
 
-crate::v2::interface::cgroup_file!(CgroupStatLocal, "cgroup.stat.local", Read);
+cgroup_value! { keyed CgroupStatLocal, |_| "value", {
+  frozen_time: required ParseMicroseconds => "frozen_usec",
+} }
+cgroup_file!(CgroupStatLocal, "cgroup.stat.local", Read);
 
 impl CgroupStatLocal {
   /// The non-root local freezer statistics filename, since Linux 6.18.
   pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
 }
-
-cgroup_value! { keyed CgroupStatLocal, |_| "value", {
-  frozen_time: required ParseMicroseconds => "frozen_usec",
-} }
 
 /// A point-in-time snapshot of `cgroup.stat` object counts.
 ///
@@ -112,7 +111,7 @@ pub struct CgroupStat {
   pub dying_subsystems: HashMap<CgroupController, Count>,
 }
 
-crate::v2::interface::cgroup_file!(CgroupStat, "cgroup.stat", Read);
+cgroup_file!(CgroupStat, "cgroup.stat", Read);
 
 impl CgroupStat {
   /// The cgroup v2 `cgroup.stat` interface filename.
@@ -138,11 +137,6 @@ impl CgroupStat {
   }
 }
 
-const DESCENDANTS: &str = "nr_descendants";
-const DYING_DESCENDANTS: &str = "nr_dying_descendants";
-const SUBSYSTEMS: &str = "nr_subsys_";
-const DYING_SUBSYSTEMS: &str = "nr_dying_subsys_";
-
 impl CgroupStat {
   /// Encodes the stored value as canonical cgroup text.
   ///
@@ -164,6 +158,11 @@ impl CgroupStat {
     Ok(output)
   }
 }
+
+const DESCENDANTS: &str = "nr_descendants";
+const DYING_DESCENDANTS: &str = "nr_dying_descendants";
+const SUBSYSTEMS: &str = "nr_subsys_";
+const DYING_SUBSYSTEMS: &str = "nr_dying_subsys_";
 
 impl FromStr for CgroupStat {
   type Err = ParseError<ParseValueError>;

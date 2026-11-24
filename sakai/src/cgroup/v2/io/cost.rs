@@ -11,6 +11,7 @@ use crate::{
   error::ParseValueError,
   parse::{EncodeCgroup, ParseBoolean, ParseCgroup, ParseMicroseconds, ParsePercent, cgroup_value},
   unit::{BytesPerSecond, OperationsPerSecond, Ratio, Time},
+  v2::interface::cgroup_file,
 };
 
 /// Who controls one device's I/O cost parameters.
@@ -69,8 +70,10 @@ pub struct IoCostQos {
   pub devices: BTreeMap<Device, IoDeviceCostQos>,
 }
 
-crate::v2::interface::cgroup_file!(file IoCostQos, "io.cost.qos", ReadWrite);
-crate::v2::interface::cgroup_file!(read IoCostQos => IoCostQos);
+cgroup_value! { device_rows IoCostQos, devices: IoDeviceCostQos, Device::parse_lines }
+cgroup_file!(file IoCostQos, "io.cost.qos", ReadWrite);
+cgroup_file!(read IoCostQos => IoCostQos);
+cgroup_file!(write IoCostQos, 'a => (Device, &'a IoDeviceCostQos), encode_qos);
 
 impl IoCostQos {
   /// The root-only I/O cost QoS interface filename.
@@ -112,8 +115,6 @@ cgroup_value! { fields IoDeviceCostQos, {
   max_scaling: required ParseScalingPercent => "max",
 } }
 
-cgroup_value! { device_rows IoCostQos, devices: IoDeviceCostQos, Device::parse_lines }
-
 struct ParseScalingPercent;
 
 #[nutype(validate(finite, greater_or_equal = 1.0, less_or_equal = 10_000.0), derive(Debug, Clone, Copy))]
@@ -142,8 +143,10 @@ pub struct IoCostModel {
   pub devices: BTreeMap<Device, IoDeviceCostModel>,
 }
 
-crate::v2::interface::cgroup_file!(file IoCostModel, "io.cost.model", ReadWrite);
-crate::v2::interface::cgroup_file!(read IoCostModel => IoCostModel);
+cgroup_value! { device_rows IoCostModel, devices: IoDeviceCostModel, Device::parse_lines }
+cgroup_file!(file IoCostModel, "io.cost.model", ReadWrite);
+cgroup_file!(read IoCostModel => IoCostModel);
+cgroup_file!(write IoCostModel, 'a => (Device, &'a IoDeviceCostModel), encode_model);
 
 impl IoCostModel {
   /// The root-only I/O cost model interface filename.
@@ -185,8 +188,6 @@ cgroup_value! { fields IoDeviceCostModel, {
   write_random_iops: required ParseIops => "wrandiops",
 } }
 
-cgroup_value! { device_rows IoCostModel, devices: IoDeviceCostModel, Device::parse_lines }
-
 impl EncodeCgroup<IoCostControl> for IoCostControl {
   fn encode_token(&self, output: &mut String) -> Option<()> { write!(output, "{self}").ok() }
 }
@@ -201,8 +202,6 @@ impl EncodeCgroup<ParseScalingPercent> for Ratio {
   }
 }
 
-crate::v2::interface::cgroup_file!(write IoCostQos, 'a => (Device, &'a IoDeviceCostQos), encode_qos);
-
 fn encode_qos((device, value): (Device, &IoDeviceCostQos)) -> Result<String, crate::error::EncodeError> {
   match value.control {
     | IoCostControl::Auto => Ok(format!("{device} enable={} ctrl=auto", u8::from(value.enabled))),
@@ -212,8 +211,6 @@ fn encode_qos((device, value): (Device, &IoDeviceCostQos)) -> Result<String, cra
     },
   }
 }
-
-crate::v2::interface::cgroup_file!(write IoCostModel, 'a => (Device, &'a IoDeviceCostModel), encode_model);
 
 fn encode_model((device, value): (Device, &IoDeviceCostModel)) -> Result<String, crate::error::EncodeError> {
   match value.control {

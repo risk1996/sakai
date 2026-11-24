@@ -3,6 +3,7 @@ use std::str::FromStr;
 use crate::{
   error::{ParseError, ParseValueError},
   parse::cgroup_value,
+  v2::interface::cgroup_file,
 };
 
 /// A snapshot of the request-priority policy in `io.prio.class`.
@@ -33,8 +34,7 @@ pub enum IoPriorityClass {
 }
 
 cgroup_value! { display IoPriorityClass }
-
-crate::v2::interface::cgroup_file!(IoPriorityClass, "io.prio.class", ReadWrite);
+cgroup_file!(IoPriorityClass, "io.prio.class", ReadWrite);
 
 impl IoPriorityClass {
   /// The I/O priority policy interface filename, also present at the root.

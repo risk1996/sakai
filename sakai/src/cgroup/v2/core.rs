@@ -91,8 +91,11 @@ pub enum CgroupType {
 }
 
 cgroup_value! { display CgroupType }
-
-crate::v2::interface::cgroup_file!(file CgroupType, "cgroup.type", ReadWrite);
+cgroup_file!(file CgroupType, "cgroup.type", ReadWrite);
+cgroup_file!(read CgroupType => CgroupType, |contents: &str| {
+  Ok(contents.trim().parse().map_err(|source| CgroupTypeParseError { raw: contents.into(), source })?)
+});
+cgroup_file!(write CgroupType, 'a => (), |()| CgroupType::Threaded.encode_cgroup());
 
 impl CgroupType {
   /// The cgroup v2 `cgroup.type` interface filename.
@@ -159,6 +162,16 @@ pub enum CgroupController {
   Other(String),
 }
 
+cgroup_file!(alias
+  /// The cgroup's available controllers.
+  CgroupControllers, CgroupController::CONTROLLERS_FILE_NAME, Read, Vec<CgroupController>, decode_controllers
+);
+cgroup_file!(alias
+  /// Controllers enabled for children and their enable or disable actions.
+  CgroupSubtreeControl, CgroupController::SUBTREE_CONTROL_FILE_NAME, ReadWrite, Vec<CgroupController>, decode_controllers
+);
+cgroup_file!(write CgroupSubtreeControl, 'a => &'a [SubtreeControl], encode_subtree_control);
+
 impl CgroupController {
   /// The cgroup v2 `cgroup.controllers` interface filename.
   ///
@@ -190,6 +203,17 @@ pub enum MigrationTarget {
   Caller,
 }
 
+cgroup_file!(alias
+  /// Process membership and migration.
+  CgroupProcs, TaskId::PROCS_FILE_NAME, ReadWrite, Vec<TaskId>, decode_tasks
+);
+cgroup_file!(write CgroupProcs, 'a => MigrationTarget, MigrationTarget::command);
+cgroup_file!(alias
+  /// Thread membership and migration.
+  CgroupThreads, TaskId::THREADS_FILE_NAME, ReadWrite, Vec<TaskId>, decode_tasks
+);
+cgroup_file!(write CgroupThreads, 'a => MigrationTarget, MigrationTarget::command);
+
 impl MigrationTarget {
   fn command(self) -> Result<String, crate::error::EncodeError> {
     match self {
@@ -199,21 +223,6 @@ impl MigrationTarget {
     }
   }
 }
-
-cgroup_file!(read CgroupType => CgroupType, |contents: &str| {
-  Ok(contents.trim().parse().map_err(|source| CgroupTypeParseError { raw: contents.into(), source })?)
-});
-cgroup_file!(write CgroupType, 'a => (), |()| CgroupType::Threaded.encode_cgroup());
-
-cgroup_file!(alias
-  /// The cgroup's available controllers.
-  CgroupControllers, CgroupController::CONTROLLERS_FILE_NAME, Read, Vec<CgroupController>, decode_controllers
-);
-cgroup_file!(alias
-  /// Controllers enabled for children and their enable or disable actions.
-  CgroupSubtreeControl, CgroupController::SUBTREE_CONTROL_FILE_NAME, ReadWrite, Vec<CgroupController>, decode_controllers
-);
-cgroup_file!(write CgroupSubtreeControl, 'a => &'a [SubtreeControl], encode_subtree_control);
 
 fn decode_controllers(contents: &str) -> Result<Vec<CgroupController>, Box<dyn std::error::Error + Send + Sync>> {
   Ok(contents.split_ascii_whitespace().map(CgroupController::from).collect())
@@ -239,17 +248,6 @@ fn encode_subtree_control(actions: &[SubtreeControl]) -> Result<String, crate::e
   }
   Ok(command)
 }
-
-cgroup_file!(alias
-  /// Process membership and migration.
-  CgroupProcs, TaskId::PROCS_FILE_NAME, ReadWrite, Vec<TaskId>, decode_tasks
-);
-cgroup_file!(alias
-  /// Thread membership and migration.
-  CgroupThreads, TaskId::THREADS_FILE_NAME, ReadWrite, Vec<TaskId>, decode_tasks
-);
-cgroup_file!(write CgroupProcs, 'a => MigrationTarget, MigrationTarget::command);
-cgroup_file!(write CgroupThreads, 'a => MigrationTarget, MigrationTarget::command);
 
 fn decode_tasks(contents: &str) -> Result<Vec<TaskId>, Box<dyn std::error::Error + Send + Sync>> {
   Ok(TaskId::parse_list(contents)?)

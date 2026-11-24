@@ -16,6 +16,7 @@ use crate::{
   Pressure,
   error::{ParseError, ParseValueError},
   parse::{KeyedFields, cgroup_value},
+  v2::interface::cgroup_file,
 };
 
 mod cost;
@@ -24,6 +25,11 @@ mod max;
 mod priority;
 mod stat;
 mod weight;
+
+cgroup_file!(alias
+  /// I/O pressure snapshots.
+  IoPressure, Pressure::IO_FILE_NAME, Read, Pressure
+);
 
 /// A block-device identifier keyed by the kernel's decimal `major:minor` pair.
 ///
@@ -43,8 +49,6 @@ pub struct Device {
 }
 
 cgroup_value! { display Device }
-
-const DEVICE_SEPARATOR: char = ':';
 
 impl Device {
   /// Constructs a device key without resolving it to a currently present device.
@@ -89,6 +93,8 @@ impl Device {
   }
 }
 
+const DEVICE_SEPARATOR: char = ':';
+
 impl std::fmt::Display for Device {
   fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(formatter, "{}{DEVICE_SEPARATOR}{}", self.major, self.minor)
@@ -125,8 +131,3 @@ mod tests {
     ]);
   }
 }
-
-crate::v2::interface::cgroup_file!(alias
-  /// I/O pressure snapshots.
-  IoPressure, Pressure::IO_FILE_NAME, Read, Pressure
-);

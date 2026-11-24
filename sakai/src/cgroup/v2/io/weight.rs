@@ -6,6 +6,7 @@ use super::Device;
 use crate::{
   error::{ParseError, ParseValueError},
   parse::{KeyedFields, ParseCgroup},
+  v2::interface::cgroup_file,
 };
 
 /// An I/O scheduling weight in the kernel-supported range, 1 through 10,000.
@@ -41,8 +42,15 @@ pub struct IoWeight {
   pub devices: BTreeMap<Device, Weight>,
 }
 
-crate::v2::interface::cgroup_file!(file IoWeight, "io.weight", ReadWrite);
-crate::v2::interface::cgroup_file!(read IoWeight => IoWeight);
+cgroup_file!(file IoWeight, "io.weight", ReadWrite);
+cgroup_file!(read IoWeight => IoWeight);
+cgroup_file!(write IoWeight, 'a => IoWeightCommand, |command| Ok(match command {
+  | IoWeightCommand::Default(weight) => format!("{DEFAULT_WEIGHT_KEY} {}", weight.as_ref()),
+  | IoWeightCommand::Device(device, weight) => {
+    let value = weight.map_or_else(|| DEFAULT_WEIGHT_KEY.to_owned(), |weight| weight.as_ref().to_string());
+    format!("{device} {value}")
+  },
+}));
 
 impl IoWeight {
   /// The cgroup v2 `io.weight` interface filename.
@@ -50,8 +58,6 @@ impl IoWeight {
   /// See [Linux `io.weight` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
 }
-
-const DEFAULT_WEIGHT_KEY: &str = "default";
 
 impl IoWeight {
   /// Encodes the stored value as canonical cgroup text.
@@ -69,6 +75,8 @@ impl IoWeight {
     Ok(output)
   }
 }
+
+const DEFAULT_WEIGHT_KEY: &str = "default";
 
 impl FromStr for IoWeight {
   type Err = ParseError<ParseValueError>;
@@ -104,14 +112,6 @@ pub enum IoWeightCommand {
   /// Sets an override or clears it with `None`.
   Device(Device, Option<Weight>),
 }
-
-crate::v2::interface::cgroup_file!(write IoWeight, 'a => IoWeightCommand, |command| Ok(match command {
-  | IoWeightCommand::Default(weight) => format!("{DEFAULT_WEIGHT_KEY} {}", weight.as_ref()),
-  | IoWeightCommand::Device(device, weight) => {
-    let value = weight.map_or_else(|| DEFAULT_WEIGHT_KEY.to_owned(), |weight| weight.as_ref().to_string());
-    format!("{device} {value}")
-  },
-}));
 
 #[cfg(test)]
 mod tests {

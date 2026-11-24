@@ -21,6 +21,8 @@ use crate::{
 #[non_exhaustive]
 pub struct TaskId(i32);
 
+cgroup_value! { token TaskId: TaskId, TASK_ID }
+
 impl TaskId {
   /// The process list interface filename.
   pub const PROCS_FILE_NAME: &'static str = "cgroup.procs";
@@ -49,8 +51,6 @@ impl ParseCgroup<Self> for TaskId {
 impl EncodeCgroup<Self> for TaskId {
   fn encode_token(&self, output: &mut String) -> Option<()> { write!(output, "{}", self.as_ref()).ok() }
 }
-
-cgroup_value! { token TaskId: TaskId, TASK_ID }
 
 #[cfg(test)]
 mod tests {

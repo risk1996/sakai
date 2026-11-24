@@ -12,6 +12,7 @@ use crate::{
   pressure::Pressure,
   scalar::{Scalar, interface},
   unit::Bytes,
+  v2::interface::cgroup_file,
 };
 
 mod events;
@@ -131,7 +132,7 @@ pub type MemoryLow = Scalar<MaxOr<Bytes>, interface::MemoryLow>;
 /// See [Linux `memory.min` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
 pub type MemoryMin = Scalar<MaxOr<Bytes>, interface::MemoryMin>;
 
-crate::v2::interface::cgroup_file!(alias
+cgroup_file!(alias
   /// Memory pressure snapshots.
   MemoryPressure, Pressure::MEMORY_FILE_NAME, Read, Pressure
 );

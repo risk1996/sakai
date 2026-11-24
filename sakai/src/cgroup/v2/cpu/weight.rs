@@ -5,6 +5,7 @@ use nutype::nutype;
 use crate::{
   error::ParseValueError,
   parse::{EncodeCgroup, ParseCgroup, cgroup_value},
+  v2::interface::cgroup_file,
 };
 
 /// A relative CPU scheduling weight from 1 through 10,000, with a default of 100.
@@ -63,8 +64,10 @@ pub enum CpuWeight {
   Shares(Weight),
 }
 
-crate::v2::interface::cgroup_file!(file CpuWeight, "cpu.weight", ReadWrite);
-crate::v2::interface::cgroup_file!(read CpuWeight => CpuWeight);
+cgroup_value! { token CpuWeight: ParseCpuWeight, "weight" }
+cgroup_file!(file CpuWeight, "cpu.weight", ReadWrite);
+cgroup_file!(read CpuWeight => CpuWeight);
+cgroup_file!(write CpuWeight, 'a => Weight, |weight| CpuWeight::Shares(weight).encode_cgroup());
 
 impl CpuWeight {
   /// The cgroup v2 `cpu.weight` interface filename.
@@ -72,8 +75,6 @@ impl CpuWeight {
   /// See [Linux `cpu.weight` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
   pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
 }
-
-cgroup_value! { token CpuWeight: ParseCpuWeight, "weight" }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct ParseCpuWeight;
@@ -98,8 +99,6 @@ impl EncodeCgroup<ParseCpuWeight> for CpuWeight {
     write!(output, "{value}").ok()
   }
 }
-
-crate::v2::interface::cgroup_file!(write CpuWeight, 'a => Weight, |weight| CpuWeight::Shares(weight).encode_cgroup());
 
 #[cfg(test)]
 mod tests {

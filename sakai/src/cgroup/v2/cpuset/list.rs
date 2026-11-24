@@ -1,6 +1,10 @@
 use std::{fmt::Write, ops::RangeInclusive, str::FromStr};
 
-use crate::error::{ParseError, ParseValueError};
+use super::placement_command;
+use crate::{
+  error::{ParseError, ParseValueError},
+  v2::interface::cgroup_file,
+};
 
 const RANGE_SEPARATOR: char = '-';
 const LIST_SEPARATOR: char = ',';
@@ -54,6 +58,10 @@ macro_rules! placement_list {
       /// of ranges, not the number of IDs.
       pub ranges: Vec<RangeInclusive<u32>>,
     }
+
+    cgroup_file!(file $name, $name::$configured, ReadWrite);
+    cgroup_file!(read $name => $name);
+    cgroup_file!(write $name, 'a => &'a $name, |value: &$name| placement_command(value.encode_cgroup()));
 
     impl $name {
       /// The configured placement interface filename; absent at the hierarchy root.

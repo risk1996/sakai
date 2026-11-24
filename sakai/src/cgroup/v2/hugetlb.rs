@@ -13,6 +13,7 @@ use crate::{
   limit::MaxOr,
   parse::{EncodeCgroup, KeyedFields, ParseBytes, ParseCgroup, ParseCount, cgroup_value},
   unit::{Bytes, Count},
+  v2::interface::cgroup_file,
 };
 
 /// A HugeTLB page size expressed in bytes, independent of the system page size.
@@ -41,15 +42,6 @@ use crate::{
 #[non_exhaustive]
 pub struct PageSize(Bytes);
 
-/// An invalid HugeTLB [`PageSize`].
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[non_exhaustive]
-pub enum PageSizeError {
-  /// The size in bytes is below 1 KiB or is not a power of two.
-  #[error("PageSize failed the predicate test.")]
-  PredicateViolated,
-}
-
 cgroup_value! { display PageSize }
 
 impl PageSize {
@@ -63,6 +55,15 @@ impl PageSize {
   }
 
   fn file_name(&self, suffix: &str) -> String { format!("hugetlb.{self}.{suffix}") }
+}
+
+/// An invalid HugeTLB [`PageSize`].
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
+pub enum PageSizeError {
+  /// The size in bytes is below 1 KiB or is not a power of two.
+  #[error("PageSize failed the predicate test.")]
+  PredicateViolated,
 }
 
 impl fmt::Display for PageSize {
@@ -104,7 +105,7 @@ impl FromStr for PageSize {
 }
 
 macro_rules! scalar {
-  ($name:ident, $value:ty, $suffix:literal, $field:literal, $documentation:literal) => {
+  ($name:ident, $value:ty, $suffix:literal, $field:literal, $mode:ident, $documentation:literal $(, $encode:expr)?) => {
     #[doc = $documentation]
     ///
     /// Values can change between reads.
@@ -117,29 +118,42 @@ macro_rules! scalar {
       pub value: $value,
     }
 
+    cgroup_value! { scalar $name, value: ParseBytes, $field }
+    cgroup_file!(file $name, $name::FILE_NAME_TEMPLATE, $mode, PageSize => |size: &PageSize| size.file_name($name::SUFFIX));
+    cgroup_file!(read $name => $name);
+    $(cgroup_file!(write $name, 'a => $value, $encode);)?
+
     impl $name {
       /// Interface filename template; replace `<hugepagesize>` with a [`PageSize`] label.
       pub const FILE_NAME_TEMPLATE: &'static str = concat!("hugetlb.<hugepagesize>.", $suffix);
       const SUFFIX: &'static str = $suffix;
     }
-
-    cgroup_value! { scalar $name, value: ParseBytes, $field }
   };
 }
 
-scalar!(HugetlbCurrent, Bytes, "current", "current", "Hierarchical faulted HugeTLB usage in bytes for one page size.");
+scalar!(
+  HugetlbCurrent,
+  Bytes,
+  "current",
+  "current",
+  Read,
+  "Hierarchical faulted HugeTLB usage in bytes for one page size."
+);
 scalar!(
   HugetlbMax,
   MaxOr<Bytes>,
   "max",
   "max",
-  "Configured HugeTLB fault limit in bytes, or `max`; ancestors can still constrain usage."
+  ReadWrite,
+  "Configured HugeTLB fault limit in bytes, or `max`; ancestors can still constrain usage.",
+  |value| HugetlbMax { value }.encode_cgroup()
 );
 scalar!(
   HugetlbReservedCurrent,
   Bytes,
   "rsvd.current",
   "current",
+  Read,
   "Hierarchical reservation-accounting usage in bytes: reserved pages plus faulted pages without prior reservations, \
    not only unused reservations."
 );
@@ -148,8 +162,10 @@ scalar!(
   MaxOr<Bytes>,
   "rsvd.max",
   "max",
+  ReadWrite,
   "Configured reservation-accounting limit in bytes, or `max`; ancestors can still constrain reservations and \
-   unreserved faults."
+   unreserved faults.",
+  |value| HugetlbReservedMax { value }.encode_cgroup()
 );
 
 /// Cumulative HugeTLB allocation-failure event counts for one page size.
@@ -167,6 +183,11 @@ pub struct HugetlbEvents {
   pub max: Count,
 }
 
+cgroup_value! { keyed HugetlbEvents, |_| "value", { max: required ParseCount => "max" } }
+cgroup_file!(file HugetlbEvents, HugetlbEvents::FILE_NAME_TEMPLATE, Read,
+  PageSize => |size: &PageSize| size.file_name(HugetlbEvents::SUFFIX));
+cgroup_file!(read HugetlbEvents => HugetlbEvents);
+
 impl HugetlbEvents {
   /// Hierarchical event filename template, parameterized by [`PageSize`].
   pub const FILE_NAME_TEMPLATE: &'static str = "hugetlb.<hugepagesize>.events";
@@ -175,8 +196,6 @@ impl HugetlbEvents {
   const LOCAL_SUFFIX: &'static str = "events.local";
   const SUFFIX: &'static str = "events";
 }
-
-cgroup_value! { keyed HugetlbEvents, |_| "value", { max: required ParseCount => "max" } }
 
 /// Hierarchical in-use HugeTLB bytes and NUMA distribution for one page size.
 ///
@@ -195,13 +214,15 @@ pub struct HugetlbNumaStat {
   pub nodes: BTreeMap<u32, Bytes>,
 }
 
+cgroup_file!(file HugetlbNumaStat, HugetlbNumaStat::FILE_NAME_TEMPLATE, Read,
+  PageSize => |size: &PageSize| size.file_name(HugetlbNumaStat::SUFFIX));
+cgroup_file!(read HugetlbNumaStat => HugetlbNumaStat);
+
 impl HugetlbNumaStat {
   /// NUMA filename template, parameterized by [`PageSize`].
   pub const FILE_NAME_TEMPLATE: &'static str = "hugetlb.<hugepagesize>.numa_stat";
   const SUFFIX: &'static str = "numa_stat";
 }
-
-const NUMA_TOTAL: &str = "total";
 
 impl HugetlbNumaStat {
   /// Encodes the stored value as canonical cgroup text.
@@ -219,6 +240,8 @@ impl HugetlbNumaStat {
     Ok(output)
   }
 }
+
+const NUMA_TOTAL: &str = "total";
 
 impl FromStr for HugetlbNumaStat {
   type Err = ParseError<ParseValueError>;
@@ -243,41 +266,13 @@ impl FromStr for HugetlbNumaStat {
   }
 }
 
-crate::v2::interface::cgroup_file!(file HugetlbCurrent, HugetlbCurrent::FILE_NAME_TEMPLATE, Read,
-  PageSize => |size: &PageSize| size.file_name(HugetlbCurrent::SUFFIX));
-crate::v2::interface::cgroup_file!(read HugetlbCurrent => HugetlbCurrent);
-
-crate::v2::interface::cgroup_file!(file HugetlbMax, HugetlbMax::FILE_NAME_TEMPLATE, ReadWrite,
-  PageSize => |size: &PageSize| size.file_name(HugetlbMax::SUFFIX));
-crate::v2::interface::cgroup_file!(read HugetlbMax => HugetlbMax);
-
-crate::v2::interface::cgroup_file!(write HugetlbMax, 'a => MaxOr<Bytes>, |value| HugetlbMax { value }.encode_cgroup());
-
-crate::v2::interface::cgroup_file!(file HugetlbReservedCurrent, HugetlbReservedCurrent::FILE_NAME_TEMPLATE, Read,
-  PageSize => |size: &PageSize| size.file_name(HugetlbReservedCurrent::SUFFIX));
-crate::v2::interface::cgroup_file!(read HugetlbReservedCurrent => HugetlbReservedCurrent);
-
-crate::v2::interface::cgroup_file!(file HugetlbReservedMax, HugetlbReservedMax::FILE_NAME_TEMPLATE, ReadWrite,
-  PageSize => |size: &PageSize| size.file_name(HugetlbReservedMax::SUFFIX));
-crate::v2::interface::cgroup_file!(read HugetlbReservedMax => HugetlbReservedMax);
-
-crate::v2::interface::cgroup_file!(write HugetlbReservedMax, 'a => MaxOr<Bytes>, |value| HugetlbReservedMax { value }.encode_cgroup());
-
-crate::v2::interface::cgroup_file!(file HugetlbEvents, HugetlbEvents::FILE_NAME_TEMPLATE, Read,
-  PageSize => |size: &PageSize| size.file_name(HugetlbEvents::SUFFIX));
-crate::v2::interface::cgroup_file!(read HugetlbEvents => HugetlbEvents);
-
-crate::v2::interface::cgroup_file!(file HugetlbNumaStat, HugetlbNumaStat::FILE_NAME_TEMPLATE, Read,
-  PageSize => |size: &PageSize| size.file_name(HugetlbNumaStat::SUFFIX));
-crate::v2::interface::cgroup_file!(read HugetlbNumaStat => HugetlbNumaStat);
-
-crate::v2::interface::cgroup_file!(file HugetlbEventsLocal, HugetlbEvents::LOCAL_FILE_NAME_TEMPLATE, Read,
-  PageSize => |size: &PageSize| size.file_name(HugetlbEvents::LOCAL_SUFFIX));
-crate::v2::interface::cgroup_file!(read HugetlbEventsLocal => HugetlbEvents);
-
 /// Local HugeTLB allocation failures for a given page size.
 #[non_exhaustive]
 pub struct HugetlbEventsLocal;
+
+cgroup_file!(file HugetlbEventsLocal, HugetlbEvents::LOCAL_FILE_NAME_TEMPLATE, Read,
+  PageSize => |size: &PageSize| size.file_name(HugetlbEvents::LOCAL_SUFFIX));
+cgroup_file!(read HugetlbEventsLocal => HugetlbEvents);
 
 #[cfg(test)]
 mod tests {

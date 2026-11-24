@@ -9,6 +9,7 @@ use crate::{
   limit::MaxOr,
   parse::{EncodeCgroup, ParseBytes, ParseCgroup, ParseCount, ParseMicroseconds, cgroup_value},
   unit::{Bytes, Count, Ratio, Time},
+  v2::interface::cgroup_file,
 };
 
 /// A volatile snapshot of hierarchical `io.stat` counters, keyed by device.
@@ -31,7 +32,8 @@ pub struct IoStat {
   pub devices: BTreeMap<Device, IoDeviceStat>,
 }
 
-crate::v2::interface::cgroup_file!(IoStat, "io.stat", Read);
+cgroup_value! { device_rows IoStat, devices: IoDeviceStat, Device::parse_lines }
+cgroup_file!(IoStat, "io.stat", Read);
 
 impl IoStat {
   /// The cgroup v2 `io.stat` interface filename.
@@ -134,6 +136,27 @@ pub struct IoDeviceStat {
   pub cost_vrate: Option<Ratio>,
 }
 
+cgroup_value! { fields IoDeviceStat, {
+  read_bytes: optional ParseBytes => "rbytes",
+  write_bytes: optional ParseBytes => "wbytes",
+  discard_bytes: optional ParseBytes => "dbytes",
+  read_operations: optional ParseCount => "rios",
+  write_operations: optional ParseCount => "wios",
+  discard_operations: optional ParseCount => "dios",
+  delay_usage: optional DelayUsage => "use_delay",
+  delay: optional ParseNanoseconds => "delay_nsec",
+  depth: optional ParseCount => "depth",
+  average_latency: optional ParseMicroseconds => "avg_lat",
+  latency_window: optional ParseMilliseconds => "win",
+  missed: optional ParseCount => "missed",
+  total: optional ParseCount => "total",
+  cost_usage: optional ParseMicroseconds => "cost.usage",
+  cost_wait: optional ParseMicroseconds => "cost.wait",
+  cost_indebt: optional ParseMicroseconds => "cost.indebt",
+  cost_indelay: optional ParseMicroseconds => "cost.indelay",
+  cost_vrate: optional ParseCostPercent => "cost.vrate",
+} }
+
 /// The kernel's signed `use_delay` debug indicator.
 ///
 /// `-1` requests a fixed delay without automatic scaling; nonnegative values
@@ -187,29 +210,6 @@ impl ParseCgroup<ParseMilliseconds> for Time {
     Ok(Self::new::<nanosecond>(nanos))
   }
 }
-
-cgroup_value! { fields IoDeviceStat, {
-  read_bytes: optional ParseBytes => "rbytes",
-  write_bytes: optional ParseBytes => "wbytes",
-  discard_bytes: optional ParseBytes => "dbytes",
-  read_operations: optional ParseCount => "rios",
-  write_operations: optional ParseCount => "wios",
-  discard_operations: optional ParseCount => "dios",
-  delay_usage: optional DelayUsage => "use_delay",
-  delay: optional ParseNanoseconds => "delay_nsec",
-  depth: optional ParseCount => "depth",
-  average_latency: optional ParseMicroseconds => "avg_lat",
-  latency_window: optional ParseMilliseconds => "win",
-  missed: optional ParseCount => "missed",
-  total: optional ParseCount => "total",
-  cost_usage: optional ParseMicroseconds => "cost.usage",
-  cost_wait: optional ParseMicroseconds => "cost.wait",
-  cost_indebt: optional ParseMicroseconds => "cost.indebt",
-  cost_indelay: optional ParseMicroseconds => "cost.indelay",
-  cost_vrate: optional ParseCostPercent => "cost.vrate",
-} }
-
-cgroup_value! { device_rows IoStat, devices: IoDeviceStat, Device::parse_lines }
 
 impl EncodeCgroup<DelayUsage> for DelayUsage {
   fn encode_token(&self, output: &mut String) -> Option<()> { write!(output, "{}", self.as_ref()).ok() }

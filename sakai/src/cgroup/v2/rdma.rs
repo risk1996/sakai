@@ -10,6 +10,7 @@ use crate::{
   limit::MaxOr,
   parse::{EncodeCgroup, KeyedFields, ParseCgroup, ParseCount, cgroup_value, encode_pair},
   unit::Count,
+  v2::interface::cgroup_file,
 };
 
 /// An RDMA adapter name and its optional system-wide device index.
@@ -92,7 +93,12 @@ pub struct RdmaCurrent {
   pub devices: BTreeMap<RdmaDevice, RdmaDeviceCurrent>,
 }
 
-crate::v2::interface::cgroup_file!(RdmaCurrent, "rdma.current", Read);
+cgroup_value! { device_rows RdmaCurrent, devices: RdmaDeviceCurrent, parse_devices }
+cgroup_file!(RdmaCurrent, "rdma.current", Read);
+cgroup_file!(alias
+  /// Peak RDMA usage.
+  RdmaPeak, RdmaCurrent::PEAK_FILE_NAME, Read, RdmaCurrent
+);
 
 impl RdmaCurrent {
   /// The cgroup v2 `rdma.current` interface filename.
@@ -125,8 +131,6 @@ cgroup_value! { fields RdmaDeviceCurrent, {
   hca_object: required UsageCount => "hca_object",
 } }
 
-cgroup_value! { device_rows RdmaCurrent, devices: RdmaDeviceCurrent, parse_devices }
-
 /// A per-device configuration snapshot from `rdma.max`, measured in counts.
 ///
 /// Zero is a valid limit. `max` means no configured limit at this cgroup;
@@ -143,8 +147,10 @@ pub struct RdmaMax {
   pub devices: BTreeMap<RdmaDevice, RdmaDeviceMax>,
 }
 
-crate::v2::interface::cgroup_file!(file RdmaMax, "rdma.max", ReadWrite);
-crate::v2::interface::cgroup_file!(read RdmaMax => RdmaMax);
+cgroup_value! { device_rows RdmaMax, devices: RdmaDeviceMax, parse_devices }
+cgroup_file!(file RdmaMax, "rdma.max", ReadWrite);
+cgroup_file!(read RdmaMax => RdmaMax);
+cgroup_file!(write RdmaMax, 'a => (&'a RdmaDevice, &'a RdmaDeviceMax), encode_device_max);
 
 impl RdmaMax {
   /// The cgroup v2 `rdma.max` interface filename.
@@ -168,8 +174,6 @@ cgroup_value! { fields RdmaDeviceMax, {
   hca_object: required ParseCount => "hca_object",
 } }
 
-cgroup_value! { device_rows RdmaMax, devices: RdmaDeviceMax, parse_devices }
-
 /// A volatile snapshot of hierarchical or local per-device RDMA events.
 ///
 /// Since Linux 7.2; see the
@@ -185,7 +189,12 @@ pub struct RdmaEvents {
   pub devices: BTreeMap<RdmaDevice, RdmaDeviceEvents>,
 }
 
-crate::v2::interface::cgroup_file!(RdmaEvents, "rdma.events", Read);
+cgroup_value! { device_rows RdmaEvents, devices: RdmaDeviceEvents, parse_devices }
+cgroup_file!(RdmaEvents, "rdma.events", Read);
+cgroup_file!(alias
+  /// Local RDMA events.
+  RdmaEventsLocal, RdmaEvents::LOCAL_FILE_NAME, Read, RdmaEvents
+);
 
 impl RdmaEvents {
   /// The hierarchical `rdma.events` filename, available since Linux 7.2.
@@ -253,8 +262,6 @@ pub struct RdmaResourceEvents {
   pub alloc_fail: Count,
 }
 
-cgroup_value! { device_rows RdmaEvents, devices: RdmaDeviceEvents, parse_devices }
-
 fn parse_devices<T>(
   raw: &str,
   parse: impl Fn(KeyedFields<'_>) -> Result<T, ParseError<ParseValueError>>,
@@ -280,18 +287,6 @@ fn parse_devices<T>(
     })
     .collect()
 }
-
-crate::v2::interface::cgroup_file!(alias
-  /// Peak RDMA usage.
-  RdmaPeak, RdmaCurrent::PEAK_FILE_NAME, Read, RdmaCurrent
-);
-
-crate::v2::interface::cgroup_file!(alias
-  /// Local RDMA events.
-  RdmaEventsLocal, RdmaEvents::LOCAL_FILE_NAME, Read, RdmaEvents
-);
-
-crate::v2::interface::cgroup_file!(write RdmaMax, 'a => (&'a RdmaDevice, &'a RdmaDeviceMax), encode_device_max);
 
 fn encode_device_max((device, value): (&RdmaDevice, &RdmaDeviceMax)) -> Result<String, crate::error::EncodeError> {
   super::interface::check_token(&device.name, "device").and_then(|()| {

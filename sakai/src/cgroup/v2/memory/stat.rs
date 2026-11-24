@@ -4,6 +4,7 @@ use crate::{
   error::{ParseError, ParseValueError},
   parse::{ParseBytes, ParseCgroup, ParseCount, ParsePages, Parser, encode_pair},
   unit::{Bytes, Count, Pages},
+  v2::interface::cgroup_file,
 };
 
 /// A point-in-time breakdown from `memory.stat` for this cgroup and descendants.
@@ -31,7 +32,7 @@ pub struct MemoryStat {
   pub counts: BTreeMap<MemoryStatCountField, Count>,
 }
 
-crate::v2::interface::cgroup_file!(MemoryStat, "memory.stat", Read);
+cgroup_file!(MemoryStat, "memory.stat", Read);
 
 impl MemoryStat {
   /// The cgroup v2 `memory.stat` interface filename.

@@ -1,6 +1,9 @@
 use std::str::FromStr;
 
-use crate::error::{ParseError, ParseValueError};
+use crate::{
+  error::{ParseError, ParseValueError},
+  v2::interface::cgroup_file,
+};
 
 /// A volatile snapshot of `cpuset.cpus.partition` for one non-root cgroup.
 ///
@@ -35,8 +38,9 @@ pub enum CpusetPartition {
   },
 }
 
-crate::v2::interface::cgroup_file!(file CpusetPartition, "cpuset.cpus.partition", ReadWrite);
-crate::v2::interface::cgroup_file!(read CpusetPartition => CpusetPartition);
+cgroup_file!(file CpusetPartition, "cpuset.cpus.partition", ReadWrite);
+cgroup_file!(read CpusetPartition => CpusetPartition);
+cgroup_file!(write CpusetPartition, 'a => &'a CpusetPartition, |value: &CpusetPartition| Ok(value.state().to_owned()));
 
 impl CpusetPartition {
   /// The cgroup v2 partition-state interface filename, absent at the root.
@@ -66,11 +70,6 @@ impl CpusetPartition {
   }
 }
 
-const MEMBER: &str = "member";
-const ROOT: &str = "root";
-const ISOLATED: &str = "isolated";
-const INVALID: &str = " invalid";
-
 impl CpusetPartition {
   /// Encodes the stored partition state and any diagnostic reason.
   ///
@@ -95,6 +94,11 @@ impl CpusetPartition {
 
   fn valid_reason(reason: &str) -> bool { !reason.trim().is_empty() && !reason.contains(['\n', '\r']) }
 }
+
+const MEMBER: &str = "member";
+const ROOT: &str = "root";
+const ISOLATED: &str = "isolated";
+const INVALID: &str = " invalid";
 
 impl FromStr for CpusetPartition {
   type Err = ParseError<ParseValueError>;

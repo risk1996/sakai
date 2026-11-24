@@ -5,6 +5,7 @@ use crate::{
   parse::{ParseCount, cgroup_value},
   scalar::{Scalar, interface},
   unit::{Bytes, Count},
+  v2::interface::cgroup_file,
 };
 
 /// Hierarchical swap usage reported by `memory.swap.current`.
@@ -68,15 +69,6 @@ pub struct SwapEvents {
   pub fail: Count,
 }
 
-crate::v2::interface::cgroup_file!(SwapEvents, "memory.swap.events", Read);
-
-impl SwapEvents {
-  /// The cgroup v2 `memory.swap.events` interface filename.
-  ///
-  /// See [Linux `memory.swap.events` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-}
-
 cgroup_value! { keyed SwapEvents, |key| match key {
       "high" => "high",
       "max" => "max",
@@ -87,6 +79,14 @@ cgroup_value! { keyed SwapEvents, |key| match key {
   max: required ParseCount => "max",
   fail: required ParseCount => "fail",
 } }
+cgroup_file!(SwapEvents, "memory.swap.events", Read);
+
+impl SwapEvents {
+  /// The cgroup v2 `memory.swap.events` interface filename.
+  ///
+  /// See [Linux `memory.swap.events` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
+  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
+}
 
 #[cfg(test)]
 mod tests {
