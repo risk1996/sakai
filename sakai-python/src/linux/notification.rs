@@ -163,7 +163,7 @@ pub(super) struct ChangeNotification {
 
 impl From<CoreChangeNotification> for ChangeNotification {
   fn from(value: CoreChangeNotification) -> Self {
-    Self { modified: value.modified(), removed: value.removed(), overflowed: value.overflowed() }
+    Self { modified: value.modified, removed: value.removed, overflowed: value.overflowed }
   }
 }
 

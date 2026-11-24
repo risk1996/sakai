@@ -5,6 +5,7 @@ use crate::{
   parse::{ParseCount, cgroup_value},
   scalar::{Scalar, interface},
   unit::Count,
+  v2::interface::cgroup_file,
 };
 
 /// Current number of tasks in this cgroup and its descendants.
@@ -47,11 +48,22 @@ pub type PidsMax = Scalar<MaxOr<Count>, interface::PidsMax>;
 ///
 /// See [Linux `pids.events` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#pid).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct PidsEvents {
-  max: Count,
+  /// Number of occurrences of the process limit being hit.
+  ///
+  /// See [Linux pid interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#pid).
+  pub max: Count,
 }
 
-crate::v2::interface::cgroup_file!(PidsEvents, "pids.events", Read);
+cgroup_value! { keyed PidsEvents, |_| "value", {
+  max: required ParseCount => "max",
+} }
+cgroup_file!(PidsEvents, "pids.events", Read);
+cgroup_file!(alias
+  /// Local PID controller events.
+  PidsEventsLocal, PidsEvents::LOCAL_FILE_NAME, Read, PidsEvents
+);
 
 impl PidsEvents {
   /// The cgroup v2 `pids.events` interface filename.
@@ -62,22 +74,7 @@ impl PidsEvents {
   ///
   /// See [Linux 6.11 source](https://github.com/torvalds/linux/blob/v6.11/kernel/cgroup/pids.c).
   pub const LOCAL_FILE_NAME: &'static str = "pids.events.local";
-
-  /// Number of occurrences of the process limit being hit.
-  ///
-  /// See [Linux pid interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#pid).
-  #[must_use]
-  pub const fn max(&self) -> Count { self.max }
 }
-
-cgroup_value! { keyed PidsEvents, |_| "value", {
-  max: required ParseCount => "max",
-} }
-
-crate::v2::interface::cgroup_file!(alias
-  /// Local PID controller events.
-  PidsEventsLocal, PidsEvents::LOCAL_FILE_NAME, Read, PidsEvents
-);
 
 #[cfg(test)]
 mod tests {

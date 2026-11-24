@@ -16,11 +16,14 @@
 //! [Linux PSI triggers](https://docs.kernel.org/accounting/psi.html#monitoring-for-pressure-thresholds).
 
 use std::{
+  fmt,
   fs::File,
   io::{self, Seek, SeekFrom},
+  iter::FusedIterator,
   mem::MaybeUninit,
   os::fd::{AsFd, AsRawFd, BorrowedFd},
   path::PathBuf,
+  slice,
   time::Duration,
 };
 
@@ -29,8 +32,50 @@ use rustix::{
   fd::OwnedFd,
   fs::{Mode, OFlags, inotify, openat},
 };
+use strum::{IntoEnumIterator, VariantArray};
 
 use crate::Error;
+
+// Keep the public iterator types extensible while deriving their variant lists.
+macro_rules! interface_iter {
+  ($interface:ident, $iterator:ident, $doc:literal) => {
+    #[doc = $doc]
+    #[derive(Clone)]
+    #[non_exhaustive]
+    pub struct $iterator {
+      variants: slice::Iter<'static, $interface>,
+    }
+
+    impl IntoEnumIterator for $interface {
+      type Iterator = $iterator;
+
+      fn iter() -> Self::Iterator { $iterator { variants: Self::VARIANTS.iter() } }
+    }
+
+    impl Iterator for $iterator {
+      type Item = $interface;
+
+      fn next(&mut self) -> Option<Self::Item> { self.variants.next().copied() }
+
+      fn nth(&mut self, n: usize) -> Option<Self::Item> { self.variants.nth(n).copied() }
+
+      fn size_hint(&self) -> (usize, Option<usize>) { self.variants.size_hint() }
+    }
+
+    impl DoubleEndedIterator for $iterator {
+      fn next_back(&mut self) -> Option<Self::Item> { self.variants.next_back().copied() }
+    }
+
+    impl ExactSizeIterator for $iterator {}
+    impl FusedIterator for $iterator {}
+
+    impl fmt::Debug for $iterator {
+      fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.debug_struct(stringify!($iterator)).field("len", &self.len()).finish()
+      }
+    }
+  };
+}
 
 /// An interface with kernel cgroup event notifications.
 ///
@@ -39,7 +84,7 @@ use crate::Error;
 /// Notifications include changes in descendants where the interface is
 /// hierarchical. See [Linux cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html).
 #[derive(
-  Debug, Clone, Copy, PartialEq, Eq, Hash, strum::EnumString, strum::Display, strum::IntoStaticStr, strum::EnumIter,
+  Debug, Clone, Copy, PartialEq, Eq, Hash, strum::EnumString, strum::Display, strum::IntoStaticStr, strum::VariantArray,
 )]
 #[non_exhaustive]
 pub enum EventInterface {
@@ -74,6 +119,8 @@ impl EventInterface {
   pub fn filename(&self) -> &'static str { self.into() }
 }
 
+interface_iter!(EventInterface, EventInterfaceIter, "Iterates the supported cgroup event interfaces.");
+
 /// A supported configuration interface whose writes can be watched with inotify.
 ///
 /// Parses and displays exact filenames. A write notification does not guarantee
@@ -82,7 +129,7 @@ impl EventInterface {
 /// corresponding reader, including optional and root-exempt interfaces.
 /// See [Linux cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html).
 #[derive(
-  Debug, Clone, Copy, PartialEq, Eq, Hash, strum::EnumString, strum::Display, strum::IntoStaticStr, strum::EnumIter,
+  Debug, Clone, Copy, PartialEq, Eq, Hash, strum::EnumString, strum::Display, strum::IntoStaticStr, strum::VariantArray,
 )]
 #[non_exhaustive]
 pub enum ConfigurationInterface {
@@ -199,6 +246,12 @@ impl ConfigurationInterface {
   pub fn filename(&self) -> &'static str { self.into() }
 }
 
+interface_iter!(
+  ConfigurationInterface,
+  ConfigurationInterfaceIter,
+  "Iterates the supported cgroup configuration interfaces."
+);
+
 /// An independent event subscription holding a read-only interface descriptor.
 ///
 /// Create it with [`super::Cgroup::poll_events`]. An initial read establishes a
@@ -213,6 +266,7 @@ impl ConfigurationInterface {
 /// Dropping the subscription closes its descriptor. See
 /// [cgroups(7)](https://man7.org/linux/man-pages/man7/cgroups.7.html).
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct EventPoller {
   file: File,
   path: PathBuf,
@@ -273,31 +327,26 @@ impl AsFd for EventPoller {
 /// can be true together; reread configuration after modifications or overflow.
 /// See [inotify(7)](https://man7.org/linux/man-pages/man7/inotify.7.html).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub struct ChangeNotification {
-  modified: bool,
-  removed: bool,
-  overflowed: bool,
-}
-
-impl ChangeNotification {
   /// Whether a write or kernel content notification was observed.
   ///
   /// A write can leave the parsed value unchanged; this is not a value diff.
-  pub fn modified(&self) -> bool { self.modified }
-
+  pub modified: bool,
   /// Whether the kernel reported removal or watch invalidation, including unmounting.
   ///
   /// The watcher becomes terminal and does not follow a replacement interface.
   /// Cgroup interface removal does not guarantee an inotify event; `false`
   /// does not establish that the interface still exists.
-  pub fn removed(&self) -> bool { self.removed }
-
+  pub removed: bool,
   /// Whether the kernel inotify queue overflowed and notifications were lost.
   ///
   /// Reread the configuration; notification history is incomplete. A watcher
   /// whose removal event was lost may need to be recreated by the caller.
-  pub fn overflowed(&self) -> bool { self.overflowed }
+  pub overflowed: bool,
+}
 
+impl ChangeNotification {
   fn include(&mut self, flags: inotify::ReadFlags) {
     self.modified |= flags.contains(inotify::ReadFlags::MODIFY);
     self.removed |=
@@ -326,6 +375,7 @@ impl ChangeNotification {
 /// an indefinite wait can remain blocked after removal. See the
 /// [Linux kernfs removal path](https://github.com/torvalds/linux/blob/v5.15/fs/kernfs/dir.c#L1236-L1295).
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct ConfigurationWatcher {
   descriptor: OwnedFd,
   interface: ConfigurationInterface,
@@ -568,7 +618,7 @@ mod tests {
       actual.include(flags);
       assert_eq!(actual, expected);
       assert_eq!(
-        (actual.modified(), actual.removed(), actual.overflowed()),
+        (actual.modified, actual.removed, actual.overflowed),
         (expected.modified, expected.removed, expected.overflowed)
       );
     }

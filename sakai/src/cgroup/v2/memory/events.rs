@@ -4,6 +4,7 @@ use crate::{
   error::{ParseError, ParseValueError},
   parse::{ParseCount, cgroup_value},
   unit::Count,
+  v2::interface::cgroup_file,
 };
 
 /// A point-in-time snapshot of hierarchical `memory.events` counters.
@@ -13,11 +14,15 @@ use crate::{
 ///
 /// See [Linux `memory.events` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct MemoryEvents {
-  counts: MemoryEventCounts,
+  /// Event counts, measured as numbers of occurrences.
+  ///
+  /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
+  pub counts: MemoryEventCounts,
 }
 
-crate::v2::interface::cgroup_file!(MemoryEvents, "memory.events", Read);
+cgroup_file!(MemoryEvents, "memory.events", Read);
 
 impl MemoryEvents {
   /// The cgroup v2 `memory.events` interface filename.
@@ -31,12 +36,6 @@ impl MemoryEvents {
   ///
   /// Returns an error if a field cannot be represented exactly.
   pub fn encode_cgroup(&self) -> Result<String, crate::error::EncodeError> { self.counts.encode_cgroup() }
-
-  /// Returns the event counts, measured as numbers of occurrences.
-  ///
-  /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-  #[must_use]
-  pub const fn counts(&self) -> MemoryEventCounts { self.counts }
 }
 
 impl FromStr for MemoryEvents {
@@ -52,11 +51,15 @@ impl FromStr for MemoryEvents {
 ///
 /// See [Linux `memory.events.local` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct MemoryEventsLocal {
-  counts: MemoryEventCounts,
+  /// Local event counts, measured as numbers of occurrences.
+  ///
+  /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
+  pub counts: MemoryEventCounts,
 }
 
-crate::v2::interface::cgroup_file!(MemoryEventsLocal, "memory.events.local", Read);
+cgroup_file!(MemoryEventsLocal, "memory.events.local", Read);
 
 impl MemoryEventsLocal {
   /// The cgroup v2 `memory.events.local` interface filename.
@@ -70,12 +73,6 @@ impl MemoryEventsLocal {
   ///
   /// Returns an error if a field cannot be represented exactly.
   pub fn encode_cgroup(&self) -> Result<String, crate::error::EncodeError> { self.counts.encode_cgroup() }
-
-  /// Returns the local event counts, measured as numbers of occurrences.
-  ///
-  /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-  #[must_use]
-  pub const fn counts(&self) -> MemoryEventCounts { self.counts }
 }
 
 impl FromStr for MemoryEventsLocal {
@@ -91,64 +88,42 @@ impl FromStr for MemoryEventsLocal {
 ///
 /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct MemoryEventCounts {
-  low: Count,
-  high: Count,
-  max: Count,
-  oom: Count,
-  oom_kill: Count,
-  oom_group_kill: Option<Count>,
-  sock_throttled: Option<Count>,
-}
-
-impl MemoryEventCounts {
   /// Reclaims despite usage below the effective low boundary.
   ///
   /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-  #[must_use]
-  pub const fn low(&self) -> Count { self.low }
-
+  pub low: Count,
   /// Throttling and direct reclaim after crossing the high boundary.
   ///
   /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-  #[must_use]
-  pub const fn high(&self) -> Count { self.high }
-
+  pub high: Count,
   /// Attempts to cross the max boundary.
   ///
   /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-  #[must_use]
-  pub const fn max(&self) -> Count { self.max }
-
+  pub max: Count,
   /// Allocations about to fail at the memory limit.
   ///
   /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-  #[must_use]
-  pub const fn oom(&self) -> Count { self.oom }
-
+  pub oom: Count,
   /// Processes killed by any OOM killer.
   ///
   /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-  #[must_use]
-  pub const fn oom_kill(&self) -> Count { self.oom_kill }
-
+  pub oom_kill: Count,
   /// Group OOM kills, when reported by the kernel.
   ///
   /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
   /// Since Linux 5.17; see the [upstream Linux 5.17 source](https://github.com/torvalds/linux/blob/v5.17/mm/memcontrol.c).
   /// `None` means the counter was not reported, rather than zero events.
-  #[must_use]
-  pub const fn oom_group_kill(&self) -> Option<Count> { self.oom_group_kill }
-
+  pub oom_group_kill: Option<Count>,
   /// Network socket throttling events, when reported by the kernel.
   ///
   /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
   ///
   /// Since Linux 6.19; see the [upstream Linux 6.19 source](https://github.com/torvalds/linux/blob/v6.19/mm/memcontrol.c).
   /// `None` means the counter was not reported, rather than zero events.
-  #[must_use]
-  pub const fn sock_throttled(&self) -> Option<Count> { self.sock_throttled }
+  pub sock_throttled: Option<Count>,
 }
 
 cgroup_value! { keyed MemoryEventCounts, |_| "value", {

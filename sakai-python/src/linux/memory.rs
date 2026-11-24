@@ -34,28 +34,28 @@ impl MemoryReader {
   /// Read current memory usage of this cgroup and its descendants, in bytes.
   fn current(&self, py: Python<'_>) -> PyResult<Quantity<sakai::Bytes>> {
     PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::memory::MemoryCurrent>)
-      .map(|value| value.value().into())
+      .map(|value| value.value.into())
   }
 
   /// Read peak hierarchical memory usage since cgroup creation, in bytes.
   /// This fresh read-only descriptor never resets the peak.
   fn peak(&self, py: Python<'_>) -> PyResult<Quantity<sakai::Bytes>> {
     PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::memory::MemoryPeak>)
-      .map(|value| value.value().into())
+      .map(|value| value.value.into())
   }
 
   /// Read the hard memory limit as `max` or a concrete byte count.
   #[gen_stub(override_return_type(type_repr = "MaxOr[Bytes]"))]
   fn max(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::memory::MemoryMax>)
-      .map(|value| MaxOr::from_bytes(value.value()))
+      .map(|value| MaxOr::from_bytes(value.value))
   }
 
   /// Read the throttling threshold as `max` or a concrete byte count.
   #[gen_stub(override_return_type(type_repr = "MaxOr[Bytes]"))]
   fn high(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::memory::MemoryHigh>)
-      .map(|value| MaxOr::from_bytes(value.value()))
+      .map(|value| MaxOr::from_bytes(value.value))
   }
 
   /// Read best-effort memory protection as `max` or a concrete byte count.
@@ -63,7 +63,7 @@ impl MemoryReader {
   #[gen_stub(override_return_type(type_repr = "MaxOr[Bytes]"))]
   fn low(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::memory::MemoryLow>)
-      .map(|value| MaxOr::from_bytes(value.value()))
+      .map(|value| MaxOr::from_bytes(value.value))
   }
 
   /// Read hard memory protection as `max` or a concrete byte count.
@@ -71,26 +71,26 @@ impl MemoryReader {
   #[gen_stub(override_return_type(type_repr = "MaxOr[Bytes]"))]
   fn min(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::memory::MemoryMin>)
-      .map(|value| MaxOr::from_bytes(value.value()))
+      .map(|value| MaxOr::from_bytes(value.value))
   }
 
   /// Read whether the OOM killer treats this cgroup as one workload.
   fn oom_group(&self, py: Python<'_>) -> PyResult<bool> {
     PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::memory::MemoryOomGroup>)
-      .map(|value| value.value())
+      .map(|value| value.value)
   }
 
   /// Read hierarchical memory events; memory_localevents mounts report local events.
   fn events(&self, py: Python<'_>) -> PyResult<MemoryEventCounts> {
     PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::memory::MemoryEvents>)
-      .map(|value| value.counts().into())
+      .map(|value| value.counts.into())
   }
 
   /// Read events originating in this cgroup, excluding descendants.
   /// Older kernels may lack this interface, raising InterfaceMissingError.
   fn events_local(&self, py: Python<'_>) -> PyResult<MemoryEventCounts> {
     PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::memory::MemoryEventsLocal>)
-      .map(|value| value.counts().into())
+      .map(|value| value.counts.into())
   }
 
   /// Read memory statistics in separate byte, page, and count mappings.
@@ -136,13 +136,13 @@ pub(super) struct MemoryEventCounts {
 impl From<CoreMemoryEventCounts> for MemoryEventCounts {
   fn from(value: CoreMemoryEventCounts) -> Self {
     Self {
-      low: value.low().into(),
-      high: value.high().into(),
-      max: value.max().into(),
-      oom: value.oom().into(),
-      oom_kill: value.oom_kill().into(),
-      oom_group_kill: value.oom_group_kill().map(|count| count.into()),
-      sock_throttled: value.sock_throttled().map(|count| count.into()),
+      low: value.low.into(),
+      high: value.high.into(),
+      max: value.max.into(),
+      oom: value.oom.into(),
+      oom_kill: value.oom_kill.into(),
+      oom_group_kill: value.oom_group_kill.map(|count| count.into()),
+      sock_throttled: value.sock_throttled.map(|count| count.into()),
     }
   }
 }
@@ -161,27 +161,27 @@ impl SwapReader {
   /// Read current hierarchical swap usage in bytes.
   fn current(&self, py: Python<'_>) -> PyResult<Quantity<sakai::Bytes>> {
     PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::memory::SwapCurrent>)
-      .map(|value| value.value().into())
+      .map(|value| value.value.into())
   }
 
   /// Read peak swap usage since cgroup creation; this never resets the peak.
   fn peak(&self, py: Python<'_>) -> PyResult<Quantity<sakai::Bytes>> {
     PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::memory::SwapPeak>)
-      .map(|value| value.value().into())
+      .map(|value| value.value.into())
   }
 
   /// Read the hard swap limit as `max` or a concrete byte count.
   #[gen_stub(override_return_type(type_repr = "MaxOr[Bytes]"))]
   fn max(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::memory::SwapMax>)
-      .map(|value| MaxOr::from_bytes(value.value()))
+      .map(|value| MaxOr::from_bytes(value.value))
   }
 
   /// Read the swap throttling threshold as `max` or a concrete byte count.
   #[gen_stub(override_return_type(type_repr = "MaxOr[Bytes]"))]
   fn high(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::memory::SwapHigh>)
-      .map(|value| MaxOr::from_bytes(value.value()))
+      .map(|value| MaxOr::from_bytes(value.value))
   }
 
   /// Read swap threshold and allocation failure counters for this cgroup and descendants.
@@ -211,7 +211,7 @@ pub(super) struct SwapEvents {
 
 impl From<CoreSwapEvents> for SwapEvents {
   fn from(value: CoreSwapEvents) -> Self {
-    Self { high: value.high().map(|count| count.into()), max: value.max().into(), fail: value.fail().into() }
+    Self { high: value.high.map(|count| count.into()), max: value.max.into(), fail: value.fail.into() }
   }
 }
 
@@ -229,14 +229,14 @@ impl ZswapReader {
   /// Read zswap compression-backend memory for this cgroup and descendants, in bytes.
   fn current(&self, py: Python<'_>) -> PyResult<Quantity<sakai::Bytes>> {
     PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::memory::ZswapCurrent>)
-      .map(|value| value.value().into())
+      .map(|value| value.value.into())
   }
 
   /// Read the hard zswap pool limit as `max` or a concrete byte count.
   #[gen_stub(override_return_type(type_repr = "MaxOr[Bytes]"))]
   fn max(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::memory::ZswapMax>)
-      .map(|value| MaxOr::from_bytes(value.value()))
+      .map(|value| MaxOr::from_bytes(value.value))
   }
 
   /// Read this cgroup's configured disk writeback policy.
@@ -244,7 +244,7 @@ impl ZswapReader {
   /// does not block disk swap when zswap is disabled globally.
   fn writeback(&self, py: Python<'_>) -> PyResult<bool> {
     PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::memory::ZswapWriteback>)
-      .map(|value| value.value())
+      .map(|value| value.value)
   }
 }
 
@@ -263,9 +263,9 @@ pub(super) struct MemoryStat {
 impl From<CoreMemoryStat> for MemoryStat {
   fn from(value: CoreMemoryStat) -> Self {
     Self {
-      bytes: MemoryValues::fields(value.bytes(), |value| value.into()),
-      pages: MemoryValues::fields(value.pages(), |value| value.into()),
-      counts: MemoryValues::fields(value.counts(), |value| value.into()),
+      bytes: MemoryValues::fields(&value.bytes, |value| value.into()),
+      pages: MemoryValues::fields(&value.pages, |value| value.into()),
+      counts: MemoryValues::fields(&value.counts, |value| value.into()),
     }
   }
 }
@@ -336,9 +336,9 @@ pub(super) struct MemoryNumaStat {
 impl From<CoreMemoryNumaStat> for MemoryNumaStat {
   fn from(value: CoreMemoryNumaStat) -> Self {
     Self {
-      bytes: MemoryValues::fields(value.bytes(), |nodes| MemoryValues::nodes(nodes, |value| value.into())),
-      pages: MemoryValues::fields(value.pages(), |nodes| MemoryValues::nodes(nodes, |value| value.into())),
-      counts: MemoryValues::fields(value.counts(), |nodes| MemoryValues::nodes(nodes, |value| value.into())),
+      bytes: MemoryValues::fields(&value.bytes, |nodes| MemoryValues::nodes(nodes, |value| value.into())),
+      pages: MemoryValues::fields(&value.pages, |nodes| MemoryValues::nodes(nodes, |value| value.into())),
+      counts: MemoryValues::fields(&value.counts, |nodes| MemoryValues::nodes(nodes, |value| value.into())),
     }
   }
 }
@@ -423,8 +423,8 @@ mod tests {
         ),
       ] {
         for counts in [
-          assert_ok!(input.parse::<sakai::v2::memory::MemoryEvents>()).counts(),
-          assert_ok!(input.parse::<sakai::v2::memory::MemoryEventsLocal>()).counts(),
+          assert_ok!(input.parse::<sakai::v2::memory::MemoryEvents>()).counts,
+          assert_ok!(input.parse::<sakai::v2::memory::MemoryEventsLocal>()).counts,
         ] {
           let events = MemoryEventCounts::from(counts);
           assert_eq!(events, expected);

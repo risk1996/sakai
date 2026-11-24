@@ -125,15 +125,24 @@ pub type FractionalEventRate = uom::si::f64::Frequency;
 ///
 /// See [Linux CPU bandwidth units](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
 #[nutype(
-  validate(predicate = |time| time.get::<nanosecond>() != 0),
+  validate(with = NonZeroTime::validate_time, error = NonZeroTimeError),
   derive(Debug, Clone, Copy, PartialEq, Eq, Hash, AsRef),
 )]
+#[non_exhaustive]
 pub struct NonZeroTime(Time);
 const _: () = {
   assert!(size_of::<NonZeroTime>() == size_of::<Time>());
   assert!(align_of::<NonZeroTime>() == align_of::<Time>());
 };
 
+/// An invalid [`NonZeroTime`] duration.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
+pub enum NonZeroTimeError {
+  /// The duration is zero.
+  #[error("NonZeroTime failed the predicate test.")]
+  PredicateViolated,
+}
 impl NonZeroTime {
   /// Calculates an event rate over this nonzero elapsed duration.
   ///
@@ -156,6 +165,10 @@ impl NonZeroTime {
   pub fn event_rate(&self, count: Count) -> FractionalEventRate {
     let elapsed = uom::si::f64::Time::new::<nanosecond>(self.as_ref().get::<nanosecond>() as f64);
     FractionalEventRate::new::<uom::si::frequency::hertz>(count.value as f64 / elapsed.get::<uom::si::time::second>())
+  }
+
+  fn validate_time(time: &Time) -> Result<(), NonZeroTimeError> {
+    if time.get::<nanosecond>() == 0 { Err(NonZeroTimeError::PredicateViolated) } else { Ok(()) }
   }
 }
 

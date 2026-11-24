@@ -101,7 +101,7 @@ impl CpuList {
   #[getter]
   #[gen_stub(override_return_type(type_repr = "tuple[tuple[int, int], ...]"))]
   fn ranges(&self, py: Python<'_>) -> PyResult<Py<PyTuple>> {
-    PyTuple::new(py, self.inner.ranges().iter().map(|range| (*range.start(), *range.end()))).map(Bound::unbind)
+    PyTuple::new(py, self.inner.ranges.iter().map(|range| (*range.start(), *range.end()))).map(Bound::unbind)
   }
 
   /// Test membership in the stored snapshot without kernel I/O.
@@ -135,7 +135,7 @@ impl MemoryNodeList {
   #[getter]
   #[gen_stub(override_return_type(type_repr = "tuple[tuple[int, int], ...]"))]
   fn ranges(&self, py: Python<'_>) -> PyResult<Py<PyTuple>> {
-    PyTuple::new(py, self.inner.ranges().iter().map(|range| (*range.start(), *range.end()))).map(Bound::unbind)
+    PyTuple::new(py, self.inner.ranges.iter().map(|range| (*range.start(), *range.end()))).map(Bound::unbind)
   }
 
   /// Test membership in the stored snapshot without kernel I/O.
@@ -165,7 +165,14 @@ pub(super) struct CpusetPartition {
 
 impl From<CorePartition> for CpusetPartition {
   fn from(value: CorePartition) -> Self {
-    Self { state: value.state(), is_invalid: value.is_invalid(), reason: value.reason().map(str::to_owned) }
+    Self {
+      state: value.state(),
+      is_invalid: value.is_invalid(),
+      reason: match value {
+        | CorePartition::RootInvalid { reason, .. } | CorePartition::IsolatedInvalid { reason, .. } => reason,
+        | _ => None,
+      },
+    }
   }
 }
 

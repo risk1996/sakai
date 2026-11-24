@@ -3,8 +3,8 @@
 //! `sakai` reads CPU, memory, placement, task counts, I/O, huge pages, RDMA,
 //! device memory, miscellaneous resources, and core cgroup state. Use
 //! `Cgroup` on Linux to discover a cgroup, then select an interface type.
-//! Each read returns an owned snapshot: getters inspect that snapshot without
-//! doing more I/O. Reads of different files are not an atomic transaction.
+//! Each read returns an owned snapshot with public fields. Reading or editing
+//! those fields performs no I/O. Reads of different files are not an atomic transaction.
 //!
 //! # Units and missing values
 //!
@@ -18,9 +18,9 @@
 //!
 //! The public quantities intentionally expose `uom` interoperability: construct
 //! and convert them with `uom`'s unit types. [`Count`] and [`unit::Pages`] use
-//! their public `value` field. Map accessors intentionally return borrowed
-//! `BTreeMap` values for deterministic iteration and typed lookup; absent keys
-//! mean unreported fields, not zero. These representations are public contracts.
+//! their public `value` field. Snapshot maps support typed lookup, and
+//! `BTreeMap` fields also support deterministic iteration. An absent key
+//! means the kernel did not report that field.
 //! Use [`NonZeroTime::event_rate`] for fractional monitoring rates.
 //!
 //! # Linux availability
@@ -45,7 +45,7 @@
 //! # #[cfg(target_os = "linux")]
 //! # fn example() -> Result<(), sakai::Error> {
 //! let cgroup = Cgroup::from_current_process()?;
-//! let usage = cgroup.read_value::<sakai::v2::cpu::CpuStat>()?.time().usage();
+//! let usage = cgroup.read_value::<sakai::v2::cpu::CpuStat>()?.time.usage;
 //! let quota = cgroup.read_value::<sakai::v2::cpu::CpuMax>()?;
 //! # Ok(())
 //! # }
@@ -68,8 +68,7 @@
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 //!
-//! Snapshot storage and parser field identifiers are implementation details;
-//! use the public interface-specific snapshot types instead.
+//! Use the public interface-specific snapshot types to access fields.
 //!
 //! ```compile_fail,E0603
 //! use sakai::scalar::Scalar;

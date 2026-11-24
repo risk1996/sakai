@@ -172,6 +172,7 @@ impl<E> ParseError<E> {
 /// A field cannot be represented exactly in its cgroup text format.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 #[error("field {field} cannot be represented exactly in cgroup text")]
+#[non_exhaustive]
 pub struct EncodeError {
   pub(crate) field: &'static str,
 }
@@ -204,6 +205,7 @@ pub enum ParseValueError {
 /// See [Linux cgroup file formats and availability](https://docs.kernel.org/admin-guide/cgroup-v2.html#interface-files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::Display)]
 #[strum(serialize_all = "lowercase")]
+#[non_exhaustive]
 pub enum FieldKind {
   /// An expected field is absent.
   Missing,

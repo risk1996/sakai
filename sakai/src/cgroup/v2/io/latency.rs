@@ -5,6 +5,7 @@ use crate::{
   error::{ParseError, ParseValueError},
   parse::ParseNonZeroMicroseconds,
   unit::NonZeroTime,
+  v2::interface::cgroup_file,
 };
 
 /// A configuration snapshot of per-device `io.latency` protection targets.
@@ -19,28 +20,24 @@ use crate::{
 ///
 /// See [Linux `io.latency` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub struct IoLatency {
   /// Configured latency targets by block device.
+  ///
+  /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   pub devices: BTreeMap<Device, NonZeroTime>,
 }
 
-crate::v2::interface::cgroup_file!(file IoLatency, "io.latency", ReadWrite);
-crate::v2::interface::cgroup_file!(read IoLatency => IoLatency);
+cgroup_file!(file IoLatency, "io.latency", ReadWrite);
+cgroup_file!(read IoLatency => IoLatency);
+cgroup_file!(write IoLatency, 'a => (Device, Option<NonZeroTime>), encode_target);
 
 impl IoLatency {
   /// The cgroup v2 `io.latency` interface filename.
   ///
   /// See [Linux `io.latency` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-
-  /// Returns configured latency targets keyed by block device.
-  ///
-  /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
-  #[must_use]
-  pub const fn devices(&self) -> &BTreeMap<Device, NonZeroTime> { &self.devices }
 }
-
-const TARGET: &str = "target";
 
 impl IoLatency {
   /// Encodes the stored value as canonical cgroup text.
@@ -61,6 +58,8 @@ impl IoLatency {
   }
 }
 
+const TARGET: &str = "target";
+
 impl FromStr for IoLatency {
   type Err = ParseError<ParseValueError>;
 
@@ -70,8 +69,6 @@ impl FromStr for IoLatency {
     })
   }
 }
-
-crate::v2::interface::cgroup_file!(write IoLatency, 'a => (Device, Option<NonZeroTime>), encode_target);
 
 fn encode_target((device, target): (Device, Option<NonZeroTime>)) -> Result<String, crate::error::EncodeError> {
   let mut command = device.to_string();

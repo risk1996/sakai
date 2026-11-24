@@ -22,8 +22,11 @@ pub trait Interface: Copy {
 /// Values are parsed without I/O. Controller readers obtain fresh snapshots.
 /// Different interfaces retain different types even when their units match.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct Scalar<T, I> {
   /// The stored quantity or limit. Editing it only changes this value.
+  ///
+  /// See [Linux cgroup file formats](https://docs.kernel.org/admin-guide/cgroup-v2.html#format).
   pub value: T,
   interface: PhantomData<I>,
 }
@@ -31,14 +34,6 @@ pub struct Scalar<T, I> {
 impl<T: Copy, I: Interface> Scalar<T, I> {
   /// The cgroup v2 interface filename.
   pub const FILE_NAME: &'static str = I::FILE_NAME;
-
-  /// Returns the snapshot in its declared units.
-  ///
-  /// This inspects stored data; it does not read the kernel.
-  ///
-  /// See [Linux cgroup file formats](https://docs.kernel.org/admin-guide/cgroup-v2.html#format).
-  #[must_use]
-  pub const fn value(&self) -> T { self.value }
 
   pub(crate) const fn new(value: T) -> Self { Self { value, interface: PhantomData } }
 }

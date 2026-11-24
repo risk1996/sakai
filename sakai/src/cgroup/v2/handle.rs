@@ -34,6 +34,7 @@ const CGROUP2_SUPER_MAGIC: fs::FsWord = 0x6367_7270;
 /// [proc_pid_cgroup(5)](https://man7.org/linux/man-pages/man5/proc_pid_cgroup.5.html), and
 /// [proc_pid_mountinfo(5)](https://man7.org/linux/man-pages/man5/proc_pid_mountinfo.5.html).
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct Cgroup {
   directory: OwnedFd,
   path: PathBuf,
@@ -493,13 +494,13 @@ mod tests {
       assert_eq!(current, assert_ok!("12".parse::<PidsCurrent>()));
       assert_eq!(max, assert_ok!("10".parse::<PidsMax>()));
       assert_eq!(events, assert_ok!("max 3".parse::<PidsEvents>()));
-      assert_eq!(events.max().value, 3);
-      assert!(state.populated());
-      assert_eq!(state.frozen(), frozen);
-      assert_eq!(stat.descendants().value, 2);
-      assert_eq!(stat.dying_descendants().value, 1);
-      assert_eq!(!stat.subsystems().is_empty(), has_subsystems);
-      assert_eq!(!stat.dying_subsystems().is_empty(), has_subsystems);
+      assert_eq!(events.max.value, 3);
+      assert!(state.populated);
+      assert_eq!(state.frozen, frozen);
+      assert_eq!(stat.descendants.value, 2);
+      assert_eq!(stat.dying_descendants.value, 1);
+      assert_eq!(!stat.subsystems.is_empty(), has_subsystems);
+      assert_eq!(!stat.dying_subsystems.is_empty(), has_subsystems);
     }
   }
 

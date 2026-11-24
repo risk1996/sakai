@@ -121,7 +121,7 @@ pub(super) struct DmemCapacity {
 
 impl From<CoreDmemCapacity> for DmemCapacity {
   fn from(value: CoreDmemCapacity) -> Self {
-    Self { regions: value.regions().iter().map(|(name, value)| (name.clone(), value.into())).collect() }
+    Self { regions: value.regions.iter().map(|(name, value)| (name.clone(), value.into())).collect() }
   }
 }
 
@@ -154,7 +154,7 @@ pub(super) struct DmemCurrent {
 
 impl From<CoreDmemCurrent> for DmemCurrent {
   fn from(value: CoreDmemCurrent) -> Self {
-    Self { regions: value.regions().iter().map(|(name, value)| (name.clone(), MaxOr::from_bytes(*value))).collect() }
+    Self { regions: value.regions.iter().map(|(name, value)| (name.clone(), MaxOr::from_bytes(*value))).collect() }
   }
 }
 
@@ -185,7 +185,7 @@ pub(super) struct DmemPeak {
 
 impl From<CoreDmemPeak> for DmemPeak {
   fn from(value: CoreDmemPeak) -> Self {
-    Self { regions: value.regions().iter().map(|(name, value)| (name.clone(), MaxOr::from_bytes(*value))).collect() }
+    Self { regions: value.regions.iter().map(|(name, value)| (name.clone(), MaxOr::from_bytes(*value))).collect() }
   }
 }
 
@@ -218,7 +218,7 @@ pub(super) struct DmemLimits {
 
 impl From<CoreDmemLimits> for DmemLimits {
   fn from(value: CoreDmemLimits) -> Self {
-    Self { regions: value.regions().iter().map(|(name, value)| (name.clone(), MaxOr::from_bytes(*value))).collect() }
+    Self { regions: value.regions.iter().map(|(name, value)| (name.clone(), MaxOr::from_bytes(*value))).collect() }
   }
 }
 

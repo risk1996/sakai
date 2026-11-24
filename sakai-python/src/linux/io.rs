@@ -93,7 +93,7 @@ pub(super) struct IoStat {
 }
 
 impl From<CoreIoStat> for IoStat {
-  fn from(value: CoreIoStat) -> Self { Self { devices: IoValues::devices(value.devices(), |value| (*value).into()) } }
+  fn from(value: CoreIoStat) -> Self { Self { devices: IoValues::devices(&value.devices, |value| (*value).into()) } }
 }
 
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
@@ -171,24 +171,24 @@ pub(super) struct IoDeviceStat {
 impl From<CoreIoDeviceStat> for IoDeviceStat {
   fn from(value: CoreIoDeviceStat) -> Self {
     Self {
-      read_bytes: value.read_bytes().map(|value| value.into()),
-      write_bytes: value.write_bytes().map(|value| value.into()),
-      discard_bytes: value.discard_bytes().map(|value| value.into()),
-      read_operations: value.read_operations().map(|value| value.into()),
-      write_operations: value.write_operations().map(|value| value.into()),
-      discard_operations: value.discard_operations().map(|value| value.into()),
-      use_delay: value.delay_usage().map(|value| value.into_inner()),
-      delay: value.delay().map(|value| value.into()),
-      depth: value.depth(),
-      average_latency: value.average_latency().map(|value| value.into()),
-      latency_window: value.latency_window().map(|value| value.into()),
-      missed: value.missed().map(|value| value.into()),
-      total: value.total().map(|value| value.into()),
-      cost_usage: value.cost_usage().map(|value| value.into()),
-      cost_wait: value.cost_wait().map(|value| value.into()),
-      cost_indebt: value.cost_indebt().map(|value| value.into()),
-      cost_indelay: value.cost_indelay().map(|value| value.into()),
-      cost_vrate: value.cost_vrate().map(|value| value.into()),
+      read_bytes: value.read_bytes.map(|value| value.into()),
+      write_bytes: value.write_bytes.map(|value| value.into()),
+      discard_bytes: value.discard_bytes.map(|value| value.into()),
+      read_operations: value.read_operations.map(|value| value.into()),
+      write_operations: value.write_operations.map(|value| value.into()),
+      discard_operations: value.discard_operations.map(|value| value.into()),
+      use_delay: value.delay_usage.map(|value| value.into_inner()),
+      delay: value.delay.map(|value| value.into()),
+      depth: value.depth,
+      average_latency: value.average_latency.map(|value| value.into()),
+      latency_window: value.latency_window.map(|value| value.into()),
+      missed: value.missed.map(|value| value.into()),
+      total: value.total.map(|value| value.into()),
+      cost_usage: value.cost_usage.map(|value| value.into()),
+      cost_wait: value.cost_wait.map(|value| value.into()),
+      cost_indebt: value.cost_indebt.map(|value| value.into()),
+      cost_indelay: value.cost_indelay.map(|value| value.into()),
+      cost_vrate: value.cost_vrate.map(|value| value.into()),
     }
   }
 }
@@ -220,8 +220,8 @@ pub(super) struct IoWeight {
 impl From<CoreIoWeight> for IoWeight {
   fn from(value: CoreIoWeight) -> Self {
     Self {
-      default_weight: *value.default_weight().as_ref(),
-      devices: IoValues::devices(value.devices(), |value| *value.as_ref()),
+      default_weight: *value.default.as_ref(),
+      devices: IoValues::devices(&value.devices, |value| *value.as_ref()),
     }
   }
 }
@@ -249,7 +249,7 @@ pub(super) struct IoMax {
 }
 
 impl From<CoreIoMax> for IoMax {
-  fn from(value: CoreIoMax) -> Self { Self { devices: IoValues::devices(value.devices(), |value| (*value).into()) } }
+  fn from(value: CoreIoMax) -> Self { Self { devices: IoValues::devices(&value.devices, |value| (*value).into()) } }
 }
 
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
@@ -282,10 +282,10 @@ pub(super) struct IoDeviceMax {
 impl From<CoreIoDeviceMax> for IoDeviceMax {
   fn from(value: CoreIoDeviceMax) -> Self {
     Self {
-      read_bandwidth: MaxOr::from_value(value.read_bandwidth(), |value| PythonLimitValue::Bandwidth(value.into())),
-      write_bandwidth: MaxOr::from_value(value.write_bandwidth(), |value| PythonLimitValue::Bandwidth(value.into())),
-      read_iops: MaxOr::from_value(value.read_iops(), |value| PythonLimitValue::Operations(value.into())),
-      write_iops: MaxOr::from_value(value.write_iops(), |value| PythonLimitValue::Operations(value.into())),
+      read_bandwidth: MaxOr::from_value(value.read_bandwidth, |value| PythonLimitValue::Bandwidth(value.into())),
+      write_bandwidth: MaxOr::from_value(value.write_bandwidth, |value| PythonLimitValue::Bandwidth(value.into())),
+      read_iops: MaxOr::from_value(value.read_iops, |value| PythonLimitValue::Operations(value.into())),
+      write_iops: MaxOr::from_value(value.write_iops, |value| PythonLimitValue::Operations(value.into())),
     }
   }
 }
@@ -304,7 +304,7 @@ pub(super) struct IoLatency {
 
 impl From<CoreIoLatency> for IoLatency {
   fn from(value: CoreIoLatency) -> Self {
-    Self { targets: IoValues::devices(value.devices(), |value| value.as_ref().into()) }
+    Self { targets: IoValues::devices(&value.devices, |value| value.as_ref().into()) }
   }
 }
 
@@ -331,9 +331,7 @@ pub(super) struct IoCostQos {
 }
 
 impl From<CoreIoCostQos> for IoCostQos {
-  fn from(value: CoreIoCostQos) -> Self {
-    Self { devices: IoValues::devices(value.devices(), |value| (*value).into()) }
-  }
+  fn from(value: CoreIoCostQos) -> Self { Self { devices: IoValues::devices(&value.devices, |value| (*value).into()) } }
 }
 
 #[cfg_attr(feature = "stubs", pyo3_stub_gen::derive::gen_stub_pymethods)]
@@ -377,14 +375,14 @@ pub(super) struct IoDeviceCostQos {
 impl From<CoreIoDeviceCostQos> for IoDeviceCostQos {
   fn from(value: CoreIoDeviceCostQos) -> Self {
     Self {
-      enabled: value.enabled(),
-      control: value.control().to_string(),
-      read_percentile: value.read_percentile().into(),
-      read_latency: value.read_latency().into(),
-      write_percentile: value.write_percentile().into(),
-      write_latency: value.write_latency().into(),
-      min_scaling: value.min_scaling().into(),
-      max_scaling: value.max_scaling().into(),
+      enabled: value.enabled,
+      control: value.control.to_string(),
+      read_percentile: value.read_percentile.into(),
+      read_latency: value.read_latency.into(),
+      write_percentile: value.write_percentile.into(),
+      write_latency: value.write_latency.into(),
+      min_scaling: value.min_scaling.into(),
+      max_scaling: value.max_scaling.into(),
     }
   }
 }
@@ -401,7 +399,7 @@ pub(super) struct IoCostModel {
 
 impl From<CoreIoCostModel> for IoCostModel {
   fn from(value: CoreIoCostModel) -> Self {
-    Self { devices: IoValues::devices(value.devices(), |value| (*value).into()) }
+    Self { devices: IoValues::devices(&value.devices, |value| (*value).into()) }
   }
 }
 
@@ -445,14 +443,14 @@ pub(super) struct IoDeviceCostModel {
 impl From<CoreIoDeviceCostModel> for IoDeviceCostModel {
   fn from(value: CoreIoDeviceCostModel) -> Self {
     Self {
-      control: value.control().to_string(),
-      model: value.model().to_string(),
-      read_bandwidth: value.read_bandwidth().into(),
-      read_sequential_iops: value.read_sequential_iops().into(),
-      read_random_iops: value.read_random_iops().into(),
-      write_bandwidth: value.write_bandwidth().into(),
-      write_sequential_iops: value.write_sequential_iops().into(),
-      write_random_iops: value.write_random_iops().into(),
+      control: value.control.to_string(),
+      model: value.model.to_string(),
+      read_bandwidth: value.read_bandwidth.into(),
+      read_sequential_iops: value.read_sequential_iops.into(),
+      read_random_iops: value.read_random_iops.into(),
+      write_bandwidth: value.write_bandwidth.into(),
+      write_sequential_iops: value.write_sequential_iops.into(),
+      write_random_iops: value.write_random_iops.into(),
     }
   }
 }
@@ -461,7 +459,7 @@ struct IoValues;
 
 impl IoValues {
   fn devices<T, Output>(values: &BTreeMap<Device, T>, convert: impl Fn(&T) -> Output) -> BTreeMap<DeviceKey, Output> {
-    values.iter().map(|(device, value)| ((device.major(), device.minor()), convert(value))).collect()
+    values.iter().map(|(device, value)| ((device.major, device.minor), convert(value))).collect()
   }
 }
 

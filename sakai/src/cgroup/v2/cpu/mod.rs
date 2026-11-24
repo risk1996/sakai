@@ -8,7 +8,7 @@ pub use uclamp::*;
 pub use weight::*;
 pub use weight_nice::*;
 
-use crate::pressure::Pressure;
+use crate::{pressure::Pressure, v2::interface::cgroup_file};
 
 mod idle;
 mod max;
@@ -18,7 +18,7 @@ mod uclamp;
 mod weight;
 mod weight_nice;
 
-crate::v2::interface::cgroup_file!(alias
+cgroup_file!(alias
   /// CPU pressure snapshots.
   CpuPressure, Pressure::CPU_FILE_NAME, Read, Pressure
 );

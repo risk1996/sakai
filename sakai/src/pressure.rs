@@ -4,6 +4,7 @@ use crate::{
   error::{ParseError, ParseValueError},
   parse::{KeyedFields, ParseMicroseconds, ParsePercent, cgroup_value},
   unit::{Ratio, Time},
+  v2::interface::cgroup_file,
 };
 
 /// Pressure stall information from a cgroup `*.pressure` file.
@@ -19,9 +20,19 @@ use crate::{
 ///
 /// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
 pub struct Pressure {
-  some: PressureLine,
-  full: Option<PressureLine>,
+  /// Pressure during which at least one task was stalled.
+  ///
+  /// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
+  pub some: PressureLine,
+  /// Pressure during which all non-idle tasks were stalled.
+  ///
+  /// CPU PSI before Linux 5.13 does not report this line. `None` means the
+  /// line was absent; it does not mean zero stall time.
+  ///
+  /// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
+  pub full: Option<PressureLine>,
 }
 
 impl Pressure {
@@ -37,70 +48,7 @@ impl Pressure {
   ///
   /// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
   pub const MEMORY_FILE_NAME: &'static str = "memory.pressure";
-
-  /// Returns pressure during which at least one task was stalled.
-  ///
-  /// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
-  #[must_use]
-  pub const fn some(&self) -> PressureLine { self.some }
-
-  /// Returns pressure during which all non-idle tasks were stalled.
-  ///
-  /// CPU PSI before Linux 5.13 does not report this line. `None` means the
-  /// line was absent; it does not mean zero stall time.
-  ///
-  /// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
-  #[must_use]
-  pub const fn full(&self) -> Option<PressureLine> { self.full }
 }
-
-/// A set of rolling averages and cumulative stall time from PSI.
-///
-/// Averages are exponentially weighted percentages parsed as [`Ratio`]; a
-/// value of 0.25 represents 25% stalled time. Total time is accumulated since
-/// accounting began, converted from kernel microseconds to [`Time`].
-///
-/// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct PressureLine {
-  avg10: Ratio,
-  avg60: Ratio,
-  avg300: Ratio,
-  total: Time,
-}
-
-impl PressureLine {
-  /// Returns the exponentially weighted stalled-time ratio with a 10-second averaging period.
-  ///
-  /// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
-  #[must_use]
-  pub const fn avg10(&self) -> Ratio { self.avg10 }
-
-  /// Returns the exponentially weighted stalled-time ratio with a 60-second averaging period.
-  ///
-  /// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
-  #[must_use]
-  pub const fn avg60(&self) -> Ratio { self.avg60 }
-
-  /// Returns the exponentially weighted stalled-time ratio with a 300-second averaging period.
-  ///
-  /// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
-  #[must_use]
-  pub const fn avg300(&self) -> Ratio { self.avg300 }
-
-  /// Returns cumulative stall time, converted from kernel microseconds to [`Time`].
-  ///
-  /// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
-  #[must_use]
-  pub const fn total(&self) -> Time { self.total }
-}
-
-cgroup_value! { fields PressureLine, {
-  avg10: required ParsePercent => PressureField::Avg10,
-  avg60: required ParsePercent => PressureField::Avg60,
-  avg300: required ParsePercent => PressureField::Avg300,
-  total: required ParseMicroseconds => PressureField::Total,
-} }
 
 impl Pressure {
   /// Encodes the stored snapshot as canonical cgroup text.
@@ -133,6 +81,41 @@ impl FromStr for Pressure {
   }
 }
 
+/// A set of rolling averages and cumulative stall time from PSI.
+///
+/// Averages are exponentially weighted percentages parsed as [`Ratio`]; a
+/// value of 0.25 represents 25% stalled time. Total time is accumulated since
+/// accounting began, converted from kernel microseconds to [`Time`].
+///
+/// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
+pub struct PressureLine {
+  /// Exponentially weighted stalled-time ratio with a 10-second averaging period.
+  ///
+  /// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
+  pub avg10: Ratio,
+  /// Exponentially weighted stalled-time ratio with a 60-second averaging period.
+  ///
+  /// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
+  pub avg60: Ratio,
+  /// Exponentially weighted stalled-time ratio with a 300-second averaging period.
+  ///
+  /// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
+  pub avg300: Ratio,
+  /// Cumulative stall time, converted from kernel microseconds to [`Time`].
+  ///
+  /// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
+  pub total: Time,
+}
+
+cgroup_value! { fields PressureLine, {
+  avg10: required ParsePercent => PressureField::Avg10,
+  avg60: required ParsePercent => PressureField::Avg60,
+  avg300: required ParsePercent => PressureField::Avg300,
+  total: required ParseMicroseconds => PressureField::Total,
+} }
+
 /// Interrupt pressure from the cgroup v2 `irq.pressure` interface.
 ///
 /// Unlike CPU, memory, and I/O pressure, interrupt pressure reports only a
@@ -147,21 +130,21 @@ impl FromStr for Pressure {
 /// returns [`crate::Error::NotSupported`]; see the
 /// [Linux 6.14 implementation](https://github.com/torvalds/linux/blob/v6.14/kernel/sched/psi.c).
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
 pub struct IrqPressure {
-  full: PressureLine,
+  /// Interrupt pressure, the only line reported by this interface.
+  ///
+  /// See the [Linux interrupt PSI implementation](https://github.com/torvalds/linux/blob/v6.1/kernel/sched/psi.c).
+  pub full: PressureLine,
 }
+
+cgroup_file!(IrqPressure, IrqPressure::FILE_NAME, Read);
 
 impl IrqPressure {
   /// The cgroup v2 `irq.pressure` interface filename.
   ///
   /// Since Linux 6.1; see the [Linux 6.1 cgroup implementation](https://github.com/torvalds/linux/blob/v6.1/kernel/cgroup/cgroup.c).
   pub const FILE_NAME: &'static str = "irq.pressure";
-
-  /// Returns interrupt pressure, the only line reported by this interface.
-  ///
-  /// See the [Linux interrupt PSI implementation](https://github.com/torvalds/linux/blob/v6.1/kernel/sched/psi.c).
-  #[must_use]
-  pub const fn full(&self) -> PressureLine { self.full }
 }
 
 impl IrqPressure {
@@ -316,5 +299,3 @@ mod tests {
     ]);
   }
 }
-
-crate::v2::interface::cgroup_file!(IrqPressure, IrqPressure::FILE_NAME, Read);

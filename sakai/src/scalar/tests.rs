@@ -20,7 +20,7 @@ where
 {
   fn contract(file: &str, field: &'static str, input: &str, expected: T) {
     assert_eq!(Self::FILE_NAME, file);
-    assert_eq!(assert_ok!(input.parse::<Self>()).value(), expected);
+    assert_eq!(assert_ok!(input.parse::<Self>()).value, expected);
     Cases::<Self>::check([("", Err(Missing(field))), ("?", Err(Invalid(field, "?"))), ("1 2", Err(Excess))]);
     assert_eq!(size_of::<Self>(), size_of::<T>());
     assert_eq!(align_of::<Self>(), align_of::<T>());
@@ -52,7 +52,7 @@ fn retains_each_interface_contract() {
   let value = Bytes::new::<byte>(123);
   assert_eq!(format!("{:?}", MemoryCurrent::new(value)), format!("MemoryCurrent {{ value: {value:?} }}"));
   const CURRENT: MemoryCurrent = MemoryCurrent::new(Bytes { value: 123, dimension: PhantomData, units: PhantomData });
-  const VALUE: Bytes = CURRENT.value();
+  const VALUE: Bytes = CURRENT.value;
   assert_eq!(VALUE, value);
 }
 

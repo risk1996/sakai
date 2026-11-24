@@ -28,7 +28,7 @@ impl PidsReader {
   /// Read the volatile hierarchical task count, which can exceed pids.max.
   fn current(&self, py: Python<'_>) -> PyResult<Quantity<sakai::Count>> {
     PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::pids::PidsCurrent>)
-      .map(|value| value.value().into())
+      .map(|value| value.value.into())
   }
 
   /// Read the historical hierarchical task-count peak, including threads.
@@ -39,14 +39,14 @@ impl PidsReader {
   /// PidsReader for read errors.
   fn peak(&self, py: Python<'_>) -> PyResult<Quantity<sakai::Count>> {
     PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::pids::PidsPeak>)
-      .map(|value| value.value().into())
+      .map(|value| value.value.into())
   }
 
   /// Read the configured task limit as MaxOr[Count]; zero is a valid limit.
   #[gen_stub(override_return_type(type_repr = "MaxOr[Count]"))]
   fn max(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::pids::PidsMax>)
-      .map(|value| MaxOr::from_count(value.value()))
+      .map(|value| MaxOr::from_count(value.value))
   }
 
   /// Read hierarchical limit events; older kernels or pids_localevents report local events.
@@ -79,5 +79,5 @@ pub(super) struct PidsEvents {
 }
 
 impl From<CorePidsEvents> for PidsEvents {
-  fn from(value: CorePidsEvents) -> Self { Self { max: value.max().into() } }
+  fn from(value: CorePidsEvents) -> Self { Self { max: value.max.into() } }
 }

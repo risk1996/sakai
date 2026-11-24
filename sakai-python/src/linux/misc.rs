@@ -88,7 +88,7 @@ pub(super) struct MiscCapacity {
 
 impl From<CoreCapacity> for MiscCapacity {
   fn from(value: CoreCapacity) -> Self {
-    Self { resources: value.resources().iter().map(|(key, value)| (key.clone(), value.into())).collect() }
+    Self { resources: value.resources.iter().map(|(key, value)| (key.clone(), value.into())).collect() }
   }
 }
 
@@ -117,7 +117,7 @@ pub(super) struct MiscCurrent {
 
 impl From<CoreCurrent> for MiscCurrent {
   fn from(value: CoreCurrent) -> Self {
-    Self { resources: value.resources().iter().map(|(key, value)| (key.clone(), value.into())).collect() }
+    Self { resources: value.resources.iter().map(|(key, value)| (key.clone(), value.into())).collect() }
   }
 }
 
@@ -146,7 +146,7 @@ pub(super) struct MiscPeak {
 
 impl From<CorePeak> for MiscPeak {
   fn from(value: CorePeak) -> Self {
-    Self { resources: value.resources().iter().map(|(key, value)| (key.clone(), value.into())).collect() }
+    Self { resources: value.resources.iter().map(|(key, value)| (key.clone(), value.into())).collect() }
   }
 }
 
@@ -181,7 +181,7 @@ pub(super) struct MiscEvents {
 
 impl From<CoreEvents> for MiscEvents {
   fn from(value: CoreEvents) -> Self {
-    Self { resources: value.resources().iter().map(|(key, value)| (key.clone(), value.into())).collect() }
+    Self { resources: value.resources.iter().map(|(key, value)| (key.clone(), value.into())).collect() }
   }
 }
 
@@ -210,9 +210,7 @@ pub(super) struct MiscMax {
 
 impl From<CoreMax> for MiscMax {
   fn from(value: CoreMax) -> Self {
-    Self {
-      resources: value.resources().iter().map(|(name, value)| (name.clone(), MaxOr::from_count(*value))).collect(),
-    }
+    Self { resources: value.resources.iter().map(|(name, value)| (name.clone(), MaxOr::from_count(*value))).collect() }
   }
 }
 

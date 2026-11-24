@@ -5,6 +5,7 @@ use nutype::nutype;
 use crate::{
   error::ParseValueError,
   parse::{EncodeCgroup, ParseCgroup, cgroup_value},
+  v2::interface::cgroup_file,
 };
 
 /// A CPU scheduling nice value from -20 (highest weight) through 19 (lowest weight).
@@ -18,21 +19,41 @@ use crate::{
 ///
 /// See [Linux `cpu.weight.nice` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
 #[nutype(
-  validate(greater_or_equal = -20, less_or_equal = 19),
+  validate(with = Nice::validate_nice, error = NiceError),
   derive(Debug, Clone, Copy, PartialEq, Eq, Hash, AsRef)
 )]
+#[non_exhaustive]
 pub struct Nice(i8);
 
-crate::v2::interface::cgroup_file!(Nice, "cpu.weight.nice", ReadWrite);
+cgroup_value! { token Nice: ParseNice, "nice" }
+cgroup_file!(Nice, "cpu.weight.nice", ReadWrite);
 
 impl Nice {
   /// The cgroup v2 `cpu.weight.nice` interface filename.
   ///
   /// See [Linux `cpu.weight.nice` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
   pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
+
+  fn validate_nice(nice: &i8) -> Result<(), NiceError> {
+    match *nice {
+      | ..=-21 => Err(NiceError::GreaterOrEqualViolated),
+      | -20..=19 => Ok(()),
+      | _ => Err(NiceError::LessOrEqualViolated),
+    }
+  }
 }
 
-cgroup_value! { token Nice: ParseNice, "nice" }
+/// An invalid CPU scheduling [`Nice`] value.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
+pub enum NiceError {
+  /// The nice value is below -20.
+  #[error("Nice is too small. The value must be greater or equal to -20.")]
+  GreaterOrEqualViolated,
+  /// The nice value is above 19.
+  #[error("Nice is too big. The value must be less or equal to 19.")]
+  LessOrEqualViolated,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct ParseNice;

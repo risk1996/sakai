@@ -4,6 +4,7 @@ use crate::{
   error::{ParseError, ParseValueError},
   parse::{EncodeCgroup, KeyedFields, ParseCgroup, ParseMicroseconds, cgroup_value},
   unit::{Count, Time},
+  v2::interface::cgroup_file,
 };
 
 /// CPU usage counters from a cgroup's `cpu.stat` file.
@@ -14,63 +15,26 @@ use crate::{
 ///
 /// See [Linux `cpu.stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct CpuStat {
-  time: CpuTimeStat,
-  bandwidth: Option<CpuBandwidthStat>,
+  /// CPU usage times.
+  ///
+  /// See [Linux CPU interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
+  pub time: CpuTimeStat,
+  /// CPU bandwidth counters when the CPU controller reports them.
+  ///
+  /// See [Linux CPU interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
+  pub bandwidth: Option<CpuBandwidthStat>,
 }
 
-crate::v2::interface::cgroup_file!(CpuStat, "cpu.stat", Read);
+cgroup_file!(CpuStat, "cpu.stat", Read);
 
 impl CpuStat {
   /// The cgroup v2 `cpu.stat` interface filename.
   ///
   /// See [Linux `cpu.stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
   pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-
-  /// Returns CPU usage times.
-  ///
-  /// See [Linux CPU interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
-  #[must_use]
-  pub const fn time(&self) -> CpuTimeStat { self.time }
-
-  /// Returns CPU bandwidth counters when the CPU controller reports them.
-  ///
-  /// See [Linux CPU interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
-  #[must_use]
-  pub const fn bandwidth(&self) -> Option<CpuBandwidthStat> { self.bandwidth }
 }
-
-/// Runqueue throttling in `cpu.stat.local`, including ancestor bandwidth limits.
-///
-/// This is a live snapshot. An empty file means the controller reports no
-/// local counter; an absent file is handled separately by the reader.
-///
-/// See [Linux `cpu.stat.local` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
-///
-/// Since Linux 6.6; see the [upstream Linux 6.6 source](https://github.com/torvalds/linux/blob/v6.6/kernel/cgroup/cgroup.c).
-/// Older kernels return [`crate::Error::FileMissing`] when this interface is read.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct CpuStatLocal {
-  throttled: Option<Time>,
-}
-
-crate::v2::interface::cgroup_file!(CpuStatLocal, "cpu.stat.local", Read);
-
-impl CpuStatLocal {
-  /// The cgroup v2 `cpu.stat.local` interface filename.
-  ///
-  /// See [Linux `cpu.stat.local` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
-  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-
-  /// Returns throttling of this cgroup's own runqueues, when reported.
-  ///
-  /// See [Linux CPU interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
-  pub const fn throttled(&self) -> Option<Time> { self.throttled }
-}
-
-cgroup_value! { keyed CpuStatLocal, CpuStatField::label, {
-  throttled: optional ParseMicroseconds => CpuStatField::ThrottledUsec,
-} }
 
 impl CpuStat {
   /// Encodes the stored snapshot as canonical cgroup text.
@@ -88,52 +52,74 @@ impl CpuStat {
   }
 }
 
+/// Runqueue throttling in `cpu.stat.local`, including ancestor bandwidth limits.
+///
+/// This is a live snapshot. An empty file means the controller reports no
+/// local counter; an absent file is handled separately by the reader.
+///
+/// See [Linux `cpu.stat.local` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
+///
+/// Since Linux 6.6; see the [upstream Linux 6.6 source](https://github.com/torvalds/linux/blob/v6.6/kernel/cgroup/cgroup.c).
+/// Older kernels return [`crate::Error::FileMissing`] when this interface is read.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub struct CpuStatLocal {
+  /// Throttling of this cgroup's own runqueues, when reported.
+  ///
+  /// See [Linux CPU interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
+  pub throttled: Option<Time>,
+}
+
+cgroup_value! { keyed CpuStatLocal, CpuStatField::label, {
+  throttled: optional ParseMicroseconds => CpuStatField::ThrottledUsec,
+} }
+cgroup_file!(CpuStatLocal, "cpu.stat.local", Read);
+
+impl CpuStatLocal {
+  /// The cgroup v2 `cpu.stat.local` interface filename.
+  ///
+  /// See [Linux `cpu.stat.local` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
+  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
+}
+
 /// CPU usage times from a cgroup's `cpu.stat` file.
 ///
 /// See [Linux `cpu.stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct CpuTimeStat {
-  usage: Time,
-  user: Time,
-  system: Time,
-  nice: Option<Time>,
-  force_idle: Option<Time>,
-}
-
-impl CpuTimeStat {
-  /// Returns total CPU time consumed by the cgroup and its descendants.
+  /// Total CPU time consumed by the cgroup and its descendants.
   ///
   /// See [Linux CPU interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
-  #[must_use]
-  pub const fn usage(&self) -> Time { self.usage }
-
-  /// Returns CPU time consumed in user mode.
+  pub usage: Time,
+  /// CPU time consumed in user mode.
   ///
   /// See [Linux CPU interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
-  #[must_use]
-  pub const fn user(&self) -> Time { self.user }
-
-  /// Returns CPU time consumed in kernel mode.
+  pub user: Time,
+  /// CPU time consumed in kernel mode.
   ///
   /// See [Linux CPU interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
-  #[must_use]
-  pub const fn system(&self) -> Time { self.system }
-
-  /// Returns user time of positively niced tasks, already included in [`Self::user`].
+  pub system: Time,
+  /// User time of positively niced tasks, already included in [`Self::user`].
   ///
   /// Since Linux 6.13; see the [Linux 6.13 source](https://github.com/torvalds/linux/blob/v6.13/kernel/cgroup/rstat.c).
   /// `None` means the counter was not reported, rather than measured zero.
-  #[must_use]
-  pub const fn nice(&self) -> Option<Time> { self.nice }
-
-  /// Returns sibling CPU time forced idle by core scheduling for this subtree.
+  pub nice: Option<Time>,
+  /// Sibling CPU time forced idle by core scheduling for this subtree.
   ///
   /// This is separate from CPU usage. Since Linux 6.0 and available with
   /// `CONFIG_SCHED_CORE`; see the [Linux 6.0 source](https://github.com/torvalds/linux/blob/v6.0/kernel/cgroup/rstat.c).
   /// `None` means the counter was not reported, rather than measured zero.
-  #[must_use]
-  pub const fn force_idle(&self) -> Option<Time> { self.force_idle }
+  pub force_idle: Option<Time>,
 }
+
+cgroup_value! { keyed CpuTimeStat, CpuStatField::label, {
+  usage: required ParseMicroseconds => CpuStatField::UsageUsec,
+  user: required ParseMicroseconds => CpuStatField::UserUsec,
+  system: required ParseMicroseconds => CpuStatField::SystemUsec,
+  nice: optional ParseMicroseconds => CpuStatField::NiceUsec,
+  force_idle: optional ParseMicroseconds => CpuStatField::ForceIdleUsec,
+} }
 
 /// CPU bandwidth counters from a cgroup's `cpu.stat` file.
 ///
@@ -147,41 +133,35 @@ impl CpuTimeStat {
 /// See [Linux `cpu.stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files)
 /// and the [counter implementation](https://github.com/torvalds/linux/blob/v6.13/kernel/sched/sched.h).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct CpuBandwidthStat {
-  nr_periods: Count,
-  nr_throttled: Count,
-  throttled: Time,
-  burst: Option<CpuBurstStat>,
-}
-
-impl CpuBandwidthStat {
-  /// Returns the number of elapsed enforcement periods.
+  /// Number of elapsed enforcement periods.
   ///
   /// See [Linux CPU interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
-  #[must_use]
-  pub const fn nr_periods(&self) -> Count { self.nr_periods }
-
-  /// Returns the number of periods in which the cgroup was throttled.
+  pub nr_periods: Count,
+  /// Number of periods in which the cgroup was throttled.
   ///
   /// See [Linux CPU interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
-  #[must_use]
-  pub const fn nr_throttled(&self) -> Count { self.nr_throttled }
-
-  /// Returns the total time for which the cgroup was throttled.
+  pub nr_throttled: Count,
+  /// Total time for which the cgroup was throttled.
   ///
   /// See [Linux CPU interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
-  #[must_use]
-  pub const fn throttled(&self) -> Time { self.throttled }
-
-  /// Returns CPU burst counters when reported by the kernel.
+  pub throttled: Time,
+  /// CPU burst counters when reported by the kernel.
   ///
   /// See [Linux CPU interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
   ///
   /// Since Linux 5.16; see the [upstream Linux 5.16 source](https://github.com/torvalds/linux/blob/v5.16/kernel/sched/core.c).
   /// `None` means the kernel did not report burst counters.
-  #[must_use]
-  pub const fn burst(&self) -> Option<CpuBurstStat> { self.burst }
+  pub burst: Option<CpuBurstStat>,
 }
+
+cgroup_value! { keyed CpuBandwidthStat, CpuStatField::label, {
+  burst: group CpuBurstStat => CpuStatField::bandwidth_burst_fields(),
+  nr_periods: required ParseBandwidthCount => CpuStatField::NrPeriods,
+  nr_throttled: required ParseBandwidthCount => CpuStatField::NrThrottled,
+  throttled: required ParseMicroseconds => CpuStatField::ThrottledUsec,
+} }
 
 /// CPU burst counters from a cgroup's `cpu.stat` file.
 ///
@@ -189,24 +169,22 @@ impl CpuBandwidthStat {
 ///
 /// Since Linux 5.16; see the [upstream Linux 5.16 source](https://github.com/torvalds/linux/blob/v5.16/kernel/sched/core.c).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct CpuBurstStat {
-  nr_bursts: Count,
-  burst: Time,
-}
-
-impl CpuBurstStat {
-  /// Returns the number of periods in which a burst occurred.
+  /// Number of periods in which a burst occurred.
   ///
   /// See [Linux CPU interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
-  #[must_use]
-  pub const fn nr_bursts(&self) -> Count { self.nr_bursts }
-
-  /// Returns cumulative CPU time consumed above quota during bursts.
+  pub nr_bursts: Count,
+  /// Cumulative CPU time consumed above quota during bursts.
   ///
   /// See [Linux CPU interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
-  #[must_use]
-  pub const fn burst(&self) -> Time { self.burst }
+  pub burst: Time,
 }
+
+cgroup_value! { keyed CpuBurstStat, CpuStatField::label, {
+  nr_bursts: required ParseBandwidthCount => CpuStatField::NrBursts,
+  burst: required ParseMicroseconds => CpuStatField::BurstUsec,
+} }
 
 struct ParseBandwidthCount;
 
@@ -245,26 +223,6 @@ impl FromStr for CpuStat {
     })
   }
 }
-
-cgroup_value! { keyed CpuTimeStat, CpuStatField::label, {
-  usage: required ParseMicroseconds => CpuStatField::UsageUsec,
-  user: required ParseMicroseconds => CpuStatField::UserUsec,
-  system: required ParseMicroseconds => CpuStatField::SystemUsec,
-  nice: optional ParseMicroseconds => CpuStatField::NiceUsec,
-  force_idle: optional ParseMicroseconds => CpuStatField::ForceIdleUsec,
-} }
-
-cgroup_value! { keyed CpuBandwidthStat, CpuStatField::label, {
-  burst: group CpuBurstStat => CpuStatField::bandwidth_burst_fields(),
-  nr_periods: required ParseBandwidthCount => CpuStatField::NrPeriods,
-  nr_throttled: required ParseBandwidthCount => CpuStatField::NrThrottled,
-  throttled: required ParseMicroseconds => CpuStatField::ThrottledUsec,
-} }
-
-cgroup_value! { keyed CpuBurstStat, CpuStatField::label, {
-  nr_bursts: required ParseBandwidthCount => CpuStatField::NrBursts,
-  burst: required ParseMicroseconds => CpuStatField::BurstUsec,
-} }
 
 #[derive(
   Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, strum::EnumString, strum::Display, strum::IntoStaticStr,
