@@ -25,7 +25,7 @@ use crate::{
 #[non_exhaustive]
 pub struct Nice(i8);
 
-cgroup_value! { token Nice: ParseNice, "nice" }
+cgroup_value! { token Nice: Nice, "nice" }
 cgroup_file!(Nice, "cpu.weight.nice", ReadWrite);
 
 impl Nice {
@@ -50,10 +50,7 @@ pub enum NiceError {
   LessOrEqualViolated,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-struct ParseNice;
-
-impl ParseCgroup<ParseNice> for Nice {
+impl ParseCgroup<Self> for Nice {
   type Error = ParseValueError;
 
   fn parse_cgroup(value: &str) -> Result<Self, Self::Error> {
@@ -61,7 +58,7 @@ impl ParseCgroup<ParseNice> for Nice {
   }
 }
 
-impl EncodeCgroup<ParseNice> for Nice {
+impl EncodeCgroup<Self> for Nice {
   fn encode_token(&self, output: &mut String) -> Option<()> {
     let value = self.into_inner();
     write!(output, "{value}").ok()
