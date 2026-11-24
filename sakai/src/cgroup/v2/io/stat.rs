@@ -147,7 +147,7 @@ cgroup_value! { fields IoDeviceStat, {
   cost_wait: optional ParseMicroseconds => "cost.wait",
   cost_indebt: optional ParseMicroseconds => "cost.indebt",
   cost_indelay: optional ParseMicroseconds => "cost.indelay",
-  cost_vrate: optional ParseCostPercent => "cost.vrate",
+  cost_vrate: optional CostPercent => "cost.vrate",
 } }
 
 /// The kernel's signed `use_delay` debug indicator.
@@ -171,12 +171,10 @@ impl ParseCgroup<Self> for DelayUsage {
 
 struct ParseNanoseconds;
 
-struct ParseCostPercent;
-
 #[nutype(validate(finite, greater_or_equal = 0.0), derive(Debug, Clone, Copy))]
 struct CostPercent(f64);
 
-impl ParseCgroup<ParseCostPercent> for Ratio {
+impl ParseCgroup<CostPercent> for Ratio {
   type Error = ParseValueError;
 
   fn parse_cgroup(value: &str) -> Result<Self, Self::Error> {
@@ -218,7 +216,7 @@ impl EncodeCgroup<ParseMilliseconds> for Time {
   }
 }
 
-impl EncodeCgroup<ParseCostPercent> for Ratio {
+impl EncodeCgroup<CostPercent> for Ratio {
   fn encode_token(&self, output: &mut String) -> Option<()> {
     crate::parse::encode_percent(self, output, |value| CostPercent::try_new(value).is_ok())
   }

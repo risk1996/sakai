@@ -76,7 +76,7 @@ impl FromStr for IoWeight {
 
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
     let fields = KeyedFields::parse(contents, |_| "weight")?;
-    let default = fields.required::<ParseWeight, _>(DEFAULT_WEIGHT_KEY)?;
+    let default = fields.required::<Weight, _>(DEFAULT_WEIGHT_KEY)?;
     let devices = fields
       .iter()
       .filter(|(key, _)| *key != DEFAULT_WEIGHT_KEY)
@@ -86,9 +86,7 @@ impl FromStr for IoWeight {
   }
 }
 
-struct ParseWeight;
-
-impl ParseCgroup<ParseWeight> for Weight {
+impl ParseCgroup<Self> for Weight {
   type Error = ParseValueError;
 
   fn parse_cgroup(value: &str) -> Result<Self, Self::Error> {

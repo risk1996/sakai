@@ -2,7 +2,7 @@ use std::{collections::BTreeMap, str::FromStr};
 
 use crate::{
   error::{ParseError, ParseValueError},
-  parse::{KeyedFields, ParseMicroseconds, ParsePercent, cgroup_value},
+  parse::{KeyedFields, ParseMicroseconds, Percent, cgroup_value},
   unit::{Ratio, Time},
   v2::interface::cgroup_file,
 };
@@ -95,9 +95,9 @@ pub struct PressureLine {
 }
 
 cgroup_value! { fields PressureLine, {
-  avg10: required ParsePercent => PressureField::Avg10,
-  avg60: required ParsePercent => PressureField::Avg60,
-  avg300: required ParsePercent => PressureField::Avg300,
+  avg10: required Percent => PressureField::Avg10,
+  avg60: required Percent => PressureField::Avg60,
+  avg300: required Percent => PressureField::Avg300,
   total: required ParseMicroseconds => PressureField::Total,
 } }
 
