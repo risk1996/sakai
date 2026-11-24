@@ -24,11 +24,6 @@ pub struct TaskId(i32);
 cgroup_value! { token TaskId: TaskId, TASK_ID }
 
 impl TaskId {
-  /// The process list interface filename.
-  pub const PROCS_FILE_NAME: &'static str = "cgroup.procs";
-  /// The thread list interface filename.
-  pub const THREADS_FILE_NAME: &'static str = "cgroup.threads";
-
   pub(super) fn parse_list(contents: &str) -> Result<Vec<Self>, ParseError<ParseValueError>> {
     contents
       .lines()

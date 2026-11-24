@@ -75,11 +75,6 @@ cgroup_file!(file IoCostQos, "io.cost.qos", ReadWrite);
 cgroup_file!(read IoCostQos => IoCostQos);
 cgroup_file!(write IoCostQos, 'a => (Device, &'a IoDeviceCostQos), encode_qos);
 
-impl IoCostQos {
-  /// The root-only I/O cost QoS interface filename.
-  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-}
-
 /// I/O cost controller enablement, latency targets, and scaling bounds for a device.
 ///
 /// See [Linux I/O cost interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
@@ -147,11 +142,6 @@ cgroup_value! { device_rows IoCostModel, devices: IoDeviceCostModel, Device::par
 cgroup_file!(file IoCostModel, "io.cost.model", ReadWrite);
 cgroup_file!(read IoCostModel => IoCostModel);
 cgroup_file!(write IoCostModel, 'a => (Device, &'a IoDeviceCostModel), encode_model);
-
-impl IoCostModel {
-  /// The root-only I/O cost model interface filename.
-  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-}
 
 /// Device cost-model rates, with sequential and random IOPS measured for 4 KiB I/O.
 ///

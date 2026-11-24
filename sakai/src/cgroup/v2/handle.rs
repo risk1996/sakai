@@ -328,13 +328,13 @@ mod tests {
   use super::*;
   use crate::{
     error::{ParseError, ParseValueError},
-    pressure::Pressure,
     v2::{
+      CgroupFile,
       core::{CgroupEvents, CgroupStat, CgroupType},
       cpu::{CpuIdle, CpuStatLocal},
-      cpuset::{CpuList, CpusetPartition, MemoryNodeList},
-      io::{IoLatency, IoMax, IoStat, IoWeight},
-      memory::{MemoryCurrent, MemoryHigh, MemoryLow, MemoryMax, MemoryMin, MemoryPeak, MemoryStat},
+      cpuset::{CpuList, CpusEffective, CpusetPartition, MemoryNodeList, MemsEffective},
+      io::{IoLatency, IoMax, IoPressure, IoStat, IoWeight},
+      memory::{MemoryCurrent, MemoryHigh, MemoryLow, MemoryMax, MemoryMin, MemoryPeak, MemoryPressure, MemoryStat},
       pids::{PidsCurrent, PidsEvents, PidsMax},
     },
   };
@@ -402,13 +402,13 @@ mod tests {
     let path = cgroup.path();
     for (result, name) in [
       (cgroup.read_value::<crate::v2::cpu::CpuStatLocal>().map(|_| ()), CpuStatLocal::FILE_NAME),
-      (cgroup.read_value::<crate::v2::cpuset::CpuList>().map(|_| ()), CpuList::CPUS_FILE_NAME),
-      (cgroup.read_value::<crate::v2::cpuset::CpusEffective>().map(|_| ()), CpuList::EFFECTIVE_FILE_NAME),
-      (cgroup.read_value::<crate::v2::cpuset::MemoryNodeList>().map(|_| ()), MemoryNodeList::MEMS_FILE_NAME),
-      (cgroup.read_value::<crate::v2::cpuset::MemsEffective>().map(|_| ()), MemoryNodeList::EFFECTIVE_FILE_NAME),
+      (cgroup.read_value::<crate::v2::cpuset::CpuList>().map(|_| ()), CpuList::FILE_NAME),
+      (cgroup.read_value::<crate::v2::cpuset::CpusEffective>().map(|_| ()), CpusEffective::FILE_NAME),
+      (cgroup.read_value::<crate::v2::cpuset::MemoryNodeList>().map(|_| ()), MemoryNodeList::FILE_NAME),
+      (cgroup.read_value::<crate::v2::cpuset::MemsEffective>().map(|_| ()), MemsEffective::FILE_NAME),
       (cgroup.read_value::<crate::v2::cpuset::CpusetPartition>().map(|_| ()), CpusetPartition::FILE_NAME),
       (cgroup.read_value::<crate::v2::io::IoStat>().map(|_| ()), IoStat::FILE_NAME),
-      (cgroup.read_value::<crate::v2::io::IoPressure>().map(|_| ()), Pressure::IO_FILE_NAME),
+      (cgroup.read_value::<crate::v2::io::IoPressure>().map(|_| ()), IoPressure::FILE_NAME),
       (cgroup.read_value::<crate::v2::io::IoWeight>().map(|_| ()), IoWeight::FILE_NAME),
       (cgroup.read_value::<crate::v2::io::IoMax>().map(|_| ()), IoMax::FILE_NAME),
       (cgroup.read_value::<crate::v2::io::IoLatency>().map(|_| ()), IoLatency::FILE_NAME),
@@ -425,7 +425,7 @@ mod tests {
       (cgroup.read_value::<crate::v2::memory::MemoryMin>().map(|_| ()), MemoryMin::FILE_NAME),
       (cgroup.read_value::<crate::v2::memory::MemoryPeak>().map(|_| ()), MemoryPeak::FILE_NAME),
       (cgroup.read_value::<crate::v2::memory::MemoryStat>().map(|_| ()), MemoryStat::FILE_NAME),
-      (cgroup.read_value::<crate::v2::memory::MemoryPressure>().map(|_| ()), Pressure::MEMORY_FILE_NAME),
+      (cgroup.read_value::<crate::v2::memory::MemoryPressure>().map(|_| ()), MemoryPressure::FILE_NAME),
     ] {
       assert!(matches!(result, Err(Error::FileMissing { path: missing }) if missing == path.join(name)));
     }
@@ -444,15 +444,11 @@ mod tests {
     for fixture in ["p4", "p4_older", "p4_root"] {
       let cgroup = Cgroup::fixture(&format!("fixtures/{fixture}"));
       let path = cgroup.path();
-      cgroup.check_fixture(CpuList::CPUS_FILE_NAME, true, || cgroup.read_value::<crate::v2::cpuset::CpuList>());
+      cgroup.check_fixture(CpuList::FILE_NAME, true, || cgroup.read_value::<crate::v2::cpuset::CpuList>());
+      cgroup.check_fixture(CpusEffective::FILE_NAME, true, || cgroup.read_value::<crate::v2::cpuset::CpusEffective>());
       cgroup
-        .check_fixture(CpuList::EFFECTIVE_FILE_NAME, true, || cgroup.read_value::<crate::v2::cpuset::CpusEffective>());
-      cgroup.check_fixture(MemoryNodeList::MEMS_FILE_NAME, true, || {
-        cgroup.read_value::<crate::v2::cpuset::MemoryNodeList>()
-      });
-      cgroup.check_fixture(MemoryNodeList::EFFECTIVE_FILE_NAME, true, || {
-        cgroup.read_value::<crate::v2::cpuset::MemsEffective>()
-      });
+        .check_fixture(MemoryNodeList::FILE_NAME, true, || cgroup.read_value::<crate::v2::cpuset::MemoryNodeList>());
+      cgroup.check_fixture(MemsEffective::FILE_NAME, true, || cgroup.read_value::<crate::v2::cpuset::MemsEffective>());
       match fixture {
         | "p4_root" => assert!(
           matches!(cgroup.read_value::<crate::v2::cpuset::CpusetPartition>(), Err(Error::FileMissing { path: missing }) if missing == path.join(CpusetPartition::FILE_NAME))
@@ -470,7 +466,7 @@ mod tests {
       let cgroup = Cgroup::fixture(&format!("fixtures/{fixture}"));
       let path = cgroup.path();
       cgroup.check_fixture(IoStat::FILE_NAME, false, || cgroup.read_value::<crate::v2::io::IoStat>());
-      cgroup.check_fixture(Pressure::IO_FILE_NAME, false, || cgroup.read_value::<crate::v2::io::IoPressure>());
+      cgroup.check_fixture(IoPressure::FILE_NAME, false, || cgroup.read_value::<crate::v2::io::IoPressure>());
       cgroup.check_fixture(IoWeight::FILE_NAME, false, || cgroup.read_value::<crate::v2::io::IoWeight>());
       cgroup.check_fixture(IoMax::FILE_NAME, false, || cgroup.read_value::<crate::v2::io::IoMax>());
       match fixture {

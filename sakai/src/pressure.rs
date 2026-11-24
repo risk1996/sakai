@@ -36,21 +36,6 @@ pub struct Pressure {
 }
 
 impl Pressure {
-  /// The cgroup v2 `cpu.pressure` interface filename.
-  ///
-  /// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
-  pub const CPU_FILE_NAME: &'static str = "cpu.pressure";
-  /// The cgroup v2 `io.pressure` interface filename.
-  ///
-  /// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
-  pub const IO_FILE_NAME: &'static str = "io.pressure";
-  /// The cgroup v2 `memory.pressure` interface filename.
-  ///
-  /// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
-  pub const MEMORY_FILE_NAME: &'static str = "memory.pressure";
-}
-
-impl Pressure {
   /// Encodes the stored snapshot as canonical cgroup text.
   ///
   /// # Errors
@@ -125,7 +110,8 @@ cgroup_value! { fields PressureLine, {
 ///
 /// Since Linux 6.1; availability requires PSI and `CONFIG_IRQ_TIME_ACCOUNTING`.
 /// See the [Linux 6.1 PSI implementation](https://github.com/torvalds/linux/blob/v6.1/kernel/sched/psi.c)
-/// and [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
+/// and [Linux 6.1 cgroup interface](https://github.com/torvalds/linux/blob/v6.1/kernel/cgroup/cgroup.c).
+/// See also [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
 /// Since Linux 6.14, reading with IRQ time accounting disabled at runtime
 /// returns [`crate::Error::NotSupported`]; see the
 /// [Linux 6.14 implementation](https://github.com/torvalds/linux/blob/v6.14/kernel/sched/psi.c).
@@ -138,14 +124,7 @@ pub struct IrqPressure {
   pub full: PressureLine,
 }
 
-cgroup_file!(IrqPressure, IrqPressure::FILE_NAME, Read);
-
-impl IrqPressure {
-  /// The cgroup v2 `irq.pressure` interface filename.
-  ///
-  /// Since Linux 6.1; see the [Linux 6.1 cgroup implementation](https://github.com/torvalds/linux/blob/v6.1/kernel/cgroup/cgroup.c).
-  pub const FILE_NAME: &'static str = "irq.pressure";
-}
+cgroup_file!(IrqPressure, "irq.pressure", Read);
 
 impl IrqPressure {
   /// Encodes the stored snapshot as canonical cgroup text.

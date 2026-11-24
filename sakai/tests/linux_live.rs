@@ -7,7 +7,7 @@ use sakai::{
   Bytes, Cgroup, Error, IrqPressure, MaxOr, NonZeroTime, Pressure, Time,
   error::{ParseError, ParseValueError},
   v2::{
-    CgroupPath,
+    CgroupFile, CgroupPath,
     core::{
       CgroupController, CgroupControllers, CgroupEvents, CgroupFreeze, CgroupMaxDepth, CgroupMaxDescendants,
       CgroupPressure, CgroupProcs, CgroupStat, CgroupStatLocal, CgroupSubtreeControl, CgroupThreads, CgroupType,
@@ -156,7 +156,7 @@ fn parses_available_root_cpu_interfaces() {
     (CpuIdle::FILE_NAME, |contents| contents.parse::<CpuIdle>().map(|_| ())),
     (CpuMax::FILE_NAME, |contents| contents.parse::<CpuMax>().map(|_| ())),
     (CpuMaxBurst::FILE_NAME, |contents| contents.parse::<CpuMaxBurst>().map(|_| ())),
-    (Pressure::CPU_FILE_NAME, |contents| contents.parse::<Pressure>().map(|_| ())),
+    (CpuPressure::FILE_NAME, |contents| contents.parse::<Pressure>().map(|_| ())),
     (CpuStat::FILE_NAME, |contents| contents.parse::<CpuStat>().map(|_| ())),
     (CpuStatLocal::FILE_NAME, |contents| contents.parse::<CpuStatLocal>().map(|_| ())),
     (CpuUclampMax::FILE_NAME, |contents| contents.parse::<CpuUclampMax>().map(|_| ())),
@@ -210,12 +210,12 @@ impl CgroupFixture {
     let parent = cgroup.as_ref();
     let path = parent.join(format!("sakai-vmtest-{}", std::process::id()));
 
-    let controllers = fs::read_to_string(parent.join(CgroupController::CONTROLLERS_FILE_NAME))?;
-    fs::write(parent.join(CgroupController::SUBTREE_CONTROL_FILE_NAME), "+cpu")?;
-    fs::write(parent.join(CgroupController::SUBTREE_CONTROL_FILE_NAME), "+pids")?;
+    let controllers = fs::read_to_string(parent.join(CgroupControllers::FILE_NAME))?;
+    fs::write(parent.join(CgroupSubtreeControl::FILE_NAME), "+cpu")?;
+    fs::write(parent.join(CgroupSubtreeControl::FILE_NAME), "+pids")?;
     for controller in ["memory", "io", "cpuset", "hugetlb", "rdma", "dmem", "misc"] {
       if controllers.split_ascii_whitespace().any(|available| available == controller) {
-        fs::write(parent.join(CgroupController::SUBTREE_CONTROL_FILE_NAME), format!("+{controller}"))?;
+        fs::write(parent.join(CgroupSubtreeControl::FILE_NAME), format!("+{controller}"))?;
       }
     }
     fs::create_dir(&path)?;
@@ -322,10 +322,10 @@ fn parses_live_delegated_controller_interfaces() {
 
   match assert_ok!(reader.read_value::<CgroupControllers>()).contains(&CgroupController::Cpuset) {
     | true => {
-      fixture.check(CpuList::CPUS_FILE_NAME, false, reader.read_value::<CpuList>());
-      fixture.check(CpuList::EFFECTIVE_FILE_NAME, false, reader.read_value::<CpusEffective>());
-      fixture.check(MemoryNodeList::MEMS_FILE_NAME, false, reader.read_value::<MemoryNodeList>());
-      fixture.check(MemoryNodeList::EFFECTIVE_FILE_NAME, false, reader.read_value::<MemsEffective>());
+      fixture.check(CpuList::FILE_NAME, false, reader.read_value::<CpuList>());
+      fixture.check(CpusEffective::FILE_NAME, false, reader.read_value::<CpusEffective>());
+      fixture.check(MemoryNodeList::FILE_NAME, false, reader.read_value::<MemoryNodeList>());
+      fixture.check(MemsEffective::FILE_NAME, false, reader.read_value::<MemsEffective>());
       fixture.check(CpusetPartition::FILE_NAME, true, reader.read_value::<CpusetPartition>());
       assert_eq!(assert_ok!(reader.read_value::<CpuList>()), CpuList::default());
       assert_eq!(assert_ok!(reader.read_value::<MemoryNodeList>()), MemoryNodeList::default());
@@ -350,7 +350,7 @@ fn parses_live_delegated_controller_interfaces() {
   fixture.check(CpuIdle::FILE_NAME, true, reader.read_value::<CpuIdle>());
   fixture.check(CpuMax::FILE_NAME, false, reader.read_value::<CpuMax>());
   fixture.check(CpuMaxBurst::FILE_NAME, true, reader.read_value::<CpuMaxBurst>());
-  fixture.check(Pressure::CPU_FILE_NAME, false, reader.read_value::<CpuPressure>());
+  fixture.check(CpuPressure::FILE_NAME, false, reader.read_value::<CpuPressure>());
   fixture.check(CpuStat::FILE_NAME, false, reader.read_value::<CpuStat>());
   fixture.check(CpuStatLocal::FILE_NAME, true, reader.read_value::<CpuStatLocal>());
   fixture.check(CpuUclampMax::FILE_NAME, true, reader.read_value::<CpuUclampMax>());
@@ -367,7 +367,7 @@ fn parses_live_delegated_controller_interfaces() {
     "vmtest kernel must provide the I/O controller"
   );
   fixture.check(IoStat::FILE_NAME, false, reader.read_value::<IoStat>());
-  fixture.check(Pressure::IO_FILE_NAME, true, reader.read_value::<IoPressure>());
+  fixture.check(IoPressure::FILE_NAME, true, reader.read_value::<IoPressure>());
   fixture.check(IoWeight::FILE_NAME, true, reader.read_value::<IoWeight>());
   fixture.check(IoMax::FILE_NAME, false, reader.read_value::<IoMax>());
   fixture.check(IoLatency::FILE_NAME, true, reader.read_value::<IoLatency>());
@@ -412,7 +412,7 @@ fn parses_live_delegated_controller_interfaces() {
   fixture.check(MemoryEventsLocal::FILE_NAME, true, reader.read_value::<MemoryEventsLocal>());
   fixture.check(MemoryOomGroup::FILE_NAME, false, reader.read_value::<MemoryOomGroup>());
   fixture.check(MemoryNumaStat::FILE_NAME, true, reader.read_value::<MemoryNumaStat>());
-  fixture.check(Pressure::MEMORY_FILE_NAME, true, reader.read_value::<MemoryPressure>());
+  fixture.check(MemoryPressure::FILE_NAME, true, reader.read_value::<MemoryPressure>());
   fixture.check(SwapCurrent::FILE_NAME, true, reader.read_value::<SwapCurrent>());
   fixture.check(SwapPeak::FILE_NAME, true, reader.read_value::<SwapPeak>());
   fixture.check(SwapMax::FILE_NAME, true, reader.read_value::<SwapMax>());
@@ -460,7 +460,7 @@ fn parses_live_delegated_controller_interfaces() {
   assert_ok!(reader.read_value::<CgroupSubtreeControl>());
 
   // Notifications only observe this disposable delegated test hierarchy.
-  assert_ok!(fs::write(fixture.path.join(CgroupController::SUBTREE_CONTROL_FILE_NAME), "+cpu"));
+  assert_ok!(fs::write(fixture.path.join(CgroupSubtreeControl::FILE_NAME), "+cpu"));
   let notification_path = fixture.path.join("notifications");
   assert_ok!(fs::create_dir(&notification_path));
   let notification_group = assert_ok!(reader.child(std::ffi::OsStr::new("notifications")));
@@ -518,7 +518,7 @@ fn reads_root_io_interfaces_and_reports_root_exemptions() {
   // Older kernels omit root io.stat; PSI can be disabled at build/boot time.
   for (name, result) in [
     (IoStat::FILE_NAME, root.read_value::<IoStat>().map(|_| ())),
-    (Pressure::IO_FILE_NAME, root.read_value::<IoPressure>().map(|_| ())),
+    (IoPressure::FILE_NAME, root.read_value::<IoPressure>().map(|_| ())),
   ] {
     match fs::read_to_string(path.join(name)) {
       | Ok(_) => assert_ok!(result),
@@ -595,8 +595,8 @@ fn reads_root_placement_and_reports_configuration_exemptions() {
       assert_ok!(root.read_value::<CpusEffective>());
       assert_ok!(root.read_value::<MemsEffective>());
       for (name, result) in [
-        (CpuList::CPUS_FILE_NAME, root.read_value::<CpuList>().map(|_| ())),
-        (MemoryNodeList::MEMS_FILE_NAME, root.read_value::<MemoryNodeList>().map(|_| ())),
+        (CpuList::FILE_NAME, root.read_value::<CpuList>().map(|_| ())),
+        (MemoryNodeList::FILE_NAME, root.read_value::<MemoryNodeList>().map(|_| ())),
         (CpusetPartition::FILE_NAME, root.read_value::<CpusetPartition>().map(|_| ())),
       ] {
         assert!(matches!(result, Err(Error::FileMissing { path: missing }) if missing == path.join(name)));

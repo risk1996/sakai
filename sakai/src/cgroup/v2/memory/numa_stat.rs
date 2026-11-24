@@ -42,11 +42,6 @@ pub struct MemoryNumaStat {
 cgroup_file!(MemoryNumaStat, "memory.numa_stat", Read);
 
 impl MemoryNumaStat {
-  /// The cgroup v2 `memory.numa_stat` interface filename.
-  ///
-  /// See [Linux `memory.numa_stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-
   fn encode_nodes<Unit, T: EncodeCgroup<Unit>>(
     output: &mut String,
     field: &'static str,

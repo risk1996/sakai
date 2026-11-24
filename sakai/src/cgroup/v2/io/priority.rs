@@ -6,7 +6,7 @@ use crate::{
   v2::interface::cgroup_file,
 };
 
-/// A snapshot of the request-priority policy in `io.prio.class`.
+/// A snapshot of the request-priority policy in `io.prio.class`, including at the root.
 ///
 /// Requires `CONFIG_BLK_CGROUP_IOPRIO`. This controls I/O request priority,
 /// including supported page-cache writeback, rather than CPU priority.
@@ -35,11 +35,6 @@ pub enum IoPriorityClass {
 
 cgroup_value! { display IoPriorityClass }
 cgroup_file!(IoPriorityClass, "io.prio.class", ReadWrite);
-
-impl IoPriorityClass {
-  /// The I/O priority policy interface filename, also present at the root.
-  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-}
 
 // Parse the kernel's single newline-terminated value with contextual errors.
 impl FromStr for IoPriorityClass {

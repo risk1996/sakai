@@ -27,8 +27,9 @@ mod stat;
 mod weight;
 
 cgroup_file!(alias
-  /// I/O pressure snapshots.
-  IoPressure, Pressure::IO_FILE_NAME, Read, Pressure
+  /// I/O pressure snapshots from `io.pressure`.
+  /// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
+  IoPressure, "io.pressure", Read, Pressure
 );
 
 /// A block-device identifier keyed by the kernel's decimal `major:minor` pair.

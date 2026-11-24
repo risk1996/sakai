@@ -30,13 +30,6 @@ pub struct CpuStat {
 cgroup_file!(CpuStat, "cpu.stat", Read);
 
 impl CpuStat {
-  /// The cgroup v2 `cpu.stat` interface filename.
-  ///
-  /// See [Linux `cpu.stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
-  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-}
-
-impl CpuStat {
   /// Encodes the stored snapshot as canonical cgroup text.
   ///
   /// # Errors
@@ -74,13 +67,6 @@ cgroup_value! { keyed CpuStatLocal, CpuStatField::label, {
   throttled: optional ParseMicroseconds => CpuStatField::ThrottledUsec,
 } }
 cgroup_file!(CpuStatLocal, "cpu.stat.local", Read);
-
-impl CpuStatLocal {
-  /// The cgroup v2 `cpu.stat.local` interface filename.
-  ///
-  /// See [Linux `cpu.stat.local` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
-  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-}
 
 /// CPU usage times from a cgroup's `cpu.stat` file.
 ///

@@ -4,7 +4,7 @@ use crate::{
   limit::MaxOr,
   parse::{ParseNonZeroMicroseconds, cgroup_value},
   unit::{NonZeroTime, Ratio},
-  v2::interface::cgroup_file,
+  v2::{CgroupFile, interface::cgroup_file},
 };
 
 /// The CPU bandwidth limit configured by a cgroup's `cpu.max` file.
@@ -34,11 +34,6 @@ cgroup_value! {
 cgroup_file!(CpuMax, "cpu.max", ReadWrite);
 
 impl CpuMax {
-  /// The cgroup v2 `cpu.max` interface filename.
-  ///
-  /// See [Linux `cpu.max` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files).
-  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-
   /// Returns the CPU bandwidth implied by this cgroup's quota and period.
   ///
   /// An unlimited quota is returned as [`MaxOr::Max`].
@@ -67,7 +62,7 @@ impl CpuMax {
 #[non_exhaustive]
 pub struct CpuQuota;
 
-cgroup_file!(file CpuQuota, CpuMax::FILE_NAME, Write);
+cgroup_file!(file CpuQuota, <CpuMax as CgroupFile>::FILE_NAME, Write);
 cgroup_file!(write CpuQuota, 'a => MaxOr<NonZeroTime>, |quota| {
   let mut command = String::new();
   crate::parse::EncodeCgroup::<ParseNonZeroMicroseconds>::encode_field(&quota, &mut command, "quota")?;

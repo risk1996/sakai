@@ -32,9 +32,6 @@ pub struct Scalar<T, I> {
 }
 
 impl<T: Copy, I: Interface> Scalar<T, I> {
-  /// The cgroup v2 interface filename.
-  pub const FILE_NAME: &'static str = I::FILE_NAME;
-
   pub(crate) const fn new(value: T) -> Self { Self { value, interface: PhantomData } }
 }
 

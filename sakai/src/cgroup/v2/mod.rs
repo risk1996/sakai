@@ -3,7 +3,8 @@
 //! Snapshots implement string parsing on any OS. Typed file I/O is available on Linux. See the
 //! [Linux cgroup v2 guide](https://docs.kernel.org/admin-guide/cgroup-v2.html).
 //!
-//! Each interface declares a [`CgroupFile`] and a mode from [`mode`]. The
+//! Import [`CgroupFile`] to access an interface's `FILE_NAME`.
+//! Each interface also declares a mode from [`mode`]. The
 //! mode describes the operations exposed by Sakai. For example, pressure
 //! snapshots are readable, and installing a PSI trigger would require a
 //! separate descriptor-scoped API.

@@ -42,6 +42,7 @@ pub type MemoryOomGroup = Scalar<bool, interface::MemoryOomGroup>;
 ///   Bytes, Count, MaxOr, Ratio, Time,
 ///   error::{ParseError, ParseValueError},
 ///   v2::{
+///     CgroupFile,
 ///     cpu::{CpuIdle, CpuMaxBurst, CpuUclampMax},
 ///     memory::{MemoryCurrent, MemoryMax},
 ///     pids::PidsCurrent,
@@ -133,6 +134,7 @@ pub type MemoryLow = Scalar<MaxOr<Bytes>, interface::MemoryLow>;
 pub type MemoryMin = Scalar<MaxOr<Bytes>, interface::MemoryMin>;
 
 cgroup_file!(alias
-  /// Memory pressure snapshots.
-  MemoryPressure, Pressure::MEMORY_FILE_NAME, Read, Pressure
+  /// Memory pressure snapshots from `memory.pressure`.
+  /// See [Linux pressure stall information](https://docs.kernel.org/accounting/psi.html).
+  MemoryPressure, "memory.pressure", Read, Pressure
 );

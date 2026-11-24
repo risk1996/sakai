@@ -97,17 +97,9 @@ cgroup_value! { device_rows RdmaCurrent, devices: RdmaDeviceCurrent, parse_devic
 cgroup_file!(RdmaCurrent, "rdma.current", Read);
 cgroup_file!(alias
   /// Peak RDMA usage.
-  RdmaPeak, RdmaCurrent::PEAK_FILE_NAME, Read, RdmaCurrent
+  /// Since Linux 7.2. See the [Linux 7.2 source](https://github.com/torvalds/linux/blob/v7.2/kernel/cgroup/rdma.c).
+  RdmaPeak, "rdma.peak", Read, RdmaCurrent
 );
-
-impl RdmaCurrent {
-  /// The cgroup v2 `rdma.current` interface filename.
-  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-  /// The `rdma.peak` interface filename, available since Linux 7.2.
-  ///
-  /// See the [Linux 7.2 implementation](https://github.com/torvalds/linux/blob/v7.2/kernel/cgroup/rdma.c).
-  pub const PEAK_FILE_NAME: &'static str = "rdma.peak";
-}
 
 /// Hierarchical HCA handle and object counts for one RDMA device.
 ///
@@ -152,11 +144,6 @@ cgroup_file!(file RdmaMax, "rdma.max", ReadWrite);
 cgroup_file!(read RdmaMax => RdmaMax);
 cgroup_file!(write RdmaMax, 'a => (&'a RdmaDevice, &'a RdmaDeviceMax), encode_device_max);
 
-impl RdmaMax {
-  /// The cgroup v2 `rdma.max` interface filename.
-  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-}
-
 /// HCA handle and object limits for one RDMA device, measured in counts.
 ///
 /// See [Linux RDMA interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#rdma-interface-files).
@@ -193,15 +180,9 @@ cgroup_value! { device_rows RdmaEvents, devices: RdmaDeviceEvents, parse_devices
 cgroup_file!(RdmaEvents, "rdma.events", Read);
 cgroup_file!(alias
   /// Local RDMA events.
-  RdmaEventsLocal, RdmaEvents::LOCAL_FILE_NAME, Read, RdmaEvents
+  /// Since Linux 7.2. See the [Linux 7.2 source](https://github.com/torvalds/linux/blob/v7.2/kernel/cgroup/rdma.c).
+  RdmaEventsLocal, "rdma.events.local", Read, RdmaEvents
 );
-
-impl RdmaEvents {
-  /// The hierarchical `rdma.events` filename, available since Linux 7.2.
-  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-  /// The local `rdma.events.local` filename, available since Linux 7.2.
-  pub const LOCAL_FILE_NAME: &'static str = "rdma.events.local";
-}
 
 /// Allocation events for both resource types of one RDMA device.
 ///
@@ -304,7 +285,7 @@ mod tests {
     Failure::{Invalid, Missing},
   };
   #[cfg(target_os = "linux")]
-  use crate::{Cgroup, Error};
+  use crate::{Cgroup, Error, v2::CgroupFile};
 
   fn count(value: u64) -> Count { Count { value, ..Default::default() } }
 
@@ -526,9 +507,9 @@ mod tests {
         [
           RdmaCurrent::FILE_NAME,
           RdmaMax::FILE_NAME,
-          RdmaCurrent::PEAK_FILE_NAME,
+          RdmaPeak::FILE_NAME,
           RdmaEvents::FILE_NAME,
-          RdmaEvents::LOCAL_FILE_NAME,
+          RdmaEventsLocal::FILE_NAME,
         ]
         .map(|name| std::fs::read_to_string(path.join(name)).ok())
       };
@@ -538,17 +519,17 @@ mod tests {
       match fixture {
         | "p6_older" => {
           for (name, read) in [
-            (RdmaCurrent::PEAK_FILE_NAME, cgroup.read_value::<crate::v2::rdma::RdmaPeak>().map(|_| ())),
+            (RdmaPeak::FILE_NAME, cgroup.read_value::<crate::v2::rdma::RdmaPeak>().map(|_| ())),
             (RdmaEvents::FILE_NAME, cgroup.read_value::<crate::v2::rdma::RdmaEvents>().map(|_| ())),
-            (RdmaEvents::LOCAL_FILE_NAME, cgroup.read_value::<crate::v2::rdma::RdmaEventsLocal>().map(|_| ())),
+            (RdmaEventsLocal::FILE_NAME, cgroup.read_value::<crate::v2::rdma::RdmaEventsLocal>().map(|_| ())),
           ] {
             assert!(matches!(read, Err(Error::FileMissing { path: missing }) if missing == path.join(name)));
           }
         },
         | _ => {
-          cgroup.check_fixture(RdmaCurrent::PEAK_FILE_NAME, false, || cgroup.read_value::<crate::v2::rdma::RdmaPeak>());
+          cgroup.check_fixture(RdmaPeak::FILE_NAME, false, || cgroup.read_value::<crate::v2::rdma::RdmaPeak>());
           cgroup.check_fixture(RdmaEvents::FILE_NAME, false, || cgroup.read_value::<crate::v2::rdma::RdmaEvents>());
-          cgroup.check_fixture(RdmaEvents::LOCAL_FILE_NAME, false, || {
+          cgroup.check_fixture(RdmaEventsLocal::FILE_NAME, false, || {
             cgroup.read_value::<crate::v2::rdma::RdmaEventsLocal>()
           });
         },

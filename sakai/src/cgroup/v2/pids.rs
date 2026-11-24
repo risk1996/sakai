@@ -61,20 +61,10 @@ cgroup_value! { keyed PidsEvents, |_| "value", {
 } }
 cgroup_file!(PidsEvents, "pids.events", Read);
 cgroup_file!(alias
-  /// Local PID controller events.
-  PidsEventsLocal, PidsEvents::LOCAL_FILE_NAME, Read, PidsEvents
+  /// Local PID controller events outside the hierarchy root.
+  /// Since Linux 6.11. See the [Linux 6.11 source](https://github.com/torvalds/linux/blob/v6.11/kernel/cgroup/pids.c).
+  PidsEventsLocal, "pids.events.local", Read, PidsEvents
 );
-
-impl PidsEvents {
-  /// The cgroup v2 `pids.events` interface filename.
-  ///
-  /// See [Linux `pids.events` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#pid).
-  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-  /// The non-root local event filename, available since Linux 6.11.
-  ///
-  /// See [Linux 6.11 source](https://github.com/torvalds/linux/blob/v6.11/kernel/cgroup/pids.c).
-  pub const LOCAL_FILE_NAME: &'static str = "pids.events.local";
-}
 
 #[cfg(test)]
 mod tests {
@@ -88,7 +78,7 @@ mod tests {
     Failure::{Excess, Invalid, Missing},
   };
   #[cfg(target_os = "linux")]
-  use crate::{Cgroup, Error};
+  use crate::{Cgroup, Error, v2::CgroupFile};
 
   #[test]
   fn parses_lifetime_task_count_peaks_without_narrowing() {
@@ -116,7 +106,7 @@ mod tests {
     let cgroup = Cgroup::fixture("fixtures/p6_misc_older");
     for (file, result) in [
       (PidsPeak::FILE_NAME, cgroup.read_value::<crate::v2::pids::PidsPeak>().map(|_| ())),
-      (PidsEvents::LOCAL_FILE_NAME, cgroup.read_value::<crate::v2::pids::PidsEventsLocal>().map(|_| ())),
+      (PidsEventsLocal::FILE_NAME, cgroup.read_value::<crate::v2::pids::PidsEventsLocal>().map(|_| ())),
     ] {
       assert!(matches!(result, Err(Error::FileMissing { path }) if path == cgroup.path().join(file)));
     }

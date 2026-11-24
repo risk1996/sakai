@@ -43,9 +43,6 @@ cgroup_file!(read CpusetPartition => CpusetPartition);
 cgroup_file!(write CpusetPartition, 'a => &'a CpusetPartition, |value: &CpusetPartition| Ok(value.state().to_owned()));
 
 impl CpusetPartition {
-  /// The cgroup v2 partition-state interface filename, absent at the root.
-  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-
   /// Inspects the stored base state: `member`, `root`, or `isolated`.
   ///
   /// Invalid roots retain their base state; inspect [`Self::is_invalid`] too.
