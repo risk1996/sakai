@@ -1,6 +1,9 @@
 use std::str::FromStr;
 
-use crate::error::{ParseError, ParseValueError};
+use crate::{
+  error::{ParseError, ParseValueError},
+  v2::interface::cgroup_file,
+};
 
 /// A volatile snapshot of `cpuset.cpus.partition` for one non-root cgroup.
 ///
@@ -35,8 +38,9 @@ pub enum CpusetPartition {
   },
 }
 
-crate::v2::interface::cgroup_file!(file CpusetPartition, "cpuset.cpus.partition", ReadWrite);
-crate::v2::interface::cgroup_file!(read CpusetPartition => CpusetPartition);
+cgroup_file!(file CpusetPartition, "cpuset.cpus.partition", ReadWrite);
+cgroup_file!(read CpusetPartition => CpusetPartition);
+cgroup_file!(write CpusetPartition, 'a => &'a CpusetPartition, |value: &CpusetPartition| Ok(value.state().to_owned()));
 
 impl CpusetPartition {
   /// The cgroup v2 partition-state interface filename, absent at the root.
@@ -56,7 +60,7 @@ impl CpusetPartition {
 
   /// Tests whether the stored snapshot describes an invalid partition root.
   ///
-  /// Members are not invalid roots. This getter performs no kernel I/O.
+  /// Members return false.
   #[must_use]
   pub const fn is_invalid(&self) -> bool {
     match self {
@@ -64,23 +68,7 @@ impl CpusetPartition {
       | Self::RootInvalid { .. } | Self::IsolatedInvalid { .. } => true,
     }
   }
-
-  /// Inspects the stored diagnostic reason, without parentheses or kernel I/O.
-  ///
-  /// `None` means no reason was reported; it does not imply a valid partition.
-  #[must_use]
-  pub fn reason(&self) -> Option<&str> {
-    match self {
-      | Self::Member | Self::Root | Self::Isolated => None,
-      | Self::RootInvalid { reason } | Self::IsolatedInvalid { reason } => reason.as_deref(),
-    }
-  }
 }
-
-const MEMBER: &str = "member";
-const ROOT: &str = "root";
-const ISOLATED: &str = "isolated";
-const INVALID: &str = " invalid";
 
 impl CpusetPartition {
   /// Encodes the stored partition state and any diagnostic reason.
@@ -106,6 +94,11 @@ impl CpusetPartition {
 
   fn valid_reason(reason: &str) -> bool { !reason.trim().is_empty() && !reason.contains(['\n', '\r']) }
 }
+
+const MEMBER: &str = "member";
+const ROOT: &str = "root";
+const ISOLATED: &str = "isolated";
+const INVALID: &str = " invalid";
 
 impl FromStr for CpusetPartition {
   type Err = ParseError<ParseValueError>;

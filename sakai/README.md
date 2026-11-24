@@ -19,7 +19,7 @@ fn main() -> Result<(), sakai::Error> {
   let cgroup = sakai::Cgroup::from_current_process()?;
   let stat = cgroup.read_value::<sakai::v2::cpu::CpuStat>()?;
   let quota = cgroup.read_value::<sakai::v2::cpu::CpuMax>()?;
-  println!("usage: {:?}, quota: {:?}", stat.time().usage(), quota);
+  println!("usage: {:?}, quota: {:?}", stat.time.usage, quota);
   Ok(())
 }
 

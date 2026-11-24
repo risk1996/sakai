@@ -9,10 +9,18 @@ use procfs::process::Process;
 /// Discovery observes the caller's namespaces; the process or mount can change
 /// after the read. This resolves a path without opening or verifying the directory.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct CgroupPath {
-  path: PathBuf,
-  mount_point: PathBuf,
-  read_only: bool,
+  /// Resolved path to the process's cgroup directory.
+  pub path: PathBuf,
+  /// Cgroup2 mount point that exposes this cgroup.
+  ///
+  /// See [proc_pid_mountinfo(5)](https://man7.org/linux/man-pages/man5/proc_pid_mountinfo.5.html).
+  pub mount_point: PathBuf,
+  /// Whether the process sees the cgroup2 mount as read-only.
+  ///
+  /// See [proc_pid_mountinfo(5)](https://man7.org/linux/man-pages/man5/proc_pid_mountinfo.5.html).
+  pub read_only: bool,
 }
 
 impl CgroupPath {
@@ -70,16 +78,6 @@ impl CgroupPath {
       | false => Ok(candidates.into_iter().map(|(_, path)| path).collect()),
     }
   }
-
-  /// Returns the cgroup2 mount point that exposes this cgroup.
-  ///
-  /// See [proc_pid_mountinfo(5)](https://man7.org/linux/man-pages/man5/proc_pid_mountinfo.5.html).
-  pub fn mount_point(&self) -> &Path { &self.mount_point }
-
-  /// Returns whether the process sees the cgroup2 mount as read-only.
-  ///
-  /// See [proc_pid_mountinfo(5)](https://man7.org/linux/man-pages/man5/proc_pid_mountinfo.5.html).
-  pub const fn is_read_only(&self) -> bool { self.read_only }
 }
 
 impl AsRef<Path> for CgroupPath {

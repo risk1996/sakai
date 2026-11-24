@@ -21,7 +21,7 @@ fn main() -> Result<(), Error> {
   let cgroup = Cgroup::from_current_process()?;
   let stat = cgroup.read_value::<CpuStat>()?;
   let quota = cgroup.read_value::<CpuMax>()?;
-  println!("usage: {:?}, quota: {:?}", stat.time().usage(), quota);
+  println!("usage: {:?}, quota: {:?}", stat.time.usage, quota);
   Ok(())
 }
 ```
@@ -33,8 +33,8 @@ return `NotCgroupV2`; hybrid hosts may expose a v2 hierarchy without CPU control
 Missing interfaces return `Error::FileMissing`, including root exemptions and
 files unavailable on older kernels. Other errors retain their cause.
 
-Every interface reader fetches fresh contents; snapshot getters inspect stored
-values. Multiple reads are not an atomic snapshot.
+Every interface reader fetches fresh contents. Reading or editing public snapshot
+fields performs no I/O. Multiple reads are not an atomic snapshot.
 `cpu.stat` usage includes descendants; its bandwidth counters describe its own
 limit. `cpu.stat.local` describes local runqueue throttling, including ancestor
 limits. Unknown CPU stat counters are ignored.
@@ -107,7 +107,7 @@ fn observe(cgroup: &Cgroup) -> Result<(), Error> {
     println!("{:?}", cgroup.read_value::<sakai::v2::memory::MemoryEvents>()?);
   }
   if let Some(change) = limits.wait(Some(Duration::from_secs(1)))? {
-    if change.modified() || change.overflowed() {
+    if change.modified || change.overflowed {
       println!("{:?}", cgroup.read_value::<sakai::v2::memory::MemoryMax>()?);
     }
   }

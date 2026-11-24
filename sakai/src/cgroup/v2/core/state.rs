@@ -5,6 +5,7 @@ use crate::{
   error::{ParseError, ParseValueError},
   parse::{KeyedFields, ParseBoolean, ParseCgroup, ParseCount, ParseMicroseconds, cgroup_value},
   unit::{Count, Time},
+  v2::interface::cgroup_file,
 };
 
 /// A point-in-time snapshot of `cgroup.events` lifecycle state.
@@ -15,39 +16,33 @@ use crate::{
 ///
 /// See [Linux `cgroup.events` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct CgroupEvents {
-  populated: bool,
-  frozen: Option<bool>,
-}
-
-crate::v2::interface::cgroup_file!(CgroupEvents, "cgroup.events", Read);
-
-impl CgroupEvents {
-  /// The cgroup v2 `cgroup.events` interface filename.
-  ///
-  /// See [Linux `cgroup.events` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
-  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-
   /// Whether this cgroup or any descendant contains live processes.
   ///
   /// See [Linux core cgroup interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
-  #[must_use]
-  pub const fn populated(&self) -> bool { self.populated }
-
+  pub populated: bool,
   /// Whether freezing has completed, if the kernel reports this state.
   ///
   /// Includes freezing imposed by ancestors; this is the observed state,
   /// which may lag a request written to `cgroup.freeze`.
   ///
   /// See [Linux `cgroup.freeze` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
-  #[must_use]
-  pub const fn frozen(&self) -> Option<bool> { self.frozen }
+  pub frozen: Option<bool>,
 }
 
 cgroup_value! { keyed CgroupEvents, |_| "value", {
   populated: required ParseBoolean => "populated",
   frozen: optional ParseBoolean => "frozen",
 } }
+cgroup_file!(CgroupEvents, "cgroup.events", Read);
+
+impl CgroupEvents {
+  /// The cgroup v2 `cgroup.events` interface filename.
+  ///
+  /// See [Linux `cgroup.events` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
+  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
+}
 
 /// A stored snapshot of local freezer accounting from `cgroup.stat.local`.
 ///
@@ -60,27 +55,24 @@ cgroup_value! { keyed CgroupEvents, |_| "value", {
 /// Since Linux 6.18; see [Linux 6.18 source](https://github.com/torvalds/linux/blob/v6.18/kernel/cgroup/cgroup.c)
 /// and [Linux `cgroup.stat.local`](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct CgroupStatLocal {
-  frozen_time: Time,
-}
-
-crate::v2::interface::cgroup_file!(CgroupStatLocal, "cgroup.stat.local", Read);
-
-impl CgroupStatLocal {
-  /// The non-root local freezer statistics filename, since Linux 6.18.
-  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-
-  /// Returns cumulative local freezing duration, parsed from microseconds.
+  /// Cumulative local freezing duration, parsed from microseconds.
   ///
-  /// Inspects this stored snapshot without I/O; the next read may report a
-  /// longer duration even if the cgroup has not finished freezing.
-  #[must_use]
-  pub const fn frozen_time(&self) -> Time { self.frozen_time }
+  /// The next read may report a longer duration even if the cgroup has not
+  /// finished freezing.
+  pub frozen_time: Time,
 }
 
 cgroup_value! { keyed CgroupStatLocal, |_| "value", {
   frozen_time: required ParseMicroseconds => "frozen_usec",
 } }
+cgroup_file!(CgroupStatLocal, "cgroup.stat.local", Read);
+
+impl CgroupStatLocal {
+  /// The non-root local freezer statistics filename, since Linux 6.18.
+  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
+}
 
 /// A point-in-time snapshot of `cgroup.stat` object counts.
 ///
@@ -93,50 +85,39 @@ cgroup_value! { keyed CgroupStatLocal, |_| "value", {
 ///
 /// See [Linux `cgroup.stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct CgroupStat {
-  descendants: Count,
-  dying_descendants: Count,
-  subsystems: HashMap<CgroupController, Count>,
-  dying_subsystems: HashMap<CgroupController, Count>,
-}
-
-crate::v2::interface::cgroup_file!(CgroupStat, "cgroup.stat", Read);
-
-impl CgroupStat {
-  /// The cgroup v2 `cgroup.stat` interface filename.
-  ///
-  /// See [Linux `cgroup.stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
-  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-
   /// Visible descendant cgroups, excluding this cgroup.
   ///
   /// See [Linux core cgroup interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
-  #[must_use]
-  pub const fn descendants(&self) -> Count { self.descendants }
-
+  pub descendants: Count,
   /// Deleted descendant cgroups that have not yet been destroyed.
   ///
   /// See [Linux core cgroup interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
-  #[must_use]
-  pub const fn dying_descendants(&self) -> Count { self.dying_descendants }
-
+  pub dying_descendants: Count,
   /// Live subsystem states at and beneath this cgroup, keyed by controller.
   ///
   /// See [Linux core cgroup interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
   ///
   /// Since Linux 6.12; see the [upstream Linux 6.12 source](https://github.com/torvalds/linux/blob/v6.12/kernel/cgroup/cgroup.c).
   /// An absent map entry means the kernel did not report that controller.
-  #[must_use]
-  pub const fn subsystems(&self) -> &HashMap<CgroupController, Count> { &self.subsystems }
-
+  pub subsystems: HashMap<CgroupController, Count>,
   /// Dying subsystem states at and beneath this cgroup, keyed by controller.
   ///
   /// See [Linux core cgroup interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
   ///
   /// Since Linux 6.12; see the [upstream Linux 6.12 source](https://github.com/torvalds/linux/blob/v6.12/kernel/cgroup/cgroup.c).
   /// An absent map entry means the kernel did not report that controller.
-  #[must_use]
-  pub const fn dying_subsystems(&self) -> &HashMap<CgroupController, Count> { &self.dying_subsystems }
+  pub dying_subsystems: HashMap<CgroupController, Count>,
+}
+
+cgroup_file!(CgroupStat, "cgroup.stat", Read);
+
+impl CgroupStat {
+  /// The cgroup v2 `cgroup.stat` interface filename.
+  ///
+  /// See [Linux `cgroup.stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
+  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
 
   fn parse_subsystems(
     raw: &str,
@@ -155,11 +136,6 @@ impl CgroupStat {
       .collect()
   }
 }
-
-const DESCENDANTS: &str = "nr_descendants";
-const DYING_DESCENDANTS: &str = "nr_dying_descendants";
-const SUBSYSTEMS: &str = "nr_subsys_";
-const DYING_SUBSYSTEMS: &str = "nr_dying_subsys_";
 
 impl CgroupStat {
   /// Encodes the stored value as canonical cgroup text.
@@ -182,6 +158,11 @@ impl CgroupStat {
     Ok(output)
   }
 }
+
+const DESCENDANTS: &str = "nr_descendants";
+const DYING_DESCENDANTS: &str = "nr_dying_descendants";
+const SUBSYSTEMS: &str = "nr_subsys_";
+const DYING_SUBSYSTEMS: &str = "nr_dying_subsys_";
 
 impl FromStr for CgroupStat {
   type Err = ParseError<ParseValueError>;

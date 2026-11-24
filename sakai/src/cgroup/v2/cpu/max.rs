@@ -4,6 +4,7 @@ use crate::{
   limit::MaxOr,
   parse::{ParseNonZeroMicroseconds, cgroup_value},
   unit::{NonZeroTime, Ratio},
+  v2::interface::cgroup_file,
 };
 
 /// The CPU bandwidth limit configured by a cgroup's `cpu.max` file.
@@ -16,6 +17,7 @@ use crate::{
 ///
 /// See [Linux `cpu.max` interface](https://www.kernel.org/doc/html/v7.3/admin-guide/cgroup-v2.html#cpu-interface-files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct CpuMax {
   /// CPU time allowed per period, or `max` for no quota at this cgroup.
   pub quota: MaxOr<NonZeroTime>,
@@ -23,7 +25,13 @@ pub struct CpuMax {
   pub period: NonZeroTime,
 }
 
-crate::v2::interface::cgroup_file!(CpuMax, "cpu.max", ReadWrite);
+cgroup_value! {
+  positional CpuMax {
+    quota: ParseNonZeroMicroseconds,
+    period: ParseNonZeroMicroseconds,
+  }
+}
+cgroup_file!(CpuMax, "cpu.max", ReadWrite);
 
 impl CpuMax {
   /// The cgroup v2 `cpu.max` interface filename.
@@ -55,18 +63,12 @@ impl CpuMax {
   }
 }
 
-cgroup_value! {
-  positional CpuMax {
-    quota: ParseNonZeroMicroseconds,
-    period: ParseNonZeroMicroseconds,
-  }
-}
-
 /// Quota-only command for `cpu.max`. The kernel keeps the existing period.
+#[non_exhaustive]
 pub struct CpuQuota;
 
-crate::v2::interface::cgroup_file!(file CpuQuota, CpuMax::FILE_NAME, Write);
-crate::v2::interface::cgroup_file!(write CpuQuota, 'a => MaxOr<NonZeroTime>, |quota| {
+cgroup_file!(file CpuQuota, CpuMax::FILE_NAME, Write);
+cgroup_file!(write CpuQuota, 'a => MaxOr<NonZeroTime>, |quota| {
   let mut command = String::new();
   crate::parse::EncodeCgroup::<ParseNonZeroMicroseconds>::encode_field(&quota, &mut command, "quota")?;
   Ok(command)

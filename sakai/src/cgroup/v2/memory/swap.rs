@@ -5,6 +5,7 @@ use crate::{
   parse::{ParseCount, cgroup_value},
   scalar::{Scalar, interface},
   unit::{Bytes, Count},
+  v2::interface::cgroup_file,
 };
 
 /// Hierarchical swap usage reported by `memory.swap.current`.
@@ -52,37 +53,20 @@ pub type SwapHigh = Scalar<MaxOr<Bytes>, interface::SwapHigh>;
 /// The [event propagation implementation](https://github.com/torvalds/linux/blob/v6.12/include/linux/memcontrol.h)
 /// applies the mount option to both memory and swap events.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct SwapEvents {
-  high: Option<Count>,
-  max: Count,
-  fail: Count,
-}
-
-crate::v2::interface::cgroup_file!(SwapEvents, "memory.swap.events", Read);
-
-impl SwapEvents {
-  /// The cgroup v2 `memory.swap.events` interface filename.
-  ///
-  /// See [Linux `memory.swap.events` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-
   /// Times swap usage exceeded the high threshold, when reported.
   ///
   /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-  #[must_use]
-  pub const fn high(&self) -> Option<Count> { self.high }
-
+  pub high: Option<Count>,
   /// Times a swap allocation failed at the max boundary.
   ///
   /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-  #[must_use]
-  pub const fn max(&self) -> Count { self.max }
-
+  pub max: Count,
   /// Swap allocation failures from the limit or system-wide exhaustion.
   ///
   /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-  #[must_use]
-  pub const fn fail(&self) -> Count { self.fail }
+  pub fail: Count,
 }
 
 cgroup_value! { keyed SwapEvents, |key| match key {
@@ -95,6 +79,14 @@ cgroup_value! { keyed SwapEvents, |key| match key {
   max: required ParseCount => "max",
   fail: required ParseCount => "fail",
 } }
+cgroup_file!(SwapEvents, "memory.swap.events", Read);
+
+impl SwapEvents {
+  /// The cgroup v2 `memory.swap.events` interface filename.
+  ///
+  /// See [Linux `memory.swap.events` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
+  pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
+}
 
 #[cfg(test)]
 mod tests {

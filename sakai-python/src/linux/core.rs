@@ -25,7 +25,7 @@ pub(super) struct CgroupEvents {
 }
 
 impl From<CoreCgroupEvents> for CgroupEvents {
-  fn from(value: CoreCgroupEvents) -> Self { Self { populated: value.populated(), frozen: value.frozen() } }
+  fn from(value: CoreCgroupEvents) -> Self { Self { populated: value.populated, frozen: value.frozen } }
 }
 
 /// Immutable, volatile cgroup and subsystem object counts from cgroup.stat.
@@ -48,11 +48,11 @@ pub(super) struct CgroupStat {
 impl From<CoreCgroupStat> for CgroupStat {
   fn from(value: CoreCgroupStat) -> Self {
     Self {
-      descendants: value.descendants().into(),
-      dying_descendants: value.dying_descendants().into(),
-      subsystems: value.subsystems().iter().map(|(controller, count)| (controller.to_string(), count.into())).collect(),
+      descendants: value.descendants.into(),
+      dying_descendants: value.dying_descendants.into(),
+      subsystems: value.subsystems.iter().map(|(controller, count)| (controller.to_string(), count.into())).collect(),
       dying_subsystems: value
-        .dying_subsystems()
+        .dying_subsystems
         .iter()
         .map(|(controller, count)| (controller.to_string(), count.into()))
         .collect(),
@@ -103,7 +103,7 @@ pub(super) struct CgroupStatLocal {
 }
 
 impl From<CoreCgroupStatLocal> for CgroupStatLocal {
-  fn from(value: CoreCgroupStatLocal) -> Self { Self { frozen_time: value.frozen_time().into() } }
+  fn from(value: CoreCgroupStatLocal) -> Self { Self { frozen_time: value.frozen_time.into() } }
 }
 
 /// Fresh reads of cgroup topology, membership, configuration, and lifecycle files.
@@ -170,7 +170,7 @@ impl CoreReader {
   /// observed state. The root lacks this file. See CoreReader for read errors.
   fn freeze(&self, py: Python<'_>) -> PyResult<bool> {
     PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::core::CgroupFreeze>)
-      .map(|value| value.value())
+      .map(|value| value.value)
   }
 
   /// Read the configured maximum descendant depth as MaxOr[Count] cgroup levels.
@@ -180,7 +180,7 @@ impl CoreReader {
   #[gen_stub(override_return_type(type_repr = "MaxOr[Count]"))]
   fn max_depth(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::core::CgroupMaxDepth>)
-      .map(|value| MaxOr::from_count(value.value()))
+      .map(|value| MaxOr::from_count(value.value))
   }
 
   /// Read the maximum descendant cgroup count, excluding this cgroup, as MaxOr[Count].
@@ -191,7 +191,7 @@ impl CoreReader {
   #[gen_stub(override_return_type(type_repr = "MaxOr[Count]"))]
   fn max_descendants(&self, py: Python<'_>) -> PyResult<MaxOr> {
     PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::core::CgroupMaxDescendants>)
-      .map(|value| MaxOr::from_count(value.value()))
+      .map(|value| MaxOr::from_count(value.value))
   }
 
   /// Read whether pressure stall accounting is enabled locally as bool.
@@ -201,7 +201,7 @@ impl CoreReader {
   /// root. See CoreReader for read errors and the Linux interface reference.
   fn pressure_enabled(&self, py: Python<'_>) -> PyResult<bool> {
     PythonError::read(py, &self.owner, sakai::Cgroup::read_value::<sakai::v2::core::CgroupPressure>)
-      .map(|value| value.value())
+      .map(|value| value.value)
   }
 
   /// Read the cgroup type: domain, domain threaded, domain invalid, or threaded.
@@ -251,7 +251,7 @@ mod tests {
       );
       check_frozen(object.bind(py).as_any(), &["frozen_time"]);
       for (input, expected) in [("0", Some(0)), ("18446744073709551615", Some(u64::MAX)), ("max", None)] {
-        let limit = MaxOr::from_count(assert_ok!(input.parse::<sakai::v2::pids::PidsMax>()).value());
+        let limit = MaxOr::from_count(assert_ok!(input.parse::<sakai::v2::pids::PidsMax>()).value);
         let object = assert_ok!(Py::new(py, limit));
         check_limit(object.bind(py).as_any(), expected, "count");
       }

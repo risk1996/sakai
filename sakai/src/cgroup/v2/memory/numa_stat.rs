@@ -9,6 +9,7 @@ use crate::{
   error::{ParseError, ParseValueError},
   parse::{EncodeCgroup, ParseBytes, ParseCgroup, ParseCount, ParsePages},
   unit::{Bytes, Count, Pages},
+  v2::interface::cgroup_file,
 };
 
 /// A point-in-time, per-node breakdown for this cgroup and its descendants.
@@ -22,15 +23,23 @@ use crate::{
 ///
 /// See [Linux `memory.numa_stat` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub struct MemoryNumaStat {
-  bytes: BTreeMap<MemoryStatByteField, BTreeMap<u32, Bytes>>,
-  pages: BTreeMap<MemoryStatPageField, BTreeMap<u32, Pages>>,
-  counts: BTreeMap<MemoryStatCountField, BTreeMap<u32, Count>>,
+  /// Byte amounts by memory field and NUMA node ID.
+  ///
+  /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
+  pub bytes: BTreeMap<MemoryStatByteField, BTreeMap<u32, Bytes>>,
+  /// Page quantities by memory field and NUMA node ID.
+  ///
+  /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
+  pub pages: BTreeMap<MemoryStatPageField, BTreeMap<u32, Pages>>,
+  /// Event counts by memory field and NUMA node ID.
+  ///
+  /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
+  pub counts: BTreeMap<MemoryStatCountField, BTreeMap<u32, Count>>,
 }
 
-const NODE_PREFIX: char = 'N';
-
-crate::v2::interface::cgroup_file!(MemoryNumaStat, "memory.numa_stat", Read);
+cgroup_file!(MemoryNumaStat, "memory.numa_stat", Read);
 
 impl MemoryNumaStat {
   /// The cgroup v2 `memory.numa_stat` interface filename.
@@ -53,24 +62,6 @@ impl MemoryNumaStat {
     }
     Ok(())
   }
-
-  /// Returns byte amounts by memory field and NUMA node ID.
-  ///
-  /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-  #[must_use]
-  pub const fn bytes(&self) -> &BTreeMap<MemoryStatByteField, BTreeMap<u32, Bytes>> { &self.bytes }
-
-  /// Returns page quantities by memory field and NUMA node ID.
-  ///
-  /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-  #[must_use]
-  pub const fn pages(&self) -> &BTreeMap<MemoryStatPageField, BTreeMap<u32, Pages>> { &self.pages }
-
-  /// Returns event counts by memory field and NUMA node ID.
-  ///
-  /// See [Linux memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-  #[must_use]
-  pub const fn counts(&self) -> &BTreeMap<MemoryStatCountField, BTreeMap<u32, Count>> { &self.counts }
 
   fn parse_nodes<Unit, T>(
     raw: &str,
@@ -129,6 +120,8 @@ impl MemoryNumaStat {
     Ok(output)
   }
 }
+
+const NODE_PREFIX: char = 'N';
 
 impl FromStr for MemoryNumaStat {
   type Err = ParseError<ParseValueError>;

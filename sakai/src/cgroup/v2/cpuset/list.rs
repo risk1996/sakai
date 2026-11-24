@@ -1,6 +1,10 @@
 use std::{fmt::Write, ops::RangeInclusive, str::FromStr};
 
-use crate::error::{ParseError, ParseValueError};
+use super::placement_command;
+use crate::{
+  error::{ParseError, ParseValueError},
+  v2::interface::cgroup_file,
+};
 
 const RANGE_SEPARATOR: char = '-';
 const LIST_SEPARATOR: char = ',';
@@ -46,10 +50,18 @@ macro_rules! placement_list {
   ($(#[$doc:meta])* $name:ident, $field:literal, $configured:ident, $file:literal, $effective:literal) => {
     $(#[$doc])*
     #[derive(Debug, Clone, PartialEq, Eq, Default)]
+    #[non_exhaustive]
     pub struct $name {
       /// Inclusive ID ranges, in ascending order without overlap.
+      ///
+      /// Single IDs have equal endpoints. Storage is proportional to the number
+      /// of ranges, not the number of IDs.
       pub ranges: Vec<RangeInclusive<u32>>,
     }
+
+    cgroup_file!(file $name, $name::$configured, ReadWrite);
+    cgroup_file!(read $name => $name);
+    cgroup_file!(write $name, 'a => &'a $name, |value: &$name| placement_command(value.encode_cgroup()));
 
     impl $name {
       /// The configured placement interface filename; absent at the hierarchy root.
@@ -59,13 +71,6 @@ macro_rules! placement_list {
       /// The effective placement interface filename, including at the hierarchy root.
       /// See [Linux cpuset interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpuset-interface-files).
       pub const EFFECTIVE_FILE_NAME: &'static str = $effective;
-
-      /// Inspects the stored ascending, non-overlapping inclusive ID ranges.
-      ///
-      /// Single IDs have equal endpoints. Storage is proportional to the number
-      /// of ranges, not the number of IDs. This getter performs no kernel I/O.
-      #[must_use]
-      pub fn ranges(&self) -> &[RangeInclusive<u32>] { &self.ranges }
 
       /// Iterates the stored IDs in ascending order without allocating an expanded list.
       ///

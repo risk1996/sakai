@@ -49,7 +49,7 @@ impl HugetlbReader {
   fn current(&self, py: Python<'_>, page_size: &str) -> PyResult<Quantity<sakai::Bytes>> {
     let size = Self::size(page_size)?;
     PythonError::read(py, &self.owner, move |owner| owner.read_file::<sakai::v2::hugetlb::HugetlbCurrent>(&size))
-      .map(|value| value.value().into())
+      .map(|value| value.value.into())
   }
 
   /// Read the faulted HugeTLB limit for page_size as MaxOr[Bytes] in bytes.
@@ -60,7 +60,7 @@ impl HugetlbReader {
   fn max(&self, py: Python<'_>, page_size: &str) -> PyResult<MaxOr> {
     let size = Self::size(page_size)?;
     PythonError::read(py, &self.owner, move |owner| owner.read_file::<sakai::v2::hugetlb::HugetlbMax>(&size))
-      .map(|value| MaxOr::from_bytes(value.value()))
+      .map(|value| MaxOr::from_bytes(value.value))
   }
 
   /// Read reservation-accounting usage for page_size in bytes, including descendants.
@@ -73,7 +73,7 @@ impl HugetlbReader {
     PythonError::read(py, &self.owner, move |owner| {
       owner.read_file::<sakai::v2::hugetlb::HugetlbReservedCurrent>(&size)
     })
-    .map(|value| value.value().into())
+    .map(|value| value.value.into())
   }
 
   /// Read the reservation-accounting limit for page_size as MaxOr[Bytes] in bytes.
@@ -84,7 +84,7 @@ impl HugetlbReader {
   fn reserved_max(&self, py: Python<'_>, page_size: &str) -> PyResult<MaxOr> {
     let size = Self::size(page_size)?;
     PythonError::read(py, &self.owner, move |owner| owner.read_file::<sakai::v2::hugetlb::HugetlbReservedMax>(&size))
-      .map(|value| MaxOr::from_bytes(value.value()))
+      .map(|value| MaxOr::from_bytes(value.value))
   }
 
   /// Read cumulative HugeTLB limit failures for page_size, including descendants.
@@ -130,7 +130,7 @@ pub(super) struct HugetlbEvents {
 }
 
 impl From<CoreHugetlbEvents> for HugetlbEvents {
-  fn from(value: CoreHugetlbEvents) -> Self { Self { max: value.max().into() } }
+  fn from(value: CoreHugetlbEvents) -> Self { Self { max: value.max.into() } }
 }
 
 /// Immutable hierarchical in-use HugeTLB byte distribution for one page size.
@@ -150,10 +150,7 @@ pub(super) struct HugetlbNumaStat {
 
 impl From<CoreHugetlbNumaStat> for HugetlbNumaStat {
   fn from(value: CoreHugetlbNumaStat) -> Self {
-    Self {
-      total: value.total().into(),
-      nodes: value.nodes().iter().map(|(node, value)| (*node, value.into())).collect(),
-    }
+    Self { total: value.total.into(), nodes: value.nodes.iter().map(|(node, value)| (*node, value.into())).collect() }
   }
 }
 

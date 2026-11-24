@@ -7,6 +7,7 @@
 ///
 /// See [Linux cgroup limits and the `max` token](https://docs.kernel.org/admin-guide/cgroup-v2.html#limits).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum MaxOr<T> {
   /// The cgroup interface file contains `max`.
   ///
@@ -16,4 +17,14 @@ pub enum MaxOr<T> {
   ///
   /// See [Linux cgroup limits and the `max` token](https://docs.kernel.org/admin-guide/cgroup-v2.html#limits).
   Value(T),
+}
+
+impl<T> MaxOr<T> {
+  /// Transforms a concrete value and preserves the `max` token.
+  pub fn map<U>(self, convert: impl FnOnce(T) -> U) -> MaxOr<U> {
+    match self {
+      | Self::Max => MaxOr::Max,
+      | Self::Value(value) => MaxOr::Value(convert(value)),
+    }
+  }
 }

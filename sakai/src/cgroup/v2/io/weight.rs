@@ -6,6 +6,7 @@ use super::Device;
 use crate::{
   error::{ParseError, ParseValueError},
   parse::{KeyedFields, ParseCgroup},
+  v2::interface::cgroup_file,
 };
 
 /// An I/O scheduling weight in the kernel-supported range, 1 through 10,000.
@@ -17,6 +18,7 @@ use crate::{
   validate(greater_or_equal = 1, less_or_equal = 10_000),
   derive(Debug, Clone, Copy, PartialEq, Eq, Hash, AsRef)
 )]
+#[non_exhaustive]
 pub struct Weight(u16);
 
 /// A configuration snapshot of `io.weight`'s default and device overrides.
@@ -28,36 +30,34 @@ pub struct Weight(u16);
 ///
 /// See [Linux `io.weight` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct IoWeight {
   /// Default weight for devices without an override.
+  ///
+  /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   pub default: Weight,
   /// Explicit per-device weight overrides.
+  ///
+  /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   pub devices: BTreeMap<Device, Weight>,
 }
 
-crate::v2::interface::cgroup_file!(file IoWeight, "io.weight", ReadWrite);
-crate::v2::interface::cgroup_file!(read IoWeight => IoWeight);
+cgroup_file!(file IoWeight, "io.weight", ReadWrite);
+cgroup_file!(read IoWeight => IoWeight);
+cgroup_file!(write IoWeight, 'a => IoWeightCommand, |command| Ok(match command {
+  | IoWeightCommand::Default(weight) => format!("{DEFAULT_WEIGHT_KEY} {}", weight.as_ref()),
+  | IoWeightCommand::Device(device, weight) => {
+    let value = weight.map_or_else(|| DEFAULT_WEIGHT_KEY.to_owned(), |weight| weight.as_ref().to_string());
+    format!("{device} {value}")
+  },
+}));
 
 impl IoWeight {
   /// The cgroup v2 `io.weight` interface filename.
   ///
   /// See [Linux `io.weight` interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
   pub const FILE_NAME: &'static str = <Self as crate::v2::CgroupFile>::FILE_NAME;
-
-  /// Returns the default scheduling weight.
-  ///
-  /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
-  #[must_use]
-  pub const fn default_weight(&self) -> Weight { self.default }
-
-  /// Returns explicit per-device scheduling-weight overrides.
-  ///
-  /// See [Linux io interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
-  #[must_use]
-  pub const fn devices(&self) -> &BTreeMap<Device, Weight> { &self.devices }
 }
-
-const DEFAULT_WEIGHT_KEY: &str = "default";
 
 impl IoWeight {
   /// Encodes the stored value as canonical cgroup text.
@@ -75,6 +75,8 @@ impl IoWeight {
     Ok(output)
   }
 }
+
+const DEFAULT_WEIGHT_KEY: &str = "default";
 
 impl FromStr for IoWeight {
   type Err = ParseError<ParseValueError>;
@@ -103,20 +105,13 @@ impl ParseCgroup<ParseWeight> for Weight {
 
 /// Changes the default weight or one device override in `io.weight`.
 #[derive(Debug, Clone, Copy)]
+#[non_exhaustive]
 pub enum IoWeightCommand {
   /// Sets the default weight.
   Default(Weight),
   /// Sets an override or clears it with `None`.
   Device(Device, Option<Weight>),
 }
-
-crate::v2::interface::cgroup_file!(write IoWeight, 'a => IoWeightCommand, |command| Ok(match command {
-  | IoWeightCommand::Default(weight) => format!("{DEFAULT_WEIGHT_KEY} {}", weight.as_ref()),
-  | IoWeightCommand::Device(device, weight) => {
-    let value = weight.map_or_else(|| DEFAULT_WEIGHT_KEY.to_owned(), |weight| weight.as_ref().to_string());
-    format!("{device} {value}")
-  },
-}));
 
 #[cfg(test)]
 mod tests {

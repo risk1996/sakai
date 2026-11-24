@@ -7,8 +7,9 @@
 - Prefer pure functions and immutable values. Local mutation is appropriate for
   parser builders, ordered fallback, and resource management when it makes
   ownership and validation clearer than a functional expression.
-- Use `&self` for read-only instance methods, including getters, predicates,
-  and derived-metric convenience functions, even when the receiver is `Copy`.
+- Expose cgroup snapshot data as public fields. Use `&self` for read-only
+  instance methods such as predicates and derived-metric functions, even when
+  the receiver is `Copy`.
   Borrowing expresses inspection and avoids whole-receiver copies without
   relying on inlining or release optimizations; those copies can remain in
   debug builds and calls across crate boundaries. The convention also remains
@@ -19,8 +20,7 @@
 - Leave formatting to the project formatter; verify with `devenv tasks run check:fmt`.
 - Prioritize correctness and leveraging the awesome Rust type system:
   - use enum instead of string matching if the list of possible values is known and finite,
-  - mark public enums `#[non_exhaustive]` when kernel fields, controllers, or
-    error categories can grow. Keep genuinely closed alternatives exhaustive.
+  - mark public cgroup structs and enums `#[non_exhaustive]`.
     Use exhaustive matches inside the defining crate so additions require
     updating internal handling; downstream matches need a fallback.
   - use `uom` whenever there is a dimension of the return type (e.g. time, bytes, count, etc.), say no to primitive obsession,
@@ -57,7 +57,7 @@
   documented too, so the exported API has no missing rustdoc.
 - Use plain language to explain behavior, units, valid ranges, and whether
   values describe this cgroup or its descendants. Explain snapshot volatility
-  and that getters inspect stored snapshots while interface reads perform fresh I/O.
+  and that interface reads perform fresh I/O.
   Document errors for fallible readers, including missing interfaces, unsupported
   operations, invalid contents, and other operating-system failures. Distinguish
   missing optional counters from measured zero values.

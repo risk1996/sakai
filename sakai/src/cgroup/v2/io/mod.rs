@@ -16,6 +16,7 @@ use crate::{
   Pressure,
   error::{ParseError, ParseValueError},
   parse::{KeyedFields, cgroup_value},
+  v2::interface::cgroup_file,
 };
 
 mod cost;
@@ -25,19 +26,29 @@ mod priority;
 mod stat;
 mod weight;
 
+cgroup_file!(alias
+  /// I/O pressure snapshots.
+  IoPressure, Pressure::IO_FILE_NAME, Read, Pressure
+);
+
 /// A block-device identifier keyed by the kernel's decimal `major:minor` pair.
 ///
 /// Device numbers identify a block device, not a mount or a filename.
 /// See [makedev(3)](https://man7.org/linux/man-pages/man3/makedev.3.html).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
 pub struct Device {
-  major: u32,
-  minor: u32,
+  /// Major device number.
+  ///
+  /// See [`Device`] and [makedev(3)](https://man7.org/linux/man-pages/man3/makedev.3.html).
+  pub major: u32,
+  /// Minor device number.
+  ///
+  /// See [`Device`] and [makedev(3)](https://man7.org/linux/man-pages/man3/makedev.3.html).
+  pub minor: u32,
 }
 
 cgroup_value! { display Device }
-
-const DEVICE_SEPARATOR: char = ':';
 
 impl Device {
   /// Constructs a device key without resolving it to a currently present device.
@@ -45,18 +56,6 @@ impl Device {
   /// See [`Device`] and [makedev(3)](https://man7.org/linux/man-pages/man3/makedev.3.html).
   #[must_use]
   pub const fn new(major: u32, minor: u32) -> Self { Self { major, minor } }
-
-  /// Returns the major device number.
-  ///
-  /// See [`Device`] and [makedev(3)](https://man7.org/linux/man-pages/man3/makedev.3.html).
-  #[must_use]
-  pub const fn major(&self) -> u32 { self.major }
-
-  /// Returns the minor device number.
-  ///
-  /// See [`Device`] and [makedev(3)](https://man7.org/linux/man-pages/man3/makedev.3.html).
-  #[must_use]
-  pub const fn minor(&self) -> u32 { self.minor }
 
   fn parse(raw: &str, value: &str) -> Result<Self, ParseError<ParseValueError>> {
     let (major, minor) = value
@@ -94,6 +93,8 @@ impl Device {
   }
 }
 
+const DEVICE_SEPARATOR: char = ':';
+
 impl std::fmt::Display for Device {
   fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(formatter, "{}{DEVICE_SEPARATOR}{}", self.major, self.minor)
@@ -130,8 +131,3 @@ mod tests {
     ]);
   }
 }
-
-crate::v2::interface::cgroup_file!(alias
-  /// I/O pressure snapshots.
-  IoPressure, Pressure::IO_FILE_NAME, Read, Pressure
-);
