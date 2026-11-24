@@ -39,8 +39,8 @@ handling. Readback can reflect page-granularity normalization.
 [Linux CPU and memory interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#interface-files)
 
 Keyed files accept a command for one device, resource, or region. For example,
-`Io::set_max` replaces one device's four limits and `Io::update_max` updates
-only the fields supplied. For changes spanning multiple files or distinct
+`Io::set_device_max` replaces one device's four limits and
+`Io::update_device_max` updates only the fields supplied. For changes spanning multiple files or distinct
 rows, each setter can succeed or fail independently.
 
 ## Transport and errors

@@ -112,7 +112,7 @@ cgroup_value! { device_rows IoMax, devices: IoDeviceMax, Device::parse_lines }
 /// A partial update to one device's `io.max` limits.
 ///
 /// Omit a field to retain its kernel value. Use [`MaxOr::Max`] to clear a
-/// limit. Supply at least one field when calling `Io::update_max`.
+/// limit. Supply at least one field when calling `Io::update_device_max`.
 /// See [Linux I/O limits](https://docs.kernel.org/admin-guide/cgroup-v2.html#io-interface-files).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct IoMaxUpdate {
@@ -156,7 +156,7 @@ impl super::Io<'_> {
   ///
   /// # Errors
   /// See the shared [interface-write errors](crate::v2#interface-write-errors).
-  pub fn set_max(&self, device: Device, limits: &IoDeviceMax) -> Result<(), crate::Error> {
+  pub fn set_device_max(&self, device: Device, limits: &IoDeviceMax) -> Result<(), crate::Error> {
     let mut command = device.to_string();
     let encoded = limits.encode_fields(&mut command, " ", '=');
     self.cgroup.write(IoMax::FILE_NAME, encoded.map(|()| command))
@@ -168,7 +168,7 @@ impl super::Io<'_> {
   /// # Errors
   /// An empty update is rejected. See the shared
   /// [interface-write errors](crate::v2#interface-write-errors).
-  pub fn update_max(&self, device: Device, update: &IoMaxUpdate) -> Result<(), crate::Error> {
+  pub fn update_device_max(&self, device: Device, update: &IoMaxUpdate) -> Result<(), crate::Error> {
     self.cgroup.write(IoMax::FILE_NAME, update.encode_command(device))
   }
 }
