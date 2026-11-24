@@ -97,19 +97,19 @@ pub struct DmemLimits {
 cgroup_value! { map DmemLimits, regions: ParseBytes, "bytes" }
 cgroup_file!(alias
   /// Device-memory min by region.
-  DmemMin, "dmem.min", ReadWrite, DmemLimits
+  DmemMin, "dmem.min" => DmemLimits
 );
 cgroup_file!(write DmemMin, 'a => (&'a str, MaxOr<Bytes>), encode_region);
 
 cgroup_file!(alias
   /// Device-memory low by region.
-  DmemLow, "dmem.low", ReadWrite, DmemLimits
+  DmemLow, "dmem.low" => DmemLimits
 );
 cgroup_file!(write DmemLow, 'a => (&'a str, MaxOr<Bytes>), encode_region);
 
 cgroup_file!(alias
   /// Device-memory max by region.
-  DmemMax, "dmem.max", ReadWrite, DmemLimits
+  DmemMax, "dmem.max" => DmemLimits
 );
 cgroup_file!(write DmemMax, 'a => (&'a str, MaxOr<Bytes>), encode_region);
 

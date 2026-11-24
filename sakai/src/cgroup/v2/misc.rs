@@ -92,7 +92,7 @@ pub struct MiscMax {
 }
 
 cgroup_value! { map MiscMax, resources: ParseCount, "value" }
-cgroup_file!(file MiscMax, "misc.max", ReadWrite);
+cgroup_file!(file MiscMax, "misc.max");
 cgroup_file!(read MiscMax => MiscMax);
 cgroup_file!(write MiscMax, 'a => (&'a str, MaxOr<Count>), |(resource, value)| {
   super::interface::encode_keyed::<ParseCount>(resource, "resource", &value, "limit")
@@ -124,7 +124,7 @@ pub struct MiscEvents {
 cgroup_file!(MiscEvents, "misc.events", Read);
 cgroup_file!(alias
   /// Local miscellaneous resource events.
-  MiscEventsLocal, "misc.events.local", Read, MiscEvents
+  MiscEventsLocal, "misc.events.local" => MiscEvents
 );
 
 impl MiscEvents {

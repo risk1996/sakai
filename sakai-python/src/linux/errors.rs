@@ -123,6 +123,7 @@ impl PythonError {
 mod tests {
   use assertables::{assert_err, assert_ok};
   use pyo3::exceptions::{PyFileNotFoundError, PyPermissionError};
+  use sakai::v2::{ReadableFile, cpu::CpuMax};
 
   use super::*;
 
@@ -135,7 +136,7 @@ mod tests {
         (Error::FileMissing { path: path.clone() }, py.get_type::<InterfaceMissingError>(), Some(&path)),
         (Error::DeletedCgroup { path: path.clone() }, py.get_type::<DeletedCgroupError>(), Some(&path)),
         (
-          Error::Parse { path: path.clone(), source: Box::new(io::Error::other("invalid quota")) },
+          Error::Parse { path: path.clone(), source: assert_err!(CpuMax::decode("invalid quota")) },
           py.get_type::<CgroupParseError>(),
           Some(&path),
         ),

@@ -17,7 +17,7 @@ Read these in order to see how a Rust caller gets from a public interface type t
 | [`sakai/src/lib.rs`](../sakai/src/lib.rs) | Crate exports and the snapshot contract. Start with units, missing counters, and the separation between offline parsing and Linux I/O. |
 | [`cgroup/mod.rs`](../sakai/src/cgroup/mod.rs) | Hierarchy entry point. It exposes the unified v2 implementation. |
 | [`v2/mod.rs`](../sakai/src/cgroup/v2/mod.rs) | Public controller modules, Linux-only exports, and shared read/write error semantics. |
-| [`v2/interface.rs`](../sakai/src/cgroup/v2/interface.rs) | Sealed file declarations. Read `CgroupFile`, `FileValue`, and `FileCommand` together to see where name, filename key, access mode, decoded value, and command type come from. Then match `cgroup_file!` arms to their uses in `CpuMax` and `CpuQuota`. |
+| [`v2/interface.rs`](../sakai/src/cgroup/v2/interface.rs) | Sealed file declarations. Read `CgroupFile`, `ReadableFile`, and `WritableFile` together to see where name, filename key, decoded value, and command type come from. Then match `cgroup_file!` arms to their uses in `CpuMax` and `CpuQuota`. |
 | [`v2/path.rs`](../sakai/src/cgroup/v2/path.rs) | Discovery from unified membership and caller-visible mounts. Start at `CgroupPath::candidates`. Check mount-root prefix matching, candidate ordering, and the deleted-membership suffix in the procfs fixtures. |
 | [`v2/handle.rs`](../sakai/src/cgroup/v2/handle.rs) | Directory ownership and the generic operations. Follow `from_pid` through candidate fallback, then `from_path` through directory opening and filesystem verification. Read `child` and `children` for name validation and removal during enumeration. The stored path is for diagnostics. |
 | [`v2/file.rs`](../sakai/src/cgroup/v2/file.rs) | Descriptor-relative interface I/O. Look at the single-filename check, open flags, and write loop. An interrupted write is retried. A short write produces an error because sending the remainder would issue another kernel command. |
@@ -32,7 +32,7 @@ Read the specific macro arm used by a controller as you encounter it. `cgroup_va
 | [`sakai/src/unit.rs`](../sakai/src/unit.rs) | Quantity types and storage units. Check `Time`, `NonZeroTime`, `Count`, `Pages`, and `Ratio` before comparing the same field across interfaces. |
 | [`sakai/src/limit.rs`](../sakai/src/limit.rs) | `MaxOr<T>` and its finite-value helpers. Each controller documents the meaning of `max` for its own file. |
 | [`parse/mod.rs`](../sakai/src/parse/mod.rs) | `Parser` for positional tokens, `KeyedFields` for named values, and `ParseCgroup<Unit>` for conversions. Trace `ParseNonZeroMicroseconds` and the `MaxOr` codec from the first pass. Check when optional fields return `None` and when malformed input produces an error. |
-| [`parse/codec.rs`](../sakai/src/parse/codec.rs) | `EncodeCgroup` and shared `cgroup_value!` implementations. Compare the positional arm with keyed fields, optional groups, and device rows. A snapshot's `encode_cgroup` describes its text representation. The file's `FileCommand::encode` determines what goes to the kernel. |
+| [`parse/codec.rs`](../sakai/src/parse/codec.rs) | `EncodeCgroup` and shared `cgroup_value!` implementations. Compare the positional arm with keyed fields, optional groups, and device rows. A snapshot's `encode_cgroup` describes its text representation. The file's `WritableFile::encode` determines what goes to the kernel. |
 | [`scalar.rs`](../sakai/src/scalar.rs) | `Scalar<T, I>` and the marker declarations for single-value interfaces. Use `MemoryMax` and `MemoryCurrent` to trace how an alias gets its filename, mode, token codec, and available operations. |
 | [`parse/tests.rs`](../sakai/src/parse/tests.rs) | Shared table-test helpers for expected values and missing, invalid, or excess fields. Read alongside an interface's input cases. |
 | [`scalar/tests.rs`](../sakai/src/scalar/tests.rs) | Tests for the shared scalar contract. Use them to review parse and encode behavior inherited by the controller aliases. |
@@ -134,7 +134,7 @@ After reading the Rust API, start at [`sakai-python/src/linux/handle.rs`](../sak
 ## Design background
 
 - [Shared cgroup text codecs ADR](../adr/shared-cgroup-text-codecs.md) explains why the parser and encoder share layout declarations.
-- [Cgroup v2 writes](cgroup-v2-writes.md) records the write design. Check the current `FileCommand` declarations for the actual call shapes.
+- [Cgroup v2 writes](cgroup-v2-writes.md) records the write design. Check the current `WritableFile` declarations for the actual call shapes.
 - [Linux implementation audit](cgroup-v2-linux-audit.md) records kernel-version and interface edge cases. Compare its references with the version notes in the relevant Rust type.
 - [Interface inconsistencies](cgroup-v2-interface-inconsistencies.md) records the review of value, parser, and file conventions preceding the typed interface cleanup.
 - [Cgroup v2 convenience functions](cgroup-v2-convenience-functions.md) discusses derived values and their limits, starting with `CpuMax::cpu_count()`.

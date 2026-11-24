@@ -62,7 +62,7 @@ impl CpuMax {
 #[non_exhaustive]
 pub struct CpuQuota;
 
-cgroup_file!(file CpuQuota, <CpuMax as CgroupFile>::FILE_NAME, Write);
+cgroup_file!(file CpuQuota, <CpuMax as CgroupFile>::FILE_NAME);
 cgroup_file!(write CpuQuota, 'a => MaxOr<NonZeroTime>, |quota| {
   let mut command = String::new();
   crate::parse::EncodeCgroup::<ParseNonZeroMicroseconds>::encode_field(&quota, &mut command, "quota")?;

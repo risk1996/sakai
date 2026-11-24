@@ -105,14 +105,14 @@ impl FromStr for PageSize {
 }
 
 macro_rules! hugetlb_file {
-  ($name:ty, $suffix:literal, $mode:ident) => {
-    cgroup_file!(file $name, concat!("hugetlb.<hugepagesize>.", $suffix), $mode,
+  ($name:ty, $suffix:literal) => {
+    cgroup_file!(file $name, concat!("hugetlb.<hugepagesize>.", $suffix),
       PageSize => |size: &PageSize| size.file_name($suffix));
   };
 }
 
 macro_rules! scalar {
-  ($name:ident, $value:ty, $suffix:literal, $field:literal, $mode:ident, $documentation:literal $(, $encode:expr)?) => {
+  ($name:ident, $value:ty, $suffix:literal, $field:literal, $documentation:literal $(, $encode:expr)?) => {
     #[doc = $documentation]
     ///
     /// Values can change between reads.
@@ -126,26 +126,18 @@ macro_rules! scalar {
     }
 
     cgroup_value! { scalar $name, value: ParseBytes, $field }
-    hugetlb_file!($name, $suffix, $mode);
+    hugetlb_file!($name, $suffix);
     cgroup_file!(read $name => $name);
     $(cgroup_file!(write $name, 'a => $value, $encode);)?
   };
 }
 
-scalar!(
-  HugetlbCurrent,
-  Bytes,
-  "current",
-  "current",
-  Read,
-  "Hierarchical faulted HugeTLB usage in bytes for one page size."
-);
+scalar!(HugetlbCurrent, Bytes, "current", "current", "Hierarchical faulted HugeTLB usage in bytes for one page size.");
 scalar!(
   HugetlbMax,
   MaxOr<Bytes>,
   "max",
   "max",
-  ReadWrite,
   "Configured HugeTLB fault limit in bytes, or `max`; ancestors can still constrain usage.",
   |value| HugetlbMax { value }.encode_cgroup()
 );
@@ -154,7 +146,6 @@ scalar!(
   Bytes,
   "rsvd.current",
   "current",
-  Read,
   "Hierarchical reservation-accounting usage in bytes: reserved pages plus faulted pages without prior reservations, \
    not only unused reservations."
 );
@@ -163,7 +154,6 @@ scalar!(
   MaxOr<Bytes>,
   "rsvd.max",
   "max",
-  ReadWrite,
   "Configured reservation-accounting limit in bytes, or `max`; ancestors can still constrain reservations and \
    unreserved faults.",
   |value| HugetlbReservedMax { value }.encode_cgroup()
@@ -185,7 +175,7 @@ pub struct HugetlbEvents {
 }
 
 cgroup_value! { keyed HugetlbEvents, |_| "value", { max: required ParseCount => "max" } }
-hugetlb_file!(HugetlbEvents, "events", Read);
+hugetlb_file!(HugetlbEvents, "events");
 cgroup_file!(read HugetlbEvents => HugetlbEvents);
 
 /// Hierarchical in-use HugeTLB bytes and NUMA distribution for one page size.
@@ -205,7 +195,7 @@ pub struct HugetlbNumaStat {
   pub nodes: BTreeMap<u32, Bytes>,
 }
 
-hugetlb_file!(HugetlbNumaStat, "numa_stat", Read);
+hugetlb_file!(HugetlbNumaStat, "numa_stat");
 cgroup_file!(read HugetlbNumaStat => HugetlbNumaStat);
 
 impl HugetlbNumaStat {
@@ -254,7 +244,7 @@ impl FromStr for HugetlbNumaStat {
 #[non_exhaustive]
 pub struct HugetlbEventsLocal;
 
-hugetlb_file!(HugetlbEventsLocal, "events.local", Read);
+hugetlb_file!(HugetlbEventsLocal, "events.local");
 cgroup_file!(read HugetlbEventsLocal => HugetlbEvents);
 
 #[cfg(test)]

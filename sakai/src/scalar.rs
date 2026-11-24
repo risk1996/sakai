@@ -7,14 +7,13 @@ use crate::{
   limit::MaxOr,
   parse::{EncodeCgroup, ParseBoolean, ParseBytes, ParseCgroup, ParseCount, ParseMicroseconds, ParsePercent, Parser},
   unit::{Bytes, Count, Ratio, Time},
-  v2::{AccessMode, CgroupFile, FileCommand, FileValue},
+  v2::{CgroupFile, ReadableFile, WritableFile},
 };
 
 /// The filename and diagnostic label of a scalar interface.
 pub trait Interface: Copy {
   const FILE_NAME: &'static str;
   const FIELD: &'static str;
-  type Mode: AccessMode;
 }
 
 /// A typed scalar snapshot, distinguished by its interface marker.
@@ -96,35 +95,33 @@ impl<T: Copy + ScalarValue + EncodeCgroup<ScalarEncoding<T>>, I: Interface> Scal
 impl<T, I: Interface> crate::v2::interface::sealed::File for Scalar<T, I> {}
 impl<T, I: Interface> CgroupFile for Scalar<T, I> {
   type Key = ();
-  type Mode = I::Mode;
 
   const FILE_NAME: &'static str = I::FILE_NAME;
 }
 
-impl<T, I: Interface> FileValue for Scalar<T, I>
+impl<T, I: Interface> ReadableFile for Scalar<T, I>
 where
   Self: FromStr<Err = ParseError<ParseValueError>>,
 {
   type Value = Self;
 
-  fn decode(contents: &str) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> { Ok(contents.parse()?) }
+  fn decode(contents: &str) -> Result<Self, ParseError<ParseValueError>> { contents.parse() }
 }
 
-impl<T: Copy + ScalarValue + EncodeCgroup<ScalarEncoding<T>>, I: Interface<Mode: crate::v2::WriteMode>> FileCommand
-  for Scalar<T, I>
-{
+impl<T: Copy + ScalarValue + EncodeCgroup<ScalarEncoding<T>>, I: WritableScalar> WritableFile for Scalar<T, I> {
   type Command<'a> = T;
 
   fn encode(value: T) -> Result<String, EncodeError> { Self::new(value).encode_cgroup() }
 }
 
+trait WritableScalar: Interface {}
+
 /// Interface markers used by the public snapshot aliases.
 pub mod interface {
-  use super::Interface;
-  use crate::v2::mode;
+  use super::{Interface, WritableScalar};
 
   macro_rules! scalar_interface {
-    ($(#[$doc:meta])* $name:ident, $file:literal, $field:literal, $mode:ident) => {
+    ($(#[$doc:meta])* $name:ident, $file:literal, $field:literal $(, $writable:ident)?) => {
       $(#[$doc])*
       #[derive(Clone, Copy, PartialEq, Eq, Hash)]
       pub struct $name;
@@ -132,9 +129,11 @@ pub mod interface {
       impl Interface for $name {
         const FIELD: &'static str = $field;
         const FILE_NAME: &'static str = $file;
-        type Mode = mode::$mode;
       }
+
+      $(scalar_interface!(@write $name, $writable);)?
     };
+    (@write $name:ident, writable) => { impl WritableScalar for $name {} };
   }
 
   scalar_interface!(
@@ -142,56 +141,55 @@ pub mod interface {
     CgroupFreeze,
     "cgroup.freeze",
     "freeze",
-    ReadWrite
+    writable
   );
   scalar_interface!(
     /// Marker for the configured descendant depth limit.
     CgroupMaxDepth,
     "cgroup.max.depth",
     "depth",
-    ReadWrite
+    writable
   );
   scalar_interface!(
     /// Marker for the configured descendant cgroup count limit.
     CgroupMaxDescendants,
     "cgroup.max.descendants",
     "descendants",
-    ReadWrite
+    writable
   );
   scalar_interface!(
     /// Marker for the local pressure accounting enable flag.
     CgroupPressure,
     "cgroup.pressure",
     "pressure",
-    ReadWrite
+    writable
   );
-  scalar_interface!(PidsCurrent, "pids.current", "current", Read);
+  scalar_interface!(PidsCurrent, "pids.current", "current");
   scalar_interface!(
     /// Marker for the historical task count peak.
     PidsPeak,
     "pids.peak",
-    "peak",
-    Read
+    "peak"
   );
-  scalar_interface!(PidsMax, "pids.max", "max", ReadWrite);
-  scalar_interface!(MemoryOomGroup, "memory.oom.group", "oom.group", ReadWrite);
-  scalar_interface!(MemoryCurrent, "memory.current", "current", Read);
-  scalar_interface!(MemoryPeak, "memory.peak", "peak", Read);
-  scalar_interface!(MemoryMax, "memory.max", "max", ReadWrite);
-  scalar_interface!(MemoryHigh, "memory.high", "high", ReadWrite);
-  scalar_interface!(MemoryLow, "memory.low", "low", ReadWrite);
-  scalar_interface!(MemoryMin, "memory.min", "min", ReadWrite);
-  scalar_interface!(SwapCurrent, "memory.swap.current", "current", Read);
-  scalar_interface!(SwapPeak, "memory.swap.peak", "peak", Read);
-  scalar_interface!(SwapMax, "memory.swap.max", "max", ReadWrite);
-  scalar_interface!(SwapHigh, "memory.swap.high", "high", ReadWrite);
-  scalar_interface!(ZswapCurrent, "memory.zswap.current", "current", Read);
-  scalar_interface!(ZswapMax, "memory.zswap.max", "max", ReadWrite);
-  scalar_interface!(ZswapWriteback, "memory.zswap.writeback", "writeback", ReadWrite);
-  scalar_interface!(CpuIdle, "cpu.idle", "idle", ReadWrite);
-  scalar_interface!(CpuMaxBurst, "cpu.max.burst", "burst", ReadWrite);
-  scalar_interface!(CpuUclampMin, "cpu.uclamp.min", "utilization", ReadWrite);
-  scalar_interface!(CpuUclampMax, "cpu.uclamp.max", "utilization", ReadWrite);
+  scalar_interface!(PidsMax, "pids.max", "max", writable);
+  scalar_interface!(MemoryOomGroup, "memory.oom.group", "oom.group", writable);
+  scalar_interface!(MemoryCurrent, "memory.current", "current");
+  scalar_interface!(MemoryPeak, "memory.peak", "peak");
+  scalar_interface!(MemoryMax, "memory.max", "max", writable);
+  scalar_interface!(MemoryHigh, "memory.high", "high", writable);
+  scalar_interface!(MemoryLow, "memory.low", "low", writable);
+  scalar_interface!(MemoryMin, "memory.min", "min", writable);
+  scalar_interface!(SwapCurrent, "memory.swap.current", "current");
+  scalar_interface!(SwapPeak, "memory.swap.peak", "peak");
+  scalar_interface!(SwapMax, "memory.swap.max", "max", writable);
+  scalar_interface!(SwapHigh, "memory.swap.high", "high", writable);
+  scalar_interface!(ZswapCurrent, "memory.zswap.current", "current");
+  scalar_interface!(ZswapMax, "memory.zswap.max", "max", writable);
+  scalar_interface!(ZswapWriteback, "memory.zswap.writeback", "writeback", writable);
+  scalar_interface!(CpuIdle, "cpu.idle", "idle", writable);
+  scalar_interface!(CpuMaxBurst, "cpu.max.burst", "burst", writable);
+  scalar_interface!(CpuUclampMin, "cpu.uclamp.min", "utilization", writable);
+  scalar_interface!(CpuUclampMax, "cpu.uclamp.max", "utilization", writable);
 }
 
 #[cfg(test)]

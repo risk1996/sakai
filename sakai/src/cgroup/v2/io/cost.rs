@@ -71,7 +71,7 @@ pub struct IoCostQos {
 }
 
 cgroup_value! { device_rows IoCostQos, devices: IoDeviceCostQos, Device::parse_lines }
-cgroup_file!(file IoCostQos, "io.cost.qos", ReadWrite);
+cgroup_file!(file IoCostQos, "io.cost.qos");
 cgroup_file!(read IoCostQos => IoCostQos);
 cgroup_file!(write IoCostQos, 'a => (Device, &'a IoDeviceCostQos), encode_qos);
 
@@ -139,7 +139,7 @@ pub struct IoCostModel {
 }
 
 cgroup_value! { device_rows IoCostModel, devices: IoDeviceCostModel, Device::parse_lines }
-cgroup_file!(file IoCostModel, "io.cost.model", ReadWrite);
+cgroup_file!(file IoCostModel, "io.cost.model");
 cgroup_file!(read IoCostModel => IoCostModel);
 cgroup_file!(write IoCostModel, 'a => (Device, &'a IoDeviceCostModel), encode_model);
 

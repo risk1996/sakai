@@ -1,60 +1,19 @@
 //! Typed cgroup v2 file declarations and access capabilities.
 
-use std::{borrow::Cow, error::Error as StdError};
+use std::borrow::Cow;
 
-use crate::error::EncodeError;
+use crate::error::{EncodeError, ParseError, ParseValueError};
 
 pub(crate) mod sealed {
-  pub trait Mode {}
   pub trait File {}
 }
 
-/// A sealed access mode for a cgroup file.
-pub trait AccessMode: sealed::Mode {}
-
-/// Access modes supported by Sakai.
-pub mod mode {
-  use super::{AccessMode, sealed};
-
-  /// An interface exposed for reading.
-  #[non_exhaustive]
-  pub struct Read;
-  /// An interface exposed for writing.
-  #[non_exhaustive]
-  pub struct Write;
-  /// An interface exposed for reading and writing.
-  #[non_exhaustive]
-  pub struct ReadWrite;
-
-  impl sealed::Mode for Read {}
-  impl sealed::Mode for Write {}
-  impl sealed::Mode for ReadWrite {}
-  impl AccessMode for Read {}
-  impl AccessMode for Write {}
-  impl AccessMode for ReadWrite {}
-}
-
-/// A mode that supports reading.
-pub trait ReadMode: AccessMode {}
-impl ReadMode for mode::Read {}
-impl ReadMode for mode::ReadWrite {}
-
-/// A mode that supports writing.
-pub trait WriteMode: AccessMode {}
-impl WriteMode for mode::Write {}
-impl WriteMode for mode::ReadWrite {}
-
-/// A declared cgroup v2 file, with its access mode and optional filename key.
-///
-/// Modes describe the operations offered by Sakai. Kernel availability and
-/// permission checks still apply.
+/// A declared cgroup v2 file with an optional filename key.
 pub trait CgroupFile: sealed::File {
   /// Exact filename, or its template when a key is required.
   ///
   /// Use [`Self::filename`] to resolve a template for a specific key.
   const FILE_NAME: &'static str;
-  /// Access supported by this declaration.
-  type Mode: AccessMode;
   /// Filename selector, or `()` for a fixed filename.
   type Key: ?Sized;
 
@@ -62,8 +21,14 @@ pub trait CgroupFile: sealed::File {
   fn filename(_key: &Self::Key) -> Cow<'static, str> { Cow::Borrowed(Self::FILE_NAME) }
 }
 
-/// Decodes a file's stored value.
-pub trait FileValue: CgroupFile {
+/// A cgroup file with a decoder for its stored value.
+///
+/// ```compile_fail,E0277
+/// use sakai::v2::{ReadableFile, cpu::CpuQuota};
+/// fn requires_read<F: ReadableFile>() {}
+/// requires_read::<CpuQuota>();
+/// ```
+pub trait ReadableFile: CgroupFile {
   /// Value obtained by reading the file.
   type Value;
 
@@ -71,11 +36,17 @@ pub trait FileValue: CgroupFile {
   ///
   /// # Errors
   /// Returns the parser error if the contents are invalid.
-  fn decode(contents: &str) -> Result<Self::Value, Box<dyn StdError + Send + Sync>>;
+  fn decode(contents: &str) -> Result<Self::Value, ParseError<ParseValueError>>;
 }
 
-/// Encodes one command for a file.
-pub trait FileCommand: CgroupFile {
+/// A cgroup file with an encoder for its write command.
+///
+/// ```compile_fail,E0277
+/// use sakai::v2::{WritableFile, memory::MemoryCurrent};
+/// fn requires_write<F: WritableFile>() {}
+/// requires_write::<MemoryCurrent>();
+/// ```
+pub trait WritableFile: CgroupFile {
   /// Command accepted by the file, which may borrow its inputs.
   type Command<'a>;
 
@@ -86,27 +57,18 @@ pub trait FileCommand: CgroupFile {
   fn encode(command: Self::Command<'_>) -> Result<String, EncodeError>;
 }
 
-/// A file whose mode and codec support reading.
-pub trait ReadableFile: FileValue<Mode: ReadMode> {}
-impl<F: FileValue<Mode: ReadMode>> ReadableFile for F {}
-
-/// A file whose mode and codec support writing.
-pub trait WritableFile: FileCommand<Mode: WriteMode> {}
-impl<F: FileCommand<Mode: WriteMode>> WritableFile for F {}
-
 macro_rules! cgroup_file {
-  (alias $(#[$doc:meta])* $file:ident, $name:expr, $mode:ident, $value:ty $(, $decode:expr)?) => {
+  (alias $(#[$doc:meta])* $file:ident, $name:expr => $value:ty $(, $decode:expr)?) => {
     $(#[$doc])*
     #[non_exhaustive]
     pub struct $file;
-    $crate::v2::interface::cgroup_file!(file $file, $name, $mode);
+    $crate::v2::interface::cgroup_file!(file $file, $name);
     $crate::v2::interface::cgroup_file!(read $file => $value $(, $decode)?);
   };
-  (file $file:ty, $name:expr, $mode:ident $(, $key:ty => $resolve:expr)?) => {
+  (file $file:ty, $name:expr $(, $key:ty => $resolve:expr)?) => {
     impl $crate::v2::interface::sealed::File for $file {}
     impl $crate::v2::CgroupFile for $file {
       const FILE_NAME: &'static str = $name;
-      type Mode = $crate::v2::mode::$mode;
       type Key = $crate::v2::interface::cgroup_file!(@key $($key)?);
       $(fn filename(key: &Self::Key) -> std::borrow::Cow<'static, str> { ($resolve)(key).into() })?
     }
@@ -114,17 +76,17 @@ macro_rules! cgroup_file {
   (@key $key:ty) => { $key };
   (@key) => { () };
   (read $file:ty => $value:ty $(, $decode:expr)?) => {
-    impl $crate::v2::FileValue for $file {
+    impl $crate::v2::ReadableFile for $file {
       type Value = $value;
-      fn decode(contents: &str) -> Result<Self::Value, Box<dyn std::error::Error + Send + Sync>> {
+      fn decode(contents: &str) -> Result<Self::Value, $crate::error::ParseError<$crate::error::ParseValueError>> {
         $crate::v2::interface::cgroup_file!(@decode contents $(, $decode)?)
       }
     }
   };
-  (@decode $contents:ident) => { Ok($contents.parse()?) };
+  (@decode $contents:ident) => { $contents.parse() };
   (@decode $contents:ident, $decode:expr) => { ($decode)($contents) };
   (write $file:ty, $borrow:lifetime => $command:ty, $encode:expr) => {
-    impl $crate::v2::FileCommand for $file {
+    impl $crate::v2::WritableFile for $file {
       type Command<$borrow> = $command;
       fn encode(command: Self::Command<'_>) -> Result<String, $crate::error::EncodeError> {
         ($encode)(command)
@@ -132,11 +94,11 @@ macro_rules! cgroup_file {
     }
   };
   ($value:ty, $name:expr, Read) => {
-    $crate::v2::interface::cgroup_file!(file $value, $name, Read);
+    $crate::v2::interface::cgroup_file!(file $value, $name);
     $crate::v2::interface::cgroup_file!(read $value => $value);
   };
   ($value:ty, $name:expr, ReadWrite) => {
-    $crate::v2::interface::cgroup_file!(file $value, $name, ReadWrite);
+    $crate::v2::interface::cgroup_file!(file $value, $name);
     $crate::v2::interface::cgroup_file!(read $value => $value);
     $crate::v2::interface::cgroup_file!(write $value, 'a => &'a $value, <$value>::encode_cgroup);
   };

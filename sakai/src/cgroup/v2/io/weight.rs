@@ -42,7 +42,7 @@ pub struct IoWeight {
   pub devices: BTreeMap<Device, Weight>,
 }
 
-cgroup_file!(file IoWeight, "io.weight", ReadWrite);
+cgroup_file!(file IoWeight, "io.weight");
 cgroup_file!(read IoWeight => IoWeight);
 cgroup_file!(write IoWeight, 'a => IoWeightCommand, |command| Ok(match command {
   | IoWeightCommand::Default(weight) => format!("{DEFAULT_WEIGHT_KEY} {}", weight.as_ref()),

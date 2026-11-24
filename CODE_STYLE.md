@@ -7,6 +7,11 @@
 - Prefer pure functions and immutable values. Local mutation is appropriate for
   parser builders, ordered fallback, and resource management when it makes
   ownership and validation clearer than a functional expression.
+- Avoid uses of `dyn` that allocate a trait object on the heap unless nearby
+  rustdoc or a code comment says when the allocation occurs. For example,
+  document that a decoder returning `Box<dyn Error>` boxes the error only on
+  parse failure. Borrowed trait objects and type-level `PhantomData` markers
+  do not allocate by themselves.
 - Expose cgroup snapshot data as public fields. Use `&self` for read-only
   instance methods such as predicates and derived-metric functions, even when
   the receiver is `Copy`.

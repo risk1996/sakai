@@ -98,7 +98,7 @@ cgroup_file!(RdmaCurrent, "rdma.current", Read);
 cgroup_file!(alias
   /// Peak RDMA usage.
   /// Since Linux 7.2. See the [Linux 7.2 source](https://github.com/torvalds/linux/blob/v7.2/kernel/cgroup/rdma.c).
-  RdmaPeak, "rdma.peak", Read, RdmaCurrent
+  RdmaPeak, "rdma.peak" => RdmaCurrent
 );
 
 /// Hierarchical HCA handle and object counts for one RDMA device.
@@ -140,7 +140,7 @@ pub struct RdmaMax {
 }
 
 cgroup_value! { device_rows RdmaMax, devices: RdmaDeviceMax, parse_devices }
-cgroup_file!(file RdmaMax, "rdma.max", ReadWrite);
+cgroup_file!(file RdmaMax, "rdma.max");
 cgroup_file!(read RdmaMax => RdmaMax);
 cgroup_file!(write RdmaMax, 'a => (&'a RdmaDevice, &'a RdmaDeviceMax), encode_device_max);
 
@@ -181,7 +181,7 @@ cgroup_file!(RdmaEvents, "rdma.events", Read);
 cgroup_file!(alias
   /// Local RDMA events.
   /// Since Linux 7.2. See the [Linux 7.2 source](https://github.com/torvalds/linux/blob/v7.2/kernel/cgroup/rdma.c).
-  RdmaEventsLocal, "rdma.events.local", Read, RdmaEvents
+  RdmaEventsLocal, "rdma.events.local" => RdmaEvents
 );
 
 /// Allocation events for both resource types of one RDMA device.

@@ -1,5 +1,4 @@
 use std::{
-  error::Error as StdError,
   io,
   num::{ParseFloatError, ParseIntError},
   path::PathBuf,
@@ -53,7 +52,7 @@ pub enum Error {
     path: PathBuf,
     /// The original parser error, including raw content when provided.
     #[source]
-    source: Box<dyn StdError + Send + Sync + 'static>,
+    source: ParseError<ParseValueError>,
   },
   /// A command could not be encoded for its interface.
   #[error("failed to encode {}: {source}", path.display())]
@@ -183,7 +182,7 @@ impl EncodeError {
   pub const fn field(&self) -> &'static str { self.field }
 }
 
-/// A numeric field is malformed or outside the target type's supported range.
+/// A field value is malformed, unrecognized, or outside its supported range.
 ///
 /// See [Linux cgroup file formats and availability](https://docs.kernel.org/admin-guide/cgroup-v2.html#interface-files).
 #[derive(Debug, thiserror::Error)]
@@ -195,6 +194,9 @@ pub enum ParseValueError {
   /// The field is not a valid floating-point number.
   #[error(transparent)]
   Float(#[from] ParseFloatError),
+  /// The field is not a recognized value of its enum.
+  #[error(transparent)]
+  UnknownVariant(#[from] strum::ParseError),
   /// The value exceeds a supported range, including after unit conversion.
   #[error("value is outside the supported range")]
   OutOfRange,
@@ -215,6 +217,8 @@ pub enum FieldKind {
 
 #[cfg(all(test, target_os = "linux"))]
 mod tests {
+  use std::error::Error as _;
+
   use assertables::assert_some;
 
   use super::*;

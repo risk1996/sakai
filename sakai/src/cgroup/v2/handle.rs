@@ -375,10 +375,9 @@ mod tests {
       panic!("expected parse failure, got {error:?}");
     };
     assert_eq!(actual, &cgroup.path().join(CpuIdle::FILE_NAME));
-    let parsed = source.downcast_ref::<ParseError<ParseValueError>>().expect("original parse error");
-    assert_eq!(error.source().map(ToString::to_string), Some(parsed.to_string()));
-    assert!(matches!(parsed, ParseError::Invalid { field: "idle", .. }));
-    assert!(parsed.source().is_some());
+    assert_eq!(error.source().map(ToString::to_string), Some(source.to_string()));
+    assert!(matches!(source, ParseError::Invalid { field: "idle", .. }));
+    assert!(source.source().is_some());
     assert!(error.to_string().contains("failed to parse"));
     assert!(error.to_string().contains("cgroup content"));
   }
@@ -387,13 +386,14 @@ mod tests {
   fn cgroup_type_failure_keeps_raw_input_and_strum_source() {
     let cgroup = Cgroup::fixture("fixtures/invalid_type");
     let error = assert_err!(cgroup.read_value::<crate::v2::core::CgroupType>());
-    let Error::Parse { path: actual, .. } = &error else {
-      panic!("expected parse failure, got {error:?}");
+    let Error::Parse { path, source: ParseError::Invalid { raw, field, value, source } } = &error else {
+      panic!("expected an invalid field, got {error:?}");
     };
-    assert_eq!(actual, &cgroup.path().join(CgroupType::FILE_NAME));
-    assert!(error.to_string().contains("\"unknown\\n\""));
-    let reason = error.source().and_then(std::error::Error::source).expect("strum parse reason");
-    assert!(error.to_string().contains(&reason.to_string()));
+    assert_eq!(path, &cgroup.path().join(CgroupType::FILE_NAME));
+    assert_eq!(*field, CgroupType::FILE_NAME);
+    assert_eq!(raw.as_ref(), "unknown\n");
+    assert_eq!(value.as_ref(), "unknown");
+    assert!(matches!(source, ParseValueError::UnknownVariant(strum::ParseError::VariantNotFound)));
   }
 
   #[test]
