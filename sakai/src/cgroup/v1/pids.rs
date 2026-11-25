@@ -7,35 +7,17 @@ use crate::{
   parse::{ParseCount, cgroup_value},
 };
 
-v1_scalar!(
+v1_scalars! {
   /// Current number of threads in this cgroup and its descendants.
   /// This file is absent at the hierarchy root.
-  PidsCurrent,
-  "pids.current",
-  Count,
-  ParseCount,
-  Read
-);
-
-v1_scalar!(
+  PidsCurrent, "pids.current", Count, ParseCount, Read;
   /// Local thread limit. Ancestors can impose a lower limit.
   /// The kernel reports max for an unlimited value. This file is absent at the root.
-  PidsMax,
-  "pids.max",
-  MaxOr<Count>,
-  ParseCount,
-  ReadWrite
-);
-
-v1_scalar!(
+  PidsMax, "pids.max", MaxOr<Count>, ParseCount, ReadWrite;
   /// Peak hierarchical task count during the life of this cgroup, outside the root.
   /// Since Linux 6.1. See the [Linux 6.1 PID controller implementation](https://github.com/torvalds/linux/blob/v6.1/kernel/cgroup/pids.c).
-  PidsPeak,
-  "pids.peak",
-  Count,
-  ParseCount,
-  Read
-);
+  PidsPeak, "pids.peak", Count, ParseCount, Read;
+}
 
 /// Limit events reported by the v1 PID controller outside the hierarchy root.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

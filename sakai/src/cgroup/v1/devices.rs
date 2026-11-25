@@ -58,16 +58,17 @@ impl FromStr for DeviceRule {
         | value => value.parse::<u32>().ok().filter(|&number| number != u32::MAX).map(Some).ok_or_else(invalid_device),
       };
       let access = parser.next_raw_field("access")?;
+      let invalid_access = || ParseError::invalid(contents, "access", access, ParseValueError::OutOfRange);
       let (mut read, mut write, mut mknod) = (false, false, false);
       for permission in access.bytes() {
         let flag = match permission {
           | b'r' => &mut read,
           | b'w' => &mut write,
           | b'm' => &mut mknod,
-          | _ => return Err(ParseError::invalid(contents, "access", access, ParseValueError::OutOfRange)),
+          | _ => return Err(invalid_access()),
         };
         if *flag {
-          return Err(ParseError::invalid(contents, "access", access, ParseValueError::OutOfRange));
+          return Err(invalid_access());
         }
         *flag = true;
       }
@@ -102,22 +103,18 @@ impl DeviceRule {
 impl fmt::Display for DeviceRule {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     write!(f, "{} ", self.kind)?;
-    match self.major {
-      | Some(number) => write!(f, "{number}")?,
-      | None => f.write_str("*")?,
+    for (number, separator) in [(self.major, ":"), (self.minor, " ")] {
+      match number {
+        | Some(number) => write!(f, "{number}{separator}")?,
+        | None => write!(f, "*{separator}")?,
+      }
     }
-    f.write_str(":")?;
-    match self.minor {
-      | Some(number) => write!(f, "{number}")?,
-      | None => f.write_str("*")?,
+    for (enabled, permission) in [(self.read, "r"), (self.write, "w"), (self.mknod, "m")] {
+      if enabled {
+        f.write_str(permission)?;
+      }
     }
-    write!(
-      f,
-      " {}{}{}",
-      if self.read { "r" } else { "" },
-      if self.write { "w" } else { "" },
-      if self.mknod { "m" } else { "" }
-    )
+    Ok(())
   }
 }
 

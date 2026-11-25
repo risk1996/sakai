@@ -1,6 +1,5 @@
 use std::{
   ffi::OsStr,
-  io,
   os::unix::ffi::OsStrExt,
   path::{Path, PathBuf},
 };
@@ -9,7 +8,13 @@ use procfs::process::Process;
 use rustix::fs;
 
 use super::{ReadableFile, Version, WritableFile};
-use crate::{Error, cgroup::directory::Directory};
+use crate::{
+  Error,
+  cgroup::{
+    directory::Directory,
+    discovery::{open_candidates, processes},
+  },
+};
 
 // Linux UAPI linux/magic.h.
 const CGROUP_SUPER_MAGIC: fs::FsWord = 0x0027_e0eb;
@@ -50,25 +55,16 @@ impl Cgroup {
   /// [Error::DeletedCgroup] when procfs reports removal. An invalid PID
   /// returns [Error::Io]. Procfs and open failures retain their source.
   pub fn from_pid(pid: u32, controller: &str) -> Result<Self, Error> {
-    let pid = i32::try_from(pid)
-      .ok()
-      .filter(|pid| *pid > 0)
-      .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "PID must be positive and fit i32"))?;
-    let target = Process::new(pid).map_err(Error::procfs)?;
-    let caller = Process::myself().map_err(Error::procfs)?;
-    let mut first_error = None;
-    for candidate in candidates(&target, &caller, controller)? {
-      match Self::from_path(&candidate.path).and_then(|cgroup| {
+    let (target, caller) = processes(pid)?;
+    open_candidates(
+      candidates(&target, &caller, controller)?,
+      |candidate| {
+        let cgroup = Self::from_path(&candidate.path)?;
         cgroup.verify_device(candidate.device)?;
         Ok(cgroup)
-      }) {
-        | Ok(cgroup) => return Ok(cgroup),
-        | Err(error) => {
-          first_error.get_or_insert(error);
-        },
-      }
-    }
-    Err(first_error.unwrap_or_else(|| Error::V1MountMissing { controller: controller.into() }))
+      },
+      || Error::V1MountMissing { controller: controller.into() },
+    )
   }
 
   /// Opens an explicit directory and verifies that it is on a v1 cgroup filesystem.

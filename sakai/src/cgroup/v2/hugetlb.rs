@@ -52,7 +52,7 @@ impl PageSize {
   const KIBIBYTE: u64 = 1 << 10;
   const MEBIBYTE: u64 = 1 << 20;
 
-  fn file_name(&self, suffix: &str) -> String { format!("hugetlb.{self}.{suffix}") }
+  pub(in crate::cgroup) fn file_name(&self, suffix: &str) -> String { format!("hugetlb.{self}.{suffix}") }
 }
 
 impl fmt::Display for PageSize {

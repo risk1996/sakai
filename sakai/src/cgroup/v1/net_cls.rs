@@ -4,6 +4,7 @@
 
 use std::str::FromStr;
 
+use super::codec::Unsigned;
 use crate::{
   error::{ParseError, ParseValueError},
   parse::Parser,
@@ -30,14 +31,9 @@ impl FromStr for ClassId {
   type Err = ParseError<ParseValueError>;
 
   fn from_str(contents: &str) -> Result<Self, Self::Err> {
-    Parser::parse(contents, |parser| {
-      let token = parser.next_raw_field("classid")?;
-      let packed: u32 = token
-        .parse()
-        .map_err(|error: std::num::ParseIntError| ParseError::invalid(contents, "classid", token, error.into()))?;
-      let [hi, lo, mi, ni] = packed.to_be_bytes();
-      Ok(Self::new(u16::from_be_bytes([hi, lo]), u16::from_be_bytes([mi, ni])))
-    })
+    let packed = Parser::single::<Unsigned, u32>(contents, "classid")?;
+    let [hi, lo, mi, ni] = packed.to_be_bytes();
+    Ok(Self::new(u16::from_be_bytes([hi, lo]), u16::from_be_bytes([mi, ni])))
   }
 }
 

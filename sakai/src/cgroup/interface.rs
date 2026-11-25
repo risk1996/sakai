@@ -109,3 +109,22 @@ macro_rules! cgroup_file {
   };
 }
 pub(crate) use cgroup_file;
+
+pub(in crate::cgroup) fn check_token(value: &str, field: &'static str) -> Result<(), EncodeError> {
+  if value.is_empty() || value.bytes().any(|byte| byte.is_ascii_whitespace() || byte == 0) {
+    return Err(EncodeError { field });
+  }
+  Ok(())
+}
+
+pub(in crate::cgroup) fn encode_keyed<Unit>(
+  key: &str,
+  key_field: &'static str,
+  value: &impl crate::parse::EncodeCgroup<Unit>,
+  value_field: &'static str,
+) -> Result<String, EncodeError> {
+  check_token(key, key_field)?;
+  let mut command = format!("{key} ");
+  value.encode_field(&mut command, value_field)?;
+  Ok(command)
+}

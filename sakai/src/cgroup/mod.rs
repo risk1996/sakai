@@ -8,5 +8,7 @@ pub use interface::{CgroupFile, ReadableFile, WritableFile};
 #[cfg(target_os = "linux")]
 mod directory;
 #[cfg(target_os = "linux")]
+mod discovery;
+#[cfg(target_os = "linux")]
 mod file;
 pub(crate) mod interface;

@@ -8,14 +8,10 @@ use crate::{
   parse::{ParseCount, cgroup_value},
 };
 
-v1_scalar!(
+v1_scalars! {
   /// CPU time consumed by this group and its descendants, reported in nanoseconds.
-  CpuUsage,
-  "cpuacct.usage",
-  Time,
-  Nanoseconds,
-  Read
-);
+  CpuUsage, "cpuacct.usage", Time, Nanoseconds, Read;
+}
 
 /// User and system CPU time of the cgroup and its descendants in USER_HZ ticks.
 ///

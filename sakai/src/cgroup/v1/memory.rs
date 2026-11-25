@@ -11,80 +11,37 @@ use crate::{
   parse::{KeyedFields, ParseBytes, ParseCount, cgroup_value, encode_pair},
 };
 
-v1_scalar!(
+v1_scalars! {
   /// Approximate memory usage in bytes, including accounted descendants.
-  MemoryUsage,
-  "memory.usage_in_bytes",
-  Bytes,
-  ParseBytes,
-  Read
-);
-v1_scalar!(
+  MemoryUsage, "memory.usage_in_bytes", Bytes, ParseBytes, Read;
   /// Peak accounted memory usage in bytes.
-  MemoryPeak,
-  "memory.max_usage_in_bytes",
-  Bytes,
-  ParseBytes,
-  Read
-);
-v1_scalar!(
+  MemoryPeak, "memory.max_usage_in_bytes", Bytes, ParseBytes, Read;
   /// Local memory limit in bytes. The snapshot preserves the kernel's numeric
   /// unlimited sentinel. Use MaxOr::Max as a write command to reset the limit.
   /// Writes can be rounded to the system page size and are unavailable at the root.
-  MemoryLimit,
-  "memory.limit_in_bytes",
-  Bytes,
-  ParseBytes,
-  Read
-);
+  MemoryLimit, "memory.limit_in_bytes", Bytes, ParseBytes, Read;
+}
 v1_file!(write MemoryLimit, 'a => MaxOr<Bytes>, |limit| encode_byte_limit(limit, "memory.limit_in_bytes"));
 
-v1_scalar!(
+v1_scalars! {
   /// Number of times memory charges encountered this group's limit.
-  MemoryFailures,
-  "memory.failcnt",
-  Count,
-  ParseCount,
-  Read
-);
-
-v1_scalar!(
+  MemoryFailures, "memory.failcnt", Count, ParseCount, Read;
   /// Approximate combined memory and swap usage in bytes, including accounted descendants.
   /// Requires kernel support for combined memory and swap accounting.
-  MemorySwapUsage,
-  "memory.memsw.usage_in_bytes",
-  Bytes,
-  ParseBytes,
-  Read
-);
-v1_scalar!(
+  MemorySwapUsage, "memory.memsw.usage_in_bytes", Bytes, ParseBytes, Read;
   /// Peak combined memory and swap usage in bytes, when accounted by the kernel.
-  MemorySwapPeak,
-  "memory.memsw.max_usage_in_bytes",
-  Bytes,
-  ParseBytes,
-  Read
-);
-v1_scalar!(
+  MemorySwapPeak, "memory.memsw.max_usage_in_bytes", Bytes, ParseBytes, Read;
   /// Local limit for memory plus swap in bytes, when accounted by the kernel.
   /// The snapshot preserves the kernel's numeric unlimited sentinel. Use
   /// MaxOr::Max as a write command to reset the limit.
-  MemorySwapLimit,
-  "memory.memsw.limit_in_bytes",
-  Bytes,
-  ParseBytes,
-  Read
-);
+  MemorySwapLimit, "memory.memsw.limit_in_bytes", Bytes, ParseBytes, Read;
+}
 v1_file!(write MemorySwapLimit, 'a => MaxOr<Bytes>, |limit| encode_byte_limit(limit, "memory.memsw.limit_in_bytes"));
 
-v1_scalar!(
+v1_scalars! {
   /// Number of times charges encountered this group's combined memory and swap limit.
-  MemorySwapFailures,
-  "memory.memsw.failcnt",
-  Count,
-  ParseCount,
-  Read
-);
+  MemorySwapFailures, "memory.memsw.failcnt", Count, ParseCount, Read;
+}
 
 /// Usage and paging counters reported by the v1 memory controller.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

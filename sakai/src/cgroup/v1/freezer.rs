@@ -51,19 +51,9 @@ pub enum FreezerRequest {
 v1_file!(FreezerSnapshot, "freezer.state", Read);
 v1_file!(write FreezerSnapshot, 'a => FreezerRequest, |request: FreezerRequest| Ok(request.to_string()));
 
-v1_scalar!(
+v1_scalars! {
   /// Whether this cgroup has requested freezing itself.
-  SelfFreezing,
-  "freezer.self_freezing",
-  bool,
-  ParseBoolean,
-  Read
-);
-v1_scalar!(
+  SelfFreezing, "freezer.self_freezing", bool, ParseBoolean, Read;
   /// Whether freezing was requested by an ancestor.
-  ParentFreezing,
-  "freezer.parent_freezing",
-  bool,
-  ParseBoolean,
-  Read
-);
+  ParentFreezing, "freezer.parent_freezing", bool, ParseBoolean, Read;
+}

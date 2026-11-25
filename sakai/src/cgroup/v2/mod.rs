@@ -71,6 +71,6 @@ pub mod rdma;
 
 #[cfg(target_os = "linux")]
 mod handle;
-pub(crate) mod interface;
+pub(crate) use super::interface;
 #[cfg(target_os = "linux")]
 mod path;

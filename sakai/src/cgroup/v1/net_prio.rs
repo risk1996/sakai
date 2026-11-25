@@ -5,16 +5,12 @@
 use std::collections::BTreeMap;
 
 use super::codec::Unsigned;
-use crate::{error::EncodeError, parse::cgroup_value};
+use crate::{cgroup::interface::encode_keyed, parse::cgroup_value};
 
-v1_scalar!(
+v1_scalars! {
   /// Kernel's priority index for this cgroup.
-  PriorityIndex,
-  "net_prio.prioidx",
-  u64,
-  Unsigned,
-  Read
-);
+  PriorityIndex, "net_prio.prioidx", u64, Unsigned, Read;
+}
 
 /// Configured priorities by interface name. The list reflects visible interfaces at read time.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -27,8 +23,5 @@ pub struct InterfacePriorities {
 cgroup_value!(map InterfacePriorities, priorities: Unsigned, "priority");
 v1_file!(InterfacePriorities, "net_prio.ifpriomap", Read);
 v1_file!(write InterfacePriorities, 'a => (&'a str, u32), |(interface, priority): (&str, u32)| {
-  if interface.is_empty() || interface.contains(|c: char| c.is_ascii_whitespace() || c == '\0') {
-    return Err(EncodeError { field: "interface" });
-  }
-  Ok(format!("{interface} {priority}"))
+  encode_keyed::<Unsigned>(interface, "interface", &priority, "priority")
 });

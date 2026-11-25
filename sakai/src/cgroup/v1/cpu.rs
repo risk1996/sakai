@@ -8,46 +8,23 @@ use crate::{
   parse::{ParseBandwidthCount, ParseNonZeroMicroseconds, cgroup_value},
 };
 
-v1_scalar!(
+v1_scalars! {
   /// Quota in microseconds per period. The kernel reports -1 for no local limit.
   /// Ancestor bandwidth limits still apply. Writes at the hierarchy root are rejected.
-  CpuQuota,
-  "cpu.cfs_quota_us",
-  MaxOr<NonZeroTime>,
-  CpuQuotaToken,
-  ReadWrite
-);
-v1_scalar!(
+  CpuQuota, "cpu.cfs_quota_us", MaxOr<NonZeroTime>, CpuQuotaToken, ReadWrite;
   /// Length of a bandwidth enforcement period, encoded in microseconds.
   /// The kernel accepts periods from 1 millisecond through 1 second.
   /// Writes at the hierarchy root are rejected.
-  CpuPeriod,
-  "cpu.cfs_period_us",
-  NonZeroTime,
-  ParseNonZeroMicroseconds,
-  ReadWrite
-);
-v1_scalar!(
+  CpuPeriod, "cpu.cfs_period_us", NonZeroTime, ParseNonZeroMicroseconds, ReadWrite;
   /// Extra runtime the group may accumulate, encoded in microseconds.
   /// Zero disables bursting. Writes at the hierarchy root are rejected.
   /// See the [Linux 5.15 scheduler implementation](https://github.com/torvalds/linux/blob/v5.15/kernel/sched/core.c).
-  CpuBurst,
-  "cpu.cfs_burst_us",
-  Time,
-  crate::parse::ParseMicroseconds,
-  ReadWrite
-);
-
-v1_scalar!(
+  CpuBurst, "cpu.cfs_burst_us", Time, crate::parse::ParseMicroseconds, ReadWrite;
   /// Relative share of fair-scheduler CPU time among siblings. Defaults to 1024.
   /// The kernel clamps writes to its supported range.
   /// See [Linux scheduler cgroup controls](https://github.com/torvalds/linux/blob/v5.15/kernel/sched/core.c).
-  CpuShares,
-  "cpu.shares",
-  u64,
-  Unsigned,
-  ReadWrite
-);
+  CpuShares, "cpu.shares", u64, Unsigned, ReadWrite;
+}
 
 /// CPU bandwidth statistics for this cgroup. Counters can change between reads.
 /// See [Linux CFS bandwidth statistics](https://docs.kernel.org/scheduler/sched-bwc.html#statistics).

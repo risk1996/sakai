@@ -6,82 +6,38 @@ use super::codec::encode_byte_limit;
 pub use crate::v2::hugetlb::PageSize;
 use crate::{
   Bytes, Count, MaxOr,
-  parse::{ParseBytes, ParseCount, cgroup_value},
+  parse::{ParseBytes, ParseCount},
 };
 
-macro_rules! hugetlb_file {
-  ($(#[$doc:meta])* $name:ident, $suffix:literal, $value:ty, $codec:ty) => {
-    $(#[$doc])*
-    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-    #[non_exhaustive]
-    pub struct $name {
-      /// Snapshot value for the selected page size.
-      pub value: $value,
-    }
-
-    cgroup_value!(scalar $name, value: $codec, $suffix);
-    v1_file!(file $name, concat!("hugetlb.<hugepagesize>.", $suffix),
-      PageSize => |size: &PageSize| format!("hugetlb.{size}.{}", $suffix));
-    v1_file!(read $name => $name);
+macro_rules! hugetlb_files {
+  ($($(#[$doc:meta])* $name:ident, $suffix:literal, $value:ty, $codec:ty;)+) => {
+    $(
+      v1_scalar_snapshot!($(#[$doc])* $name, $value, $codec, $suffix);
+      v1_file!(file $name, concat!("hugetlb.<hugepagesize>.", $suffix),
+        PageSize => |size: &PageSize| size.file_name($suffix));
+      v1_file!(read $name => $name);
+    )+
   };
 }
 
-hugetlb_file!(
+hugetlb_files! {
   /// Faulted HugeTLB usage in bytes, including descendants.
-  HugetlbUsage,
-  "usage_in_bytes",
-  Bytes,
-  ParseBytes
-);
-hugetlb_file!(
+  HugetlbUsage, "usage_in_bytes", Bytes, ParseBytes;
   /// Local HugeTLB fault limit in bytes, including the kernel's numeric unlimited sentinel.
-  HugetlbLimit,
-  "limit_in_bytes",
-  Bytes,
-  ParseBytes
-);
-hugetlb_file!(
+  HugetlbLimit, "limit_in_bytes", Bytes, ParseBytes;
   /// Peak faulted HugeTLB usage in bytes.
-  HugetlbPeak,
-  "max_usage_in_bytes",
-  Bytes,
-  ParseBytes
-);
-hugetlb_file!(
+  HugetlbPeak, "max_usage_in_bytes", Bytes, ParseBytes;
   /// Count of failed allocations due to the HugeTLB fault limit.
-  HugetlbFailures,
-  "failcnt",
-  Count,
-  ParseCount
-);
-hugetlb_file!(
+  HugetlbFailures, "failcnt", Count, ParseCount;
   /// Bytes charged for reservations and faults without a reservation, including descendants.
-  HugetlbReservedUsage,
-  "rsvd.usage_in_bytes",
-  Bytes,
-  ParseBytes
-);
-hugetlb_file!(
+  HugetlbReservedUsage, "rsvd.usage_in_bytes", Bytes, ParseBytes;
   /// Local reservation-accounting limit in bytes, including the kernel's numeric unlimited sentinel.
-  HugetlbReservedLimit,
-  "rsvd.limit_in_bytes",
-  Bytes,
-  ParseBytes
-);
-hugetlb_file!(
+  HugetlbReservedLimit, "rsvd.limit_in_bytes", Bytes, ParseBytes;
   /// Peak reservation-accounting usage in bytes.
-  HugetlbReservedPeak,
-  "rsvd.max_usage_in_bytes",
-  Bytes,
-  ParseBytes
-);
-hugetlb_file!(
+  HugetlbReservedPeak, "rsvd.max_usage_in_bytes", Bytes, ParseBytes;
   /// Count of failed allocations due to the reservation-accounting limit.
-  HugetlbReservedFailures,
-  "rsvd.failcnt",
-  Count,
-  ParseCount
-);
+  HugetlbReservedFailures, "rsvd.failcnt", Count, ParseCount;
+}
 
 v1_file!(write HugetlbLimit, 'a => MaxOr<Bytes>, |value| encode_byte_limit(value, "limit_in_bytes"));
 v1_file!(write HugetlbReservedLimit, 'a => MaxOr<Bytes>, |value| encode_byte_limit(value, "rsvd.limit_in_bytes"));

@@ -12,14 +12,10 @@ use crate::{
   parse::{EncodeCgroup, ParseBandwidth, ParseBytes, ParseCgroup, ParseCount, ParseIops, Parser},
 };
 
-v1_scalar!(
+v1_scalars! {
   /// Default block I/O scheduling weight. Kernel support depends on the I/O scheduler.
-  BlkioWeight,
-  "blkio.weight",
-  u64,
-  Unsigned,
-  ReadWrite
-);
+  BlkioWeight, "blkio.weight", u64, Unsigned, ReadWrite;
+}
 
 /// Operation category in block I/O accounting. The categories overlap.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, strum::EnumString)]
@@ -91,58 +87,42 @@ v1_file!(alias
   IoServiced, "blkio.io_serviced" => IoStat<Count>, IoStat::parse::<ParseCount>
 );
 
-macro_rules! throttle {
-  ($(#[$doc:meta])* $name:ident, $file:literal, $value:ty, $codec:ty) => {
-    $(#[$doc])*
-    #[non_exhaustive]
-    pub struct $name;
+macro_rules! throttle_files {
+  ($($(#[$doc:meta])* $name:ident, $file:literal, $value:ty, $codec:ty;)+) => {
+    $(
+      $(#[$doc])*
+      #[non_exhaustive]
+      pub struct $name;
 
-    v1_file!(file $name, $file);
-    v1_file!(read $name => BTreeMap<Device, $value>, |contents: &str| {
-      contents.lines().filter(|line| !line.trim().is_empty()).map(|line| {
-        Parser::parse_line(contents, line, |parser| {
-          let device = parser.next_raw_field("device")?.parse::<Device>()?;
-          let rate = parser.next_field::<$codec, $value>("rate")?;
-          Ok((device, rate))
-        })
-      }).collect()
-    });
-    v1_file!(write $name, 'a => (Device, $value), |(device, value)| {
-      let mut command = format!("{device} ");
-      EncodeCgroup::<$codec>::encode_field(&value, &mut command, "rate")?;
-      Ok(command)
-    });
+      v1_file!(file $name, $file);
+      v1_file!(read $name => BTreeMap<Device, $value>, |contents: &str| {
+        contents.lines().filter(|line| !line.trim().is_empty()).map(|line| {
+          Parser::parse_line(contents, line, |parser| {
+            let device = parser.next_raw_field("device")?.parse::<Device>()?;
+            let rate = parser.next_field::<$codec, $value>("rate")?;
+            Ok((device, rate))
+          })
+        }).collect()
+      });
+      v1_file!(write $name, 'a => (Device, $value), |(device, value)| {
+        let mut command = format!("{device} ");
+        EncodeCgroup::<$codec>::encode_field(&value, &mut command, "rate")?;
+        Ok(command)
+      });
+    )+
   };
 }
 
-throttle!(
+throttle_files! {
   /// Read limit per device in bytes per second. Writing zero removes the limit.
-  ThrottleReadBps,
-  "blkio.throttle.read_bps_device",
-  BytesPerSecond,
-  ParseBandwidth
-);
-throttle!(
+  ThrottleReadBps, "blkio.throttle.read_bps_device", BytesPerSecond, ParseBandwidth;
   /// Write limit per device in bytes per second. Writing zero removes the limit.
-  ThrottleWriteBps,
-  "blkio.throttle.write_bps_device",
-  BytesPerSecond,
-  ParseBandwidth
-);
-throttle!(
+  ThrottleWriteBps, "blkio.throttle.write_bps_device", BytesPerSecond, ParseBandwidth;
   /// Read operations per second per device. Writing zero removes the limit.
-  ThrottleReadIops,
-  "blkio.throttle.read_iops_device",
-  OperationsPerSecond,
-  ParseIops
-);
-throttle!(
+  ThrottleReadIops, "blkio.throttle.read_iops_device", OperationsPerSecond, ParseIops;
   /// Write operations per second per device. Writing zero removes the limit.
-  ThrottleWriteIops,
-  "blkio.throttle.write_iops_device",
-  OperationsPerSecond,
-  ParseIops
-);
+  ThrottleWriteIops, "blkio.throttle.write_iops_device", OperationsPerSecond, ParseIops;
+}
 
 #[cfg(test)]
 mod tests {

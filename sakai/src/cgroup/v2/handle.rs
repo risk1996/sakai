@@ -1,6 +1,5 @@
-use std::{ffi::OsStr, io, path::Path};
+use std::{ffi::OsStr, path::Path};
 
-use procfs::process::Process;
 use rustix::fs;
 
 use super::{
@@ -8,7 +7,10 @@ use super::{
   path::{CgroupPath, CgroupPathError},
 };
 use crate::{
-  cgroup::directory::Directory,
+  cgroup::{
+    directory::Directory,
+    discovery::{open_candidates, processes},
+  },
   error::Error,
   v2::{ReadableFile, WritableFile},
 };
@@ -55,7 +57,7 @@ impl Cgroup {
   /// # Errors
   ///
   /// A zero PID or a PID larger than `i32::MAX` produces [`Error::Io`] with
-  /// [`io::ErrorKind::InvalidInput`]. Missing unified membership or a visible
+  /// [`std::io::ErrorKind::InvalidInput`]. Missing unified membership or a visible
   /// mount produces [`Error::NotCgroupV2`]. Deleted membership produces
   /// [`Error::DeletedCgroup`]. Procfs and directory-open failures retain their
   /// causes in [`Error::Operation`] when a path is known, or [`Error::Io`]
@@ -64,34 +66,13 @@ impl Cgroup {
   /// Discovery tries matching mounts from the most specific root first. If
   /// every candidate fails, the first candidate's error is returned.
   pub fn from_pid(pid: u32) -> Result<Self, Error> {
-    let pid = i32::try_from(pid)
-      .ok()
-      .filter(|pid| *pid > 0)
-      .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "PID must be positive and fit i32"))?;
-    let process = Process::new(pid).map_err(Error::procfs)?;
-    let caller = Process::myself().map_err(Error::procfs)?;
+    let (process, caller) = processes(pid)?;
     let candidates = CgroupPath::candidates(&process, &caller).map_err(|error| match error {
       | CgroupPathError::Procfs(source) => Error::procfs(source),
       | CgroupPathError::DeletedCgroup { path } => Error::DeletedCgroup { path },
       | CgroupPathError::UnifiedHierarchyNotFound | CgroupPathError::UnifiedMountNotFound => Error::NotCgroupV2,
     })?;
-    Self::open_candidates(candidates, Self::from_path)
-  }
-
-  fn open_candidates<T>(
-    candidates: impl IntoIterator<Item = CgroupPath>,
-    mut open: impl FnMut(&Path) -> Result<T, Error>,
-  ) -> Result<T, Error> {
-    let mut first_error = None;
-    for candidate in candidates {
-      match open(candidate.as_ref()) {
-        | Ok(value) => return Ok(value),
-        | Err(error) => {
-          first_error.get_or_insert(error);
-        },
-      }
-    }
-    Err(first_error.unwrap_or(Error::NotCgroupV2))
+    open_candidates(candidates, |candidate| Self::from_path(candidate.as_ref()), || Error::NotCgroupV2)
   }
 
   /// Opens a directory and verifies cgroup2 filesystem magic.
@@ -236,9 +217,10 @@ impl Cgroup {
 
 #[cfg(test)]
 mod tests {
-  use std::{error::Error as _, fmt::Debug, path::PathBuf, str::FromStr};
+  use std::{error::Error as _, fmt::Debug, io, path::PathBuf, str::FromStr};
 
   use assertables::{assert_err, assert_ok};
+  use procfs::process::Process;
   use rustix::fs::{Mode, OFlags};
 
   use super::*;
@@ -435,13 +417,18 @@ mod tests {
     let process = assert_ok!(Process::new_with_root(root));
     let candidates = assert_ok!(CgroupPath::candidates(&process, &process));
     let mut attempted = Vec::new();
-    let selected = assert_ok!(Cgroup::open_candidates(candidates, |path| {
-      attempted.push(path.to_owned());
-      match attempted.len() {
-        | 1 => Err(Error::NotCgroupV2),
-        | _ => Ok(path.to_owned()),
-      }
-    }));
+    let selected = assert_ok!(open_candidates(
+      candidates,
+      |candidate| {
+        let path = candidate.as_ref();
+        attempted.push(path.to_owned());
+        match attempted.len() {
+          | 1 => Err(Error::NotCgroupV2),
+          | _ => Ok(path.to_owned()),
+        }
+      },
+      || Error::NotCgroupV2
+    ));
     assert_eq!(selected, Path::new("/run/parent/pod-1/process.scope"));
     assert_eq!(attempted, [
       PathBuf::from("/run/delegated/process.scope"),
@@ -455,18 +442,26 @@ mod tests {
     let process = assert_ok!(Process::new_with_root(root));
     let candidates = assert_ok!(CgroupPath::candidates(&process, &process));
     let mut attempted = Vec::new();
-    let error = assert_err!(Cgroup::open_candidates::<()>(candidates, |path| {
-      attempted.push(path.to_owned());
-      Err(Error::Operation {
-        operation: "open cgroup",
-        path: path.to_owned(),
-        source: rustix::io::Errno::ACCESS.into(),
-      })
-    }));
+    let error = assert_err!(open_candidates(
+      candidates,
+      |candidate| -> Result<(), Error> {
+        let path = candidate.as_ref();
+        attempted.push(path.to_owned());
+        Err(Error::Operation {
+          operation: "open cgroup",
+          path: path.to_owned(),
+          source: rustix::io::Errno::ACCESS.into(),
+        })
+      },
+      || Error::NotCgroupV2
+    ));
     assert_eq!(attempted.len(), 3);
     assert!(
       matches!(error, Error::Operation { path, source, .. } if path == Path::new("/run/delegated/process.scope") && source.raw_os_error() == Some(rustix::io::Errno::ACCESS.raw_os_error()))
     );
-    assert!(matches!(Cgroup::open_candidates::<()>([], |_| Ok(())), Err(Error::NotCgroupV2)));
+    assert!(matches!(
+      open_candidates([] as [CgroupPath; 0], |_| Ok(()), || Error::NotCgroupV2),
+      Err(Error::NotCgroupV2)
+    ));
   }
 }

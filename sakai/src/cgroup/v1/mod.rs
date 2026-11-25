@@ -5,7 +5,7 @@
 //! also expose a separate handle from [crate::v2] for the same process.
 //! Snapshots can be parsed on any OS. File operations require Linux.
 //! See the [Linux cgroup v1 guide](https://docs.kernel.org/admin-guide/cgroup-v1/index.html).
-
+//!
 //! File declarations are version-specific.
 //!
 //! ```compile_fail,E0271
@@ -13,6 +13,7 @@
 //! fn v1_file<F: ReadableFile<Version = Version>>() {}
 //! v1_file::<CpuMax>();
 //! ```
+
 /// Type parameter selecting cgroup v1 file declarations.
 #[derive(Debug)]
 #[non_exhaustive]
@@ -38,8 +39,8 @@ macro_rules! v1_file {
   };
 }
 
-macro_rules! v1_scalar {
-  ($(#[$doc:meta])* $name:ident, $file:literal, $value:ty, $codec:ty, $access:ident) => {
+macro_rules! v1_scalar_snapshot {
+  ($(#[$doc:meta])* $name:ident, $value:ty, $codec:ty, $field:literal) => {
     $(#[$doc])*
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     #[non_exhaustive]
@@ -48,9 +49,17 @@ macro_rules! v1_scalar {
       pub value: $value,
     }
 
-    $crate::parse::cgroup_value!(scalar $name, value: $codec, $file);
-    v1_file!($name, $file, Read);
-    v1_scalar!(@write $name, $value, $access);
+    $crate::parse::cgroup_value!(scalar $name, value: $codec, $field);
+  };
+}
+
+macro_rules! v1_scalars {
+  ($($(#[$doc:meta])* $name:ident, $file:literal, $value:ty, $codec:ty, $access:ident;)+) => {
+    $(
+      v1_scalar_snapshot!($(#[$doc])* $name, $value, $codec, $file);
+      v1_file!($name, $file, Read);
+      v1_scalars!(@write $name, $value, $access);
+    )+
   };
   (@write $name:ident, $value:ty, Read) => {};
   (@write $name:ident, $value:ty, ReadWrite) => {
