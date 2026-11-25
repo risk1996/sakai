@@ -134,7 +134,6 @@ After reading the Rust API, start at [`sakai-python/src/linux/handle.rs`](../sak
 ## Design background
 
 - [Shared cgroup text codecs ADR](../adr/shared-cgroup-text-codecs.md) explains why the parser and encoder share layout declarations.
-- [Cgroup v2 writes](cgroup-v2-writes.md) records the write design. Check the current `WritableFile` declarations for the actual call shapes.
 - [Linux implementation audit](cgroup-v2-linux-audit.md) records kernel-version and interface edge cases. Compare its references with the version notes in the relevant Rust type.
 - [Interface inconsistencies](cgroup-v2-interface-inconsistencies.md) records the review of value, parser, and file conventions preceding the typed interface cleanup.
 - [Cgroup v2 convenience functions](cgroup-v2-convenience-functions.md) discusses derived values and their limits, starting with `CpuMax::cpu_count()`.
