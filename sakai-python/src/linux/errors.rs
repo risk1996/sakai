@@ -20,6 +20,7 @@ create_exception!(
   SakaiError,
   "A cgroup interface file is missing; path identifies the interface."
 );
+create_exception!(_sakai, NotCgroupV1Error, SakaiError, "The requested path is outside the cgroup v1 filesystem.");
 create_exception!(_sakai, NotCgroupV2Error, SakaiError, "The requested path is not on a cgroup v2 filesystem.");
 create_exception!(
   _sakai,
@@ -72,6 +73,7 @@ impl PythonError {
           | Err(error) => error,
         }
       },
+      | Error::NotCgroupV1 => NotCgroupV1Error::new_err(error.to_string()),
       | Error::NotCgroupV2 => NotCgroupV2Error::new_err("not a cgroup v2 filesystem"),
       | Error::DeletedCgroup { path } => {
         Self::with_path::<DeletedCgroupError>(py, format!("cgroup has been deleted: {}", path.display()), path)
@@ -107,10 +109,10 @@ impl PythonError {
     result.map_err(|error| Self::from_core(py, error))
   }
 
-  pub(super) fn read<T: Send + 'static>(
+  pub(super) fn read<C: Send + Sync + 'static, T: Send + 'static>(
     py: Python<'_>,
-    owner: &Arc<sakai::Cgroup>,
-    read: impl FnOnce(&sakai::Cgroup) -> Result<T, Error> + Send + 'static,
+    owner: &Arc<C>,
+    read: impl FnOnce(&C) -> Result<T, Error> + Send + 'static,
   ) -> PyResult<T> {
     // Detach only after owning all inputs; shared handles never depend on the GIL.
     // Construct Python values and translate exceptions after reattaching.

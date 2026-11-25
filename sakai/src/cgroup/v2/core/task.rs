@@ -24,7 +24,7 @@ pub struct TaskId(i32);
 cgroup_value! { token TaskId: TaskId, TASK_ID }
 
 impl TaskId {
-  pub(super) fn parse_list(contents: &str) -> Result<Vec<Self>, ParseError<ParseValueError>> {
+  pub(crate) fn parse_list(contents: &str) -> Result<Vec<Self>, ParseError<ParseValueError>> {
     contents
       .lines()
       .filter(|line| !line.trim().is_empty())

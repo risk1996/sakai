@@ -39,6 +39,21 @@ pub enum Error {
   /// The directory is not on a cgroup v2 filesystem.
   #[error("not a cgroup v2 filesystem")]
   NotCgroupV2,
+  /// The directory is outside the selected cgroup v1 filesystem.
+  #[error("not on the requested cgroup v1 filesystem")]
+  NotCgroupV1,
+  /// The process has no membership for the requested v1 controller or named hierarchy.
+  #[error("the process has no cgroup v1 membership for {controller}")]
+  V1MembershipMissing {
+    /// Controller or named hierarchy requested by the caller.
+    controller: String,
+  },
+  /// No visible v1 mount exposes the requested membership.
+  #[error("no cgroup v1 mount exposes the process's membership for {controller}")]
+  V1MountMissing {
+    /// Controller or named hierarchy requested by the caller.
+    controller: String,
+  },
   /// Procfs reports a cgroup that has already been removed.
   #[error("cgroup has been deleted: {path}")]
   DeletedCgroup {

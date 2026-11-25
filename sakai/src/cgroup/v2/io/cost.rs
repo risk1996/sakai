@@ -3,13 +3,12 @@ use std::{collections::BTreeMap, fmt::Write};
 use nutype::nutype;
 use uom::si::ratio::percent;
 
-use super::{
-  Device,
-  max::{ParseBandwidth, ParseIops},
-};
+use super::Device;
 use crate::{
   error::ParseValueError,
-  parse::{EncodeCgroup, ParseBoolean, ParseCgroup, ParseMicroseconds, Percent, cgroup_value},
+  parse::{
+    EncodeCgroup, ParseBandwidth, ParseBoolean, ParseCgroup, ParseIops, ParseMicroseconds, Percent, cgroup_value,
+  },
   unit::{BytesPerSecond, OperationsPerSecond, Ratio, Time},
   v2::interface::cgroup_file,
 };

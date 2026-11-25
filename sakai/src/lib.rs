@@ -1,4 +1,4 @@
-//! Typed cgroup v2 interfaces. Parsers work on any OS; handles require Linux.
+//! Typed Linux cgroup interfaces. Parsers work on any OS; handles require Linux.
 //!
 //! `sakai` reads CPU, memory, placement, task counts, I/O, huge pages, RDMA,
 //! device memory, miscellaneous resources, and core cgroup state. Use
@@ -79,7 +79,7 @@
 //! ```
 #![warn(missing_docs)]
 
-pub use cgroup::v2;
+pub use cgroup::{v1, v2};
 pub use error::Error;
 pub use limit::MaxOr;
 pub use pressure::{IrqPressure, Pressure, PressureLine};
@@ -90,7 +90,7 @@ pub use unit::{
 pub use v2::Cgroup;
 pub use v2::cpu::{CpuWeight, Nice, Weight};
 
-/// Cgroup hierarchy interfaces; currently the unified v2 hierarchy.
+/// Legacy v1 and unified v2 cgroup hierarchy interfaces.
 pub mod cgroup;
 /// Discovery, operating-system, and typed parsing errors.
 pub mod error;

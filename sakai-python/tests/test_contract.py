@@ -42,6 +42,7 @@ from sakai import (
   MemoryNodeList,
   MemoryNumaStat,
   MemoryStat,
+  NotCgroupV1Error,
   NotCgroupV2Error,
   OperationsPerSecond,
   Pages,
@@ -49,9 +50,11 @@ from sakai import (
   PidsReader,
   Pressure,
   Ratio,
+  SakaiError,
   SwapEvents,
   SwapReader,
   Time,
+  V1Cgroup,
   ZswapReader,
 )
 
@@ -265,6 +268,12 @@ class ContractTest(unittest.TestCase):
     reader = self.pinned_reader(Cgroup.cpu)
     self.assertIsInstance(reader.stat(), CpuStat)
     self.assertIsInstance(self.group.children(), list)
+
+  def test_legacy_handle_reports_wrong_filesystem_and_missing_hierarchy(self) -> None:
+    with self.assertRaises(NotCgroupV1Error):
+      V1Cgroup.from_path(os.fsencode(self.group.path))
+    with self.assertRaisesRegex(SakaiError, "name=sakai-contract-missing"):
+      V1Cgroup.current("name=sakai-contract-missing")
 
   def test_pid_validation(self) -> None:
     for pid in (-1, 2**100):

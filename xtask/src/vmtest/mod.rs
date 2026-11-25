@@ -246,13 +246,24 @@ impl Vmtest {
     let config = cache.join(Self::CONFIG_FILE_NAME);
     let kernel_path = serde_json::to_string(&image.to_string_lossy().as_ref())?;
     let guest_binary = Path::new(Self::GUEST_SHARE_DIRECTORY).join(Self::BINARY_PATH);
-    let contents = format!(
-      "[[target]]\nname = \"Linux {}\"\nkernel = {kernel_path}\nkernel_args = \"ro\"\ncommand = \"findmnt -no OPTIONS \
-       / | grep -qw ro && test -w /sys/fs/cgroup && SAKAI_VMTEST=1 {} --nocapture\"\n[target.vm]\nnum_cpus = \
-       1\nmemory = \"1G\"\n",
-      kernel.name,
+    let v2 = format!(
+      "findmnt -no OPTIONS / | grep -qw ro && test -w /sys/fs/cgroup && SAKAI_VMTEST=1 {} --nocapture",
       guest_binary.display(),
     );
+    let mut contents = Self::guest_target(&format!("Linux {} cgroup v2", kernel.name), &kernel_path, &v2)?;
+    if kernel.legacy {
+      // A separate boot leaves the controllers free to bind to v1. Keep the
+      // mount paths in a private namespace with a disposable writable /tmp.
+      let v1 = format!(
+        "unshare --mount --propagation private sh -ec 'mount -t tmpfs tmpfs /tmp; mkdir -p /tmp/sakai-v1/cpu \
+         /tmp/sakai-v1/memory /tmp/sakai-v1/pids /tmp/sakai-v1/named; mount -t cgroup -o cpu,cpuacct cgroup \
+         /tmp/sakai-v1/cpu; mount -t cgroup -o memory cgroup /tmp/sakai-v1/memory; mount -t cgroup -o pids cgroup \
+         /tmp/sakai-v1/pids; mount -t cgroup -o none,name=sakai cgroup /tmp/sakai-v1/named; \
+         SAKAI_VMTEST_V1=/tmp/sakai-v1 {} v1_live --nocapture'",
+        guest_binary.display(),
+      );
+      contents.push_str(&Self::guest_target(&format!("Linux {} hybrid cgroups", kernel.name), &kernel_path, &v1)?);
+    }
     fs::write(&config, contents)?;
     eprintln!("==> Linux {}", kernel.name);
     eprintln!("KVM acceleration: {}", Path::new("/dev/kvm").exists());
@@ -271,6 +282,14 @@ impl Vmtest {
       | Some(code) => std::process::exit(code),
       | None => bail!("vmtest terminated by signal"),
     }
+  }
+
+  fn guest_target(name: &str, kernel_path: &str, command: &str) -> Result<String> {
+    let command = serde_json::to_string(command)?;
+    Ok(format!(
+      "[[target]]\nname = \"{name}\"\nkernel = {kernel_path}\nkernel_args = \"ro\"\ncommand = \
+       {command}\n[target.vm]\nnum_cpus = 1\nmemory = \"1G\"\n"
+    ))
   }
 }
 

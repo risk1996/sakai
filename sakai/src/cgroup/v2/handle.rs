@@ -1,26 +1,17 @@
-use std::{
-  ffi::OsStr,
-  io,
-  os::unix::ffi::OsStrExt,
-  path::{Component, Path, PathBuf},
-};
+use std::{ffi::OsStr, io, path::Path};
 
 use procfs::process::Process;
-use rustix::{
-  fd::{AsFd, OwnedFd},
-  fs::{self, Dir, FileType, Mode, OFlags, ResolveFlags},
-};
+use rustix::fs;
 
 use super::{
   notification::{ConfigurationInterface, ConfigurationWatcher, EventInterface, EventPoller},
   path::{CgroupPath, CgroupPathError},
 };
 use crate::{
+  cgroup::directory::Directory,
   error::Error,
   v2::{ReadableFile, WritableFile},
 };
-
-const DIRECTORY_FLAGS: OFlags = OFlags::RDONLY.union(OFlags::CLOEXEC).union(OFlags::NOFOLLOW).union(OFlags::DIRECTORY);
 
 // Linux UAPI linux/magic.h; rustix does not export this constant.
 const CGROUP2_SUPER_MAGIC: fs::FsWord = 0x6367_7270;
@@ -36,8 +27,7 @@ const CGROUP2_SUPER_MAGIC: fs::FsWord = 0x6367_7270;
 #[derive(Debug)]
 #[non_exhaustive]
 pub struct Cgroup {
-  directory: OwnedFd,
-  path: PathBuf,
+  directory: Directory,
 }
 
 impl Cgroup {
@@ -117,57 +107,9 @@ impl Cgroup {
   /// produces [`crate::Error::NotCgroupV2`]; permission and open failures retain
   /// their path and operating-system error in [`Error::Operation`].
   pub fn from_path(path: &Path) -> Result<Self, Error> {
-    Self::open_path(path).map_err(|error| match error {
-      | Error::Io(source) if source.kind() != io::ErrorKind::InvalidInput => {
-        Error::Operation { operation: "open cgroup", path: path.to_owned(), source }
-      },
-      | other => other,
-    })
-  }
-
-  fn open_path(path: &Path) -> Result<Self, Error> {
-    let (base, relative) = match path.is_absolute() {
-      | true => (Path::new("/"), path.strip_prefix("/").map_err(io::Error::other)?),
-      | false => (Path::new("."), path),
-    };
-    let base = fs::open(base, DIRECTORY_FLAGS, Mode::empty()).map_err(io::Error::from)?;
-    let directory = Self::open_directory(&base, relative)?;
-    Self::verified(directory, path.to_owned())
-  }
-
-  fn verified(directory: OwnedFd, path: PathBuf) -> Result<Self, Error> {
-    match fs::fstatfs(&directory).map_err(io::Error::from)?.f_type {
-      | CGROUP2_SUPER_MAGIC => Ok(Self { directory, path }),
-      | _ => Err(Error::NotCgroupV2),
-    }
-  }
-
-  fn open_directory(base: impl AsFd, relative: &Path) -> Result<OwnedFd, Error> {
-    if relative.components().any(|part| !matches!(part, Component::Normal(_) | Component::CurDir)) {
-      return Err(io::Error::new(io::ErrorKind::InvalidInput, "cgroup path must remain beneath its directory").into());
-    }
-    let relative = match relative.as_os_str().is_empty() {
-      | true => Path::new("."),
-      | false => relative,
-    };
-    match fs::openat2(
-      &base,
-      relative,
-      DIRECTORY_FLAGS,
-      Mode::empty(),
-      ResolveFlags::BENEATH | ResolveFlags::NO_SYMLINKS,
-    ) {
-      | Ok(fd) => Ok(fd),
-      | Err(rustix::io::Errno::NOSYS) => Self::open_components(base, relative),
-      | Err(error) => Err(io::Error::from(error).into()),
-    }
-  }
-
-  fn open_components(base: impl AsFd, relative: &Path) -> Result<OwnedFd, Error> {
-    let start = fs::openat(base, ".", DIRECTORY_FLAGS, Mode::empty()).map_err(io::Error::from)?;
-    relative.components().try_fold(start, |directory, part| {
-      fs::openat(&directory, part.as_os_str(), DIRECTORY_FLAGS, Mode::empty()).map_err(|error| Error::Io(error.into()))
-    })
+    let directory = Directory::open(path)?;
+    directory.verify(CGROUP2_SUPER_MAGIC, Error::NotCgroupV2)?;
+    Ok(Self { directory })
   }
 
   /// Opens one child by name; names containing slashes or traversal are invalid.
@@ -182,15 +124,9 @@ impl Cgroup {
   /// produces [`crate::Error::NotCgroupV2`]; permission and open failures retain
   /// their path and operating-system error in [`Error::Operation`].
   pub fn child(&self, name: &OsStr) -> Result<Self, Error> {
-    if name.as_bytes().contains(&b'/') || !matches!(Path::new(name).components().next(), Some(Component::Normal(_))) {
-      return Err(io::Error::new(io::ErrorKind::InvalidInput, "child must be a single name").into());
-    }
-    let path = self.path.join(name);
-    let directory = Self::open_directory(&self.directory, Path::new(name)).map_err(|error| match error {
-      | Error::Io(source) => Error::Operation { operation: "open child cgroup", path: path.clone(), source },
-      | other => other,
-    })?;
-    Self::verified(directory, path)
+    let directory = self.directory.child(name)?;
+    directory.verify(CGROUP2_SUPER_MAGIC, Error::NotCgroupV2)?;
+    Ok(Self { directory })
   }
 
   /// Lists directories, including child names that resemble interface files.
@@ -203,37 +139,13 @@ impl Cgroup {
   ///
   /// Returns [`Error::Operation`] with the directory path and source for
   /// enumeration or child-open failures other than a removed child.
-  pub fn children(&self) -> Result<Vec<Self>, Error> {
-    Dir::read_from(&self.directory)
-      .map_err(|source| Error::Operation {
-        operation: "list child cgroups",
-        path: self.path.clone(),
-        source: source.into(),
-      })?
-      .filter_map(|entry| match entry {
-        | Err(source) => Some(Err(Error::Operation {
-          operation: "list child cgroups",
-          path: self.path.clone(),
-          source: source.into(),
-        })),
-        | Ok(entry)
-          if entry.file_type() == FileType::Directory && !matches!(entry.file_name().to_bytes(), b"." | b"..") =>
-        {
-          match self.child(OsStr::from_bytes(entry.file_name().to_bytes())) {
-            | Err(Error::Operation { source, .. }) if source.kind() == io::ErrorKind::NotFound => None,
-            | result => Some(result),
-          }
-        },
-        | Ok(_) => None,
-      })
-      .collect()
-  }
+  pub fn children(&self) -> Result<Vec<Self>, Error> { self.directory.children(|name| self.child(name)) }
 
   /// The path used to open the handle; it is diagnostic and may become stale.
   ///
   /// Renaming or deleting the cgroup can make this path stale. Interface reads
   /// continue to use the open directory descriptor; see [openat(2)](https://man7.org/linux/man-pages/man2/openat.2.html).
-  pub fn path(&self) -> &Path { &self.path }
+  pub fn path(&self) -> &Path { &self.directory.path }
 
   /// Opens a read-only subscription to one evented cgroup interface.
   ///
@@ -251,7 +163,7 @@ impl Cgroup {
   /// initial-read failures, preserving the interface path and underlying cause.
   /// Contents are acknowledged without parsing them.
   pub fn poll_events(&self, interface: EventInterface) -> Result<EventPoller, Error> {
-    EventPoller::open(&self.directory, self.path.join(interface.filename()), interface)
+    EventPoller::open(&self.directory.fd, self.path().join(interface.filename()), interface)
   }
 
   /// Watches writes to one configuration interface using inotify.
@@ -269,24 +181,23 @@ impl Cgroup {
   /// failures. Returns [`Error::Io`] for procfs, inotify resource-limit, or other
   /// watch-registration failures.
   pub fn watch_configuration(&self, interface: ConfigurationInterface) -> Result<ConfigurationWatcher, Error> {
-    ConfigurationWatcher::open(&self.directory, self.path.join(interface.filename()), interface)
+    ConfigurationWatcher::open(&self.directory.fd, self.path().join(interface.filename()), interface)
   }
 
   /// Reads a typed cgroup value from a fixed filename.
   ///
   /// # Errors
   /// See the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn read_value<F: ReadableFile<Key = ()>>(&self) -> Result<F::Value, Error> { self.read_file::<F>(&()) }
+  pub fn read_value<F: ReadableFile<Version = super::Version, Key = ()>>(&self) -> Result<F::Value, Error> {
+    self.read_file::<F>(&())
+  }
 
   /// Reads a typed cgroup value, resolving the filename with the supplied key.
   ///
   /// # Errors
   /// See the shared [interface-read errors](crate::v2#interface-read-errors).
-  pub fn read_file<F: ReadableFile>(&self, key: &F::Key) -> Result<F::Value, Error> {
-    let file = F::filename(key);
-    let raw = super::file::read_file(&self.directory, &file)
-      .map_err(|source| Error::read(self.path.join(file.as_ref()), source))?;
-    F::decode(&raw).map_err(|source| Error::Parse { path: self.path.join(file.as_ref()), source })
+  pub fn read_file<F: ReadableFile<Version = super::Version>>(&self, key: &F::Key) -> Result<F::Value, Error> {
+    self.directory.read::<F>(&F::filename(key))
   }
 
   /// Writes one typed command to a fixed filename.
@@ -303,7 +214,10 @@ impl Cgroup {
   ///
   /// # Errors
   /// See the shared [interface-write errors](crate::v2#interface-write-errors).
-  pub fn write_value<F: WritableFile<Key = ()>>(&self, command: F::Command<'_>) -> Result<(), Error> {
+  pub fn write_value<F: WritableFile<Version = super::Version, Key = ()>>(
+    &self,
+    command: F::Command<'_>,
+  ) -> Result<(), Error> {
     self.write_file::<F>(&(), command)
   }
 
@@ -311,19 +225,21 @@ impl Cgroup {
   ///
   /// # Errors
   /// See the shared [interface-write errors](crate::v2#interface-write-errors).
-  pub fn write_file<F: WritableFile>(&self, key: &F::Key, command: F::Command<'_>) -> Result<(), Error> {
-    let file = F::filename(key);
-    let command = F::encode(command).map_err(|source| Error::Encode { path: self.path.join(file.as_ref()), source })?;
-    super::file::write_file(&self.directory, &file, &command)
-      .map_err(|source| Error::interface_operation("write interface", self.path.join(file.as_ref()), source))
+  pub fn write_file<F: WritableFile<Version = super::Version>>(
+    &self,
+    key: &F::Key,
+    command: F::Command<'_>,
+  ) -> Result<(), Error> {
+    self.directory.write::<F>(&F::filename(key), command)
   }
 }
 
 #[cfg(test)]
 mod tests {
-  use std::{error::Error as _, fmt::Debug, str::FromStr};
+  use std::{error::Error as _, fmt::Debug, path::PathBuf, str::FromStr};
 
   use assertables::{assert_err, assert_ok};
+  use rustix::fs::{Mode, OFlags};
 
   use super::*;
   use crate::{
@@ -339,11 +255,13 @@ mod tests {
     },
   };
 
+  const DIRECTORY_FLAGS: OFlags = OFlags::RDONLY.union(OFlags::DIRECTORY);
+
   impl Cgroup {
     // Internal fixtures only: public constructors always verify filesystem magic.
     pub(crate) fn fixture(relative: &str) -> Self {
       let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/cgroup/v2").join(relative);
-      Self { directory: assert_ok!(fs::open(&path, DIRECTORY_FLAGS, Mode::empty())), path }
+      Self { directory: assert_ok!(Directory::open(&path)) }
     }
 
     pub(crate) fn check_fixture<T>(&self, name: &str, optional: bool, read: impl FnOnce() -> Result<T, Error>)
@@ -369,7 +287,7 @@ mod tests {
     let scratch = assert_ok!(tempfile::tempdir());
     let path = scratch.path().to_path_buf();
     assert_ok!(std::fs::write(path.join(CpuIdle::FILE_NAME), "invalid"));
-    let cgroup = Cgroup { directory: assert_ok!(fs::open(&path, DIRECTORY_FLAGS, Mode::empty())), path };
+    let cgroup = Cgroup { directory: assert_ok!(Directory::open(&path)) };
     let error = assert_err!(cgroup.read_value::<CpuIdle>());
     let Error::Parse { path: actual, source } = &error else {
       panic!("expected parse failure, got {error:?}");
@@ -504,10 +422,10 @@ mod tests {
   fn rejects_traversal_and_symlinks_with_both_backends() {
     let root = assert_ok!(fs::open("/", DIRECTORY_FLAGS, Mode::empty()));
     // /proc/self is a kernel-provided symlink, requiring no mutable fixture.
-    assert_err!(Cgroup::open_directory(&root, Path::new("proc/self")));
-    assert_err!(Cgroup::open_components(&root, Path::new("proc/self")));
-    assert_err!(Cgroup::open_directory(&root, Path::new("../")));
-    let proc = assert_ok!(Cgroup::open_components(&root, Path::new("proc")));
+    assert_err!(Directory::open_directory(&root, Path::new("proc/self")));
+    assert_err!(Directory::open_components(&root, Path::new("proc/self")));
+    assert_err!(Directory::open_directory(&root, Path::new("../")));
+    let proc = assert_ok!(Directory::open_components(&root, Path::new("proc")));
     assert_eq!(assert_ok!(fs::fstatfs(proc)).f_type, fs::PROC_SUPER_MAGIC);
   }
 

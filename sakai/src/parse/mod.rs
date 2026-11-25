@@ -1,12 +1,14 @@
 use std::{collections::BTreeMap, fmt::Write, str::SplitAsciiWhitespace};
 
 use nutype::nutype;
-use uom::si::{information::byte, ratio::percent, time::nanosecond};
+use uom::si::{
+  frequency::hertz, information::byte, information_rate::byte_per_second, ratio::percent, time::nanosecond,
+};
 
 use crate::{
   error::{ParseError, ParseValueError},
   limit::MaxOr,
-  unit::{Bytes, Count, NonZeroTime, Pages, Ratio, Time},
+  unit::{Bytes, BytesPerSecond, Count, NonZeroTime, OperationsPerSecond, Pages, Ratio, Time},
 };
 
 mod codec;
@@ -180,6 +182,26 @@ impl EncodeCgroup<ParseCount> for Count {
   fn encode_token(&self, output: &mut String) -> Option<()> { write!(output, "{}", self.value).ok() }
 }
 
+// Some kernels print these unsigned 32-bit counters with a signed format.
+pub(crate) struct ParseBandwidthCount;
+
+impl EncodeCgroup<ParseBandwidthCount> for Count {
+  fn encode_token(&self, output: &mut String) -> Option<()> { EncodeCgroup::<ParseCount>::encode_token(self, output) }
+}
+
+impl ParseCgroup<ParseBandwidthCount> for Count {
+  type Error = ParseValueError;
+
+  fn parse_cgroup(value: &str) -> Result<Self, Self::Error> {
+    let value = if value.starts_with('-') {
+      u64::from(u32::from_ne_bytes(value.parse::<i32>()?.to_ne_bytes()))
+    } else {
+      value.parse()?
+    };
+    Ok(Self { value, ..Default::default() })
+  }
+}
+
 /// A zero-sized marker for cgroup page quantities.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct ParsePages;
@@ -315,6 +337,30 @@ impl<Unit, T: EncodeCgroup<Unit>> EncodeCgroup<Unit> for MaxOr<T> {
       | Self::Value(value) => value.encode_token(output),
     }
   }
+}
+
+pub(crate) struct ParseBandwidth;
+
+impl ParseCgroup<ParseBandwidth> for BytesPerSecond {
+  type Error = ParseValueError;
+
+  fn parse_cgroup(value: &str) -> Result<Self, Self::Error> { Ok(Self::new::<byte_per_second>(value.parse()?)) }
+}
+
+pub(crate) struct ParseIops;
+
+impl ParseCgroup<ParseIops> for OperationsPerSecond {
+  type Error = ParseValueError;
+
+  fn parse_cgroup(value: &str) -> Result<Self, Self::Error> { Ok(Self::new::<hertz>(value.parse()?)) }
+}
+
+impl EncodeCgroup<ParseBandwidth> for BytesPerSecond {
+  fn encode_token(&self, output: &mut String) -> Option<()> { write!(output, "{}", self.get::<byte_per_second>()).ok() }
+}
+
+impl EncodeCgroup<ParseIops> for OperationsPerSecond {
+  fn encode_token(&self, output: &mut String) -> Option<()> { write!(output, "{}", self.get::<hertz>()).ok() }
 }
 
 #[cfg(test)]

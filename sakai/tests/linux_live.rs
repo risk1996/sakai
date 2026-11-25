@@ -4,8 +4,9 @@ use std::{fmt::Debug, fs, io, path::PathBuf, process::Command, str::FromStr, tim
 
 use assertables::{assert_ok, assert_some};
 use sakai::{
-  Bytes, Cgroup, Error, IrqPressure, MaxOr, NonZeroTime, Pressure, Time,
+  Bytes, Cgroup, Count, Error, IrqPressure, MaxOr, NonZeroTime, Pressure, Time,
   error::{ParseError, ParseValueError},
+  v1,
   v2::{
     CgroupFile, CgroupPath,
     core::{
@@ -682,4 +683,66 @@ fn check_present_or_missing(group: &Cgroup, name: &str, result: Result<(), Error
     | Err(error) => return Err(error),
   }
   Ok(())
+}
+
+#[test]
+fn v1_live_discovers_separate_hierarchies_and_applies_typed_limits() {
+  let Some(root) = std::env::var_os("SAKAI_VMTEST_V1") else { return };
+  let root = PathBuf::from(root);
+
+  let cpu = assert_ok!(v1::Cgroup::from_current_process("cpu"));
+  let cpuacct = assert_ok!(v1::Cgroup::from_current_process("cpuacct"));
+  let memory = assert_ok!(v1::Cgroup::from_current_process("memory"));
+  let pids = assert_ok!(v1::Cgroup::from_current_process("pids"));
+  assert_eq!(cpu.path(), root.join("cpu"));
+  assert_eq!(cpuacct.path(), cpu.path());
+  assert_eq!(memory.path(), root.join("memory"));
+  assert_eq!(pids.path(), root.join("pids"));
+  assert_eq!(assert_ok!(v1::Cgroup::from_current_process("name=sakai")).path(), root.join("named"));
+  assert_ok!(Cgroup::from_current_process());
+  assert_ok!(cpuacct.read_value::<v1::cpuacct::CpuUsage>());
+  assert_ok!(cpuacct.read_value::<v1::cpuacct::CpuAccountingStat>());
+
+  struct Child(PathBuf);
+
+  impl Child {
+    fn create(parent: &v1::Cgroup) -> Self {
+      let path = parent.path().join(format!("sakai-v1-{}", std::process::id()));
+      assert_ok!(fs::create_dir(&path));
+      Self(path)
+    }
+
+    fn name(&self) -> &std::ffi::OsStr { assert_some!(self.0.file_name()) }
+  }
+
+  impl Drop for Child {
+    fn drop(&mut self) { drop(fs::remove_dir(&self.0)); }
+  }
+
+  let cpu_child = Child::create(&cpu);
+  let group = assert_ok!(cpu.child(cpu_child.name()));
+  assert!(assert_ok!(cpu.children()).iter().any(|child| child.path() == group.path()));
+  let quota = assert_ok!(NonZeroTime::try_new(Time::new::<microsecond>(25_000)));
+  assert_ok!(group.write_value::<v1::cpu::CpuQuota>(MaxOr::Value(quota)));
+  assert_eq!(assert_ok!(group.read_value::<v1::cpu::CpuQuota>()).value, MaxOr::Value(quota));
+  assert_ok!(group.write_value::<v1::cpu::CpuQuota>(MaxOr::Max));
+  assert_eq!(assert_ok!(group.read_value::<v1::cpu::CpuQuota>()).value, MaxOr::Max);
+  assert_ok!(group.read_value::<v1::cpu::CpuPeriod>());
+  assert_ok!(group.read_value::<v1::cpu::CpuStat>());
+  assert!(assert_ok!(group.read_value::<v1::core::Tasks>()).is_empty());
+
+  let memory_child = Child::create(&memory);
+  let group = assert_ok!(v1::Cgroup::from_path(&memory_child.0));
+  let limit = Bytes::new::<byte>(8_388_608);
+  assert_ok!(group.write_value::<v1::memory::MemoryLimit>(MaxOr::Value(limit)));
+  assert_eq!(assert_ok!(group.read_value::<v1::memory::MemoryLimit>()).value, limit);
+  assert_ok!(group.read_value::<v1::memory::MemoryUsage>());
+  assert_ok!(group.read_value::<v1::memory::MemoryStat>());
+  assert!(matches!(group.read_value::<v1::cpu::CpuQuota>(), Err(Error::FileMissing { .. })));
+
+  let pids_child = Child::create(&pids);
+  let group = assert_ok!(pids.child(pids_child.name()));
+  let limit = Count { value: 12, ..Default::default() };
+  assert_ok!(group.write_value::<v1::pids::PidsMax>(MaxOr::Value(limit)));
+  assert_eq!(assert_ok!(group.read_value::<v1::pids::PidsMax>()).value, MaxOr::Value(limit));
 }

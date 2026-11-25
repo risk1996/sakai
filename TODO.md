@@ -126,7 +126,7 @@ files. Treat that as `FileMissing`, not a parse failure or panic.
 ## Others
 
 - [ ] Duplicate and extra (future) fields (explicitly out-of-scope for now)
-- [ ] cgroup v1
+- [x] cgroup v1 discovery, hierarchy handles, and typed controller interfaces
 - [ ] cgroup v2 write
 - [ ] Benchmark
 - [x] "Since Linux x.x" documentation — public Rust APIs link to Linux

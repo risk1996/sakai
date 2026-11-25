@@ -46,7 +46,13 @@
 
 #[cfg(target_os = "linux")]
 pub use handle::Cgroup;
-pub use interface::{CgroupFile, ReadableFile, WritableFile};
+
+pub use super::{CgroupFile, ReadableFile, WritableFile};
+
+/// Type parameter selecting cgroup v2 file declarations.
+#[derive(Debug)]
+#[non_exhaustive]
+pub struct Version;
 #[cfg(target_os = "linux")]
 pub use path::{CgroupPath, CgroupPathError};
 
@@ -63,8 +69,6 @@ pub mod notification;
 pub mod pids;
 pub mod rdma;
 
-#[cfg(target_os = "linux")]
-mod file;
 #[cfg(target_os = "linux")]
 mod handle;
 pub(crate) mod interface;
