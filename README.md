@@ -1,5 +1,15 @@
 # Sakai
 
+[![CI status on main](https://img.shields.io/github/actions/workflow/status/risk1996/sakai/ci.yml?branch=main&style=flat-square&logo=githubactions&logoColor=white&label=CI)](https://github.com/risk1996/sakai/actions/workflows/ci.yml?query=branch%3Amain)
+[![Crate version on crates.io](https://img.shields.io/crates/v/sakai?include_prereleases&style=flat-square&logo=rust&logoColor=white)](https://crates.io/crates/sakai)
+[![Python package version on PyPI](https://img.shields.io/pypi/v/sakai?style=flat-square&logo=pypi&logoColor=white)](https://pypi.org/project/sakai/)
+[![Rust API docs on docs.rs](https://img.shields.io/docsrs/sakai?style=flat-square&logo=docs.rs&logoColor=white&label=docs.rs)](https://docs.rs/sakai/latest/sakai/)
+
+[![Linux cgroup v2](https://img.shields.io/badge/Linux-cgroup%20v2-334155?style=flat-square&logo=linux&logoColor=white)](https://docs.kernel.org/admin-guide/cgroup-v2.html)
+[![Linux cgroup v1](https://img.shields.io/badge/Linux-cgroup%20v1-334155?style=flat-square&logo=linux&logoColor=white)](sakai/README.md#legacy-cgroup-v1)
+[![Installation-size reports on main](https://img.shields.io/badge/install%20size-reports-0f766e?style=flat-square&logo=githubactions&logoColor=white)](https://github.com/risk1996/sakai/actions/workflows/installation-size.yml?query=branch%3Amain)
+[![MIT license](https://img.shields.io/github/license/risk1996/sakai?style=flat-square&logo=opensourceinitiative&logoColor=white)](LICENSE)
+
 A Rust library for reading and configuring cgroups on Linux. The parsers
 are OS-independent. Linux Python bindings expose the readers.
 
