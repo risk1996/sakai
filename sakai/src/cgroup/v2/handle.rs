@@ -7,7 +7,7 @@ use super::{
   path::{CgroupPath, CgroupPathError},
 };
 use crate::{
-  cgroup::{
+  cgroup::common::{
     directory::Directory,
     discovery::{open_candidates, processes},
   },

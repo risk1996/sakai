@@ -1,10 +1,10 @@
 //! Core interfaces that explain controller availability and threaded topology.
 
 pub use state::{CgroupEvents, CgroupStat, CgroupStatLocal};
-pub use task::TaskId;
+
+pub use crate::cgroup::common::TaskId;
 
 mod state;
-mod task;
 
 use super::interface::cgroup_file;
 use crate::{

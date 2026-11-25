@@ -4,10 +4,12 @@
 
 use crate::{
   Count, MaxOr,
+  cgroup::common::interface::{cgroup_file, cgroup_scalars},
   parse::{ParseCount, cgroup_value},
 };
 
-v1_scalars! {
+cgroup_scalars! {
+  super::Version;
   /// Current number of threads in this cgroup and its descendants.
   /// This file is absent at the hierarchy root.
   PidsCurrent, "pids.current", Count, ParseCount, Read;
@@ -30,4 +32,4 @@ pub struct PidsEvents {
 cgroup_value! { keyed PidsEvents, |_| "value", {
   max: required ParseCount => "max",
 } }
-v1_file!(PidsEvents, "pids.events", Read);
+cgroup_file!(PidsEvents, "pids.events", Read; super::Version);

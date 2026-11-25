@@ -5,14 +5,16 @@
 use std::collections::BTreeMap;
 
 use super::codec::Unsigned;
-pub use crate::v2::io::Device;
+pub use crate::cgroup::common::Device;
 use crate::{
   Bytes, BytesPerSecond, Count, OperationsPerSecond,
+  cgroup::common::interface::{cgroup_file, cgroup_scalars},
   error::{ParseError, ParseValueError},
   parse::{EncodeCgroup, ParseBandwidth, ParseBytes, ParseCgroup, ParseCount, ParseIops, Parser},
 };
 
-v1_scalars! {
+cgroup_scalars! {
+  super::Version;
   /// Default block I/O scheduling weight. Kernel support depends on the I/O scheduler.
   BlkioWeight, "blkio.weight", u64, Unsigned, ReadWrite;
 }
@@ -70,32 +72,32 @@ impl<T> IoStat<T> {
   }
 }
 
-v1_file!(alias
+cgroup_file!(alias
   /// Bytes transferred per device and operation using the throttling interface.
   ThrottleIoServiceBytes, "blkio.throttle.io_service_bytes" => IoStat<Bytes>, IoStat::parse::<ParseBytes>
-);
-v1_file!(alias
+; super::Version);
+cgroup_file!(alias
   /// Bios issued per device and operation using the throttling interface.
   ThrottleIoServiced, "blkio.throttle.io_serviced" => IoStat<Count>, IoStat::parse::<ParseCount>
-);
-v1_file!(alias
+; super::Version);
+cgroup_file!(alias
   /// Bytes transferred per device and operation, when supported by the scheduler.
   IoServiceBytes, "blkio.io_service_bytes" => IoStat<Bytes>, IoStat::parse::<ParseBytes>
-);
-v1_file!(alias
+; super::Version);
+cgroup_file!(alias
   /// I/O requests issued per device and operation, when supported by the scheduler.
   IoServiced, "blkio.io_serviced" => IoStat<Count>, IoStat::parse::<ParseCount>
-);
+; super::Version);
 
-macro_rules! throttle_files {
+macro_rules! cgroup_throttle_files {
   ($($(#[$doc:meta])* $name:ident, $file:literal, $value:ty, $codec:ty;)+) => {
     $(
       $(#[$doc])*
       #[non_exhaustive]
       pub struct $name;
 
-      v1_file!(file $name, $file);
-      v1_file!(read $name => BTreeMap<Device, $value>, |contents: &str| {
+      cgroup_file!(file $name, $file; super::Version);
+      cgroup_file!(read $name => BTreeMap<Device, $value>, |contents: &str| {
         contents.lines().filter(|line| !line.trim().is_empty()).map(|line| {
           Parser::parse_line(contents, line, |parser| {
             let device = parser.next_raw_field("device")?.parse::<Device>()?;
@@ -104,7 +106,7 @@ macro_rules! throttle_files {
           })
         }).collect()
       });
-      v1_file!(write $name, 'a => (Device, $value), |(device, value)| {
+      cgroup_file!(write $name, 'a => (Device, $value), |(device, value)| {
         let mut command = format!("{device} ");
         EncodeCgroup::<$codec>::encode_field(&value, &mut command, "rate")?;
         Ok(command)
@@ -113,7 +115,7 @@ macro_rules! throttle_files {
   };
 }
 
-throttle_files! {
+cgroup_throttle_files! {
   /// Read limit per device in bytes per second. Writing zero removes the limit.
   ThrottleReadBps, "blkio.throttle.read_bps_device", BytesPerSecond, ParseBandwidth;
   /// Write limit per device in bytes per second. Writing zero removes the limit.

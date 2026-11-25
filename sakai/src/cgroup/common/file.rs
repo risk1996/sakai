@@ -63,7 +63,7 @@ mod tests {
   #[test]
   fn reads_relative_to_cgroup_directory() {
     let directory = assert_ok!(rustix::fs::open(
-      concat!(env!("CARGO_MANIFEST_DIR"), "/src/cgroup"),
+      concat!(env!("CARGO_MANIFEST_DIR"), "/src/cgroup/common"),
       OFlags::RDONLY | OFlags::CLOEXEC | OFlags::DIRECTORY,
       Mode::empty(),
     ));

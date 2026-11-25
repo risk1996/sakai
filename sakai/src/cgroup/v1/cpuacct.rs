@@ -5,10 +5,12 @@
 use super::codec::Nanoseconds;
 use crate::{
   Count, Time,
+  cgroup::common::interface::{cgroup_file, cgroup_scalars},
   parse::{ParseCount, cgroup_value},
 };
 
-v1_scalars! {
+cgroup_scalars! {
+  super::Version;
   /// CPU time consumed by this group and its descendants, reported in nanoseconds.
   CpuUsage, "cpuacct.usage", Time, Nanoseconds, Read;
 }
@@ -30,4 +32,4 @@ cgroup_value! { keyed CpuAccountingStat, |_| "value", {
   user: required ParseCount => "user",
   system: required ParseCount => "system",
 } }
-v1_file!(CpuAccountingStat, "cpuacct.stat", Read);
+cgroup_file!(CpuAccountingStat, "cpuacct.stat", Read; super::Version);

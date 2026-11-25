@@ -3,6 +3,7 @@
 //! See the [Linux v1 freezer guide](https://docs.kernel.org/admin-guide/cgroup-v1/freezer-subsystem.html).
 
 use crate::{
+  cgroup::common::interface::{cgroup_file, cgroup_scalars},
   error::{ParseError, ParseValueError},
   parse::ParseBoolean,
 };
@@ -48,10 +49,11 @@ pub enum FreezerRequest {
   Frozen,
 }
 
-v1_file!(FreezerSnapshot, "freezer.state", Read);
-v1_file!(write FreezerSnapshot, 'a => FreezerRequest, |request: FreezerRequest| Ok(request.to_string()));
+cgroup_file!(FreezerSnapshot, "freezer.state", Read; super::Version);
+cgroup_file!(write FreezerSnapshot, 'a => FreezerRequest, |request: FreezerRequest| Ok(request.to_string()));
 
-v1_scalars! {
+cgroup_scalars! {
+  super::Version;
   /// Whether this cgroup has requested freezing itself.
   SelfFreezing, "freezer.self_freezing", bool, ParseBoolean, Read;
   /// Whether freezing was requested by an ancestor.

@@ -4,14 +4,14 @@
 
 pub use rdma::{RdmaDevice, RdmaDeviceCurrent, RdmaDeviceMax};
 
-use crate::v2::rdma;
+use crate::cgroup::common::{interface::cgroup_file, rdma};
 
-v1_file!(alias
+cgroup_file!(alias
   /// Current RDMA handle and object usage by device.
   RdmaCurrent, "rdma.current" => rdma::RdmaCurrent
-);
-v1_file!(alias
+; super::Version);
+cgroup_file!(alias
   /// Local RDMA resource limits by device.
   RdmaMax, "rdma.max" => rdma::RdmaMax
-);
-v1_file!(write RdmaMax, 'a => (&'a RdmaDevice, &'a RdmaDeviceMax), <rdma::RdmaMax as crate::cgroup::WritableFile>::encode);
+; super::Version);
+cgroup_file!(write RdmaMax, 'a => (&'a RdmaDevice, &'a RdmaDeviceMax), rdma::encode_device_max);

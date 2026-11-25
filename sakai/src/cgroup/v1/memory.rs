@@ -7,11 +7,13 @@ use std::str::FromStr;
 use super::codec::encode_byte_limit;
 use crate::{
   Bytes, Count, MaxOr,
+  cgroup::common::interface::{cgroup_file, cgroup_scalars},
   error::{EncodeError, ParseError, ParseValueError},
   parse::{KeyedFields, ParseBytes, ParseCount, cgroup_value, encode_pair},
 };
 
-v1_scalars! {
+cgroup_scalars! {
+  super::Version;
   /// Approximate memory usage in bytes, including accounted descendants.
   MemoryUsage, "memory.usage_in_bytes", Bytes, ParseBytes, Read;
   /// Peak accounted memory usage in bytes.
@@ -21,9 +23,10 @@ v1_scalars! {
   /// Writes can be rounded to the system page size and are unavailable at the root.
   MemoryLimit, "memory.limit_in_bytes", Bytes, ParseBytes, Read;
 }
-v1_file!(write MemoryLimit, 'a => MaxOr<Bytes>, |limit| encode_byte_limit(limit, "memory.limit_in_bytes"));
+cgroup_file!(write MemoryLimit, 'a => MaxOr<Bytes>, |limit| encode_byte_limit(limit, "memory.limit_in_bytes"));
 
-v1_scalars! {
+cgroup_scalars! {
+  super::Version;
   /// Number of times memory charges encountered this group's limit.
   MemoryFailures, "memory.failcnt", Count, ParseCount, Read;
   /// Approximate combined memory and swap usage in bytes, including accounted descendants.
@@ -36,9 +39,10 @@ v1_scalars! {
   /// MaxOr::Max as a write command to reset the limit.
   MemorySwapLimit, "memory.memsw.limit_in_bytes", Bytes, ParseBytes, Read;
 }
-v1_file!(write MemorySwapLimit, 'a => MaxOr<Bytes>, |limit| encode_byte_limit(limit, "memory.memsw.limit_in_bytes"));
+cgroup_file!(write MemorySwapLimit, 'a => MaxOr<Bytes>, |limit| encode_byte_limit(limit, "memory.memsw.limit_in_bytes"));
 
-v1_scalars! {
+cgroup_scalars! {
+  super::Version;
   /// Number of times charges encountered this group's combined memory and swap limit.
   MemorySwapFailures, "memory.memsw.failcnt", Count, ParseCount, Read;
 }
@@ -136,7 +140,7 @@ impl FromStr for MemoryStat {
   }
 }
 
-v1_file!(MemoryStat, "memory.stat", Read);
+cgroup_file!(MemoryStat, "memory.stat", Read; super::Version);
 
 impl MemoryStat {
   /// Encodes the snapshot as v1 memory.stat text. Unrecognized fields are omitted.

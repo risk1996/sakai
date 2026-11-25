@@ -4,7 +4,7 @@ use procfs::process::Process;
 
 use crate::Error;
 
-pub(super) fn processes(pid: u32) -> Result<(Process, Process), Error> {
+pub(in crate::cgroup) fn processes(pid: u32) -> Result<(Process, Process), Error> {
   let pid = i32::try_from(pid)
     .ok()
     .filter(|pid| *pid > 0)
@@ -13,7 +13,7 @@ pub(super) fn processes(pid: u32) -> Result<(Process, Process), Error> {
 }
 
 // Try the candidates in order and retain the most specific mount's error.
-pub(super) fn open_candidates<C, T>(
+pub(in crate::cgroup) fn open_candidates<C, T>(
   candidates: impl IntoIterator<Item = C>,
   mut open: impl FnMut(C) -> Result<T, Error>,
   missing_mount: impl FnOnce() -> Error,

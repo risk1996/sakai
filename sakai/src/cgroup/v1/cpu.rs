@@ -5,10 +5,12 @@
 use super::codec::{CpuQuotaToken, Nanoseconds, Unsigned};
 use crate::{
   Count, MaxOr, NonZeroTime, Time,
+  cgroup::common::interface::{cgroup_file, cgroup_scalars},
   parse::{ParseBandwidthCount, ParseNonZeroMicroseconds, cgroup_value},
 };
 
-v1_scalars! {
+cgroup_scalars! {
+  super::Version;
   /// Quota in microseconds per period. The kernel reports -1 for no local limit.
   /// Ancestor bandwidth limits still apply. Writes at the hierarchy root are rejected.
   CpuQuota, "cpu.cfs_quota_us", MaxOr<NonZeroTime>, CpuQuotaToken, ReadWrite;
@@ -50,7 +52,7 @@ cgroup_value! { keyed CpuStat, |_| "value", {
   bursts: optional ParseBandwidthCount => "nr_bursts",
   burst_time: optional Nanoseconds => "burst_time",
 } }
-v1_file!(CpuStat, "cpu.stat", Read);
+cgroup_file!(CpuStat, "cpu.stat", Read; super::Version);
 
 #[cfg(test)]
 mod tests {

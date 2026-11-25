@@ -5,6 +5,7 @@
 use std::{fmt, str::FromStr};
 
 use crate::{
+  cgroup::common::interface::cgroup_file,
   error::{ParseError, ParseValueError},
   parse::Parser,
 };
@@ -118,25 +119,25 @@ impl fmt::Display for DeviceRule {
   }
 }
 
-v1_file!(alias
+cgroup_file!(alias
   /// Current allowlist, preserving row order.
   DevicesList, "devices.list" => Vec<DeviceRule>,
   |contents: &str| contents.lines().filter(|line| !line.trim().is_empty()).map(str::parse).collect()
-);
+; super::Version);
 
 /// Write one rule to allow device access within the limits of the parent cgroup.
 #[non_exhaustive]
 pub struct DevicesAllow;
 
-v1_file!(file DevicesAllow, "devices.allow");
-v1_file!(write DevicesAllow, 'a => DeviceRule, DeviceRule::encode);
+cgroup_file!(file DevicesAllow, "devices.allow"; super::Version);
+cgroup_file!(write DevicesAllow, 'a => DeviceRule, DeviceRule::encode);
 
 /// Write one rule to remove device access.
 #[non_exhaustive]
 pub struct DevicesDeny;
 
-v1_file!(file DevicesDeny, "devices.deny");
-v1_file!(write DevicesDeny, 'a => DeviceRule, DeviceRule::encode);
+cgroup_file!(file DevicesDeny, "devices.deny"; super::Version);
+cgroup_file!(write DevicesDeny, 'a => DeviceRule, DeviceRule::encode);
 
 #[cfg(test)]
 mod tests {

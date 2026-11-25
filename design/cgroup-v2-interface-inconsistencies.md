@@ -13,7 +13,7 @@ be handled as targeted codec fixes or API cleanup.
   that the key is a single token.
   **Medium priority.** A caller can save a modified snapshot successfully and
   discover the invalid key only when loading it again.
-  [Map codec](../sakai/src/parse/codec.rs#L65) · [Write key validation](../sakai/src/cgroup/v2/interface.rs#L108)
+  [Map codec](../sakai/src/parse/codec.rs#L65) · [Write key validation](../sakai/src/cgroup/common/interface.rs#L121)
 - **Memory snapshots can encode without required fields.** Both
   `MemoryStat::default()` and `MemoryNumaStat::default()` encode successfully
   as an empty string. Both parsers require `anon` and `file`. Editing the
@@ -59,7 +59,7 @@ be handled as targeted codec fixes or API cleanup.
   **Medium priority for `CpusetPartition`.** Passing an invalid snapshot to
   the writer can issue a valid state-change request, so the accepted inputs
   and their effect should be explicit.
-  [Scalar commands](../sakai/src/scalar.rs#L111) · [Default command macro](../sakai/src/cgroup/v2/interface.rs#L100) · [Topology command](../sakai/src/cgroup/v2/core.rs#L92) · [Partition command](../sakai/src/cgroup/v2/cpuset/partition.rs#L43)
+  [Scalar commands](../sakai/src/scalar.rs#L111) · [Default command macro](../sakai/src/cgroup/common/interface.rs#L113) · [Topology command](../sakai/src/cgroup/v2/core.rs#L92) · [Partition command](../sakai/src/cgroup/v2/cpuset/partition.rs#L43)
 - **Local event files expose different snapshot shapes.** `PidsEventsLocal`
   is a file marker that returns `PidsEvents`. `MemoryEventsLocal` is its own
   snapshot type and shares `MemoryEventCounts` with `MemoryEvents`.

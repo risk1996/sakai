@@ -92,7 +92,7 @@ impl<T: Copy + ScalarValue + EncodeCgroup<ScalarEncoding<T>>, I: Interface> Scal
   }
 }
 
-impl<T, I: Interface> crate::cgroup::interface::sealed::File for Scalar<T, I> {}
+impl<T, I: Interface> crate::cgroup::common::interface::sealed::File for Scalar<T, I> {}
 impl<T, I: Interface> CgroupFile for Scalar<T, I> {
   type Key = ();
   type Version = crate::v2::Version;

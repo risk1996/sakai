@@ -10,7 +10,7 @@ use rustix::fs;
 use super::{ReadableFile, Version, WritableFile};
 use crate::{
   Error,
-  cgroup::{
+  cgroup::common::{
     directory::Directory,
     discovery::{open_candidates, processes},
   },

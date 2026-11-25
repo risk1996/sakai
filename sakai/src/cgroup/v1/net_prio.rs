@@ -5,9 +5,13 @@
 use std::collections::BTreeMap;
 
 use super::codec::Unsigned;
-use crate::{cgroup::interface::encode_keyed, parse::cgroup_value};
+use crate::{
+  cgroup::common::interface::{cgroup_file, cgroup_scalars, encode_keyed},
+  parse::cgroup_value,
+};
 
-v1_scalars! {
+cgroup_scalars! {
+  super::Version;
   /// Kernel's priority index for this cgroup.
   PriorityIndex, "net_prio.prioidx", u64, Unsigned, Read;
 }
@@ -21,7 +25,7 @@ pub struct InterfacePriorities {
 }
 
 cgroup_value!(map InterfacePriorities, priorities: Unsigned, "priority");
-v1_file!(InterfacePriorities, "net_prio.ifpriomap", Read);
-v1_file!(write InterfacePriorities, 'a => (&'a str, u32), |(interface, priority): (&str, u32)| {
+cgroup_file!(InterfacePriorities, "net_prio.ifpriomap", Read; super::Version);
+cgroup_file!(write InterfacePriorities, 'a => (&'a str, u32), |(interface, priority): (&str, u32)| {
   encode_keyed::<Unsigned>(interface, "interface", &priority, "priority")
 });

@@ -6,6 +6,7 @@ use std::str::FromStr;
 
 use super::codec::Unsigned;
 use crate::{
+  cgroup::common::interface::cgroup_file,
   error::{ParseError, ParseValueError},
   parse::Parser,
 };
@@ -37,5 +38,5 @@ impl FromStr for ClassId {
   }
 }
 
-v1_file!(ClassId, "net_cls.classid", Read);
-v1_file!(write ClassId, 'a => ClassId, |id: ClassId| Ok(format!("0x{:04x}{:04x}", id.major, id.minor)));
+cgroup_file!(ClassId, "net_cls.classid", Read; super::Version);
+cgroup_file!(write ClassId, 'a => ClassId, |id: ClassId| Ok(format!("0x{:04x}{:04x}", id.major, id.minor)));

@@ -9,6 +9,14 @@ pub(crate) mod sealed {
 }
 
 /// A declared cgroup file with an optional filename key.
+///
+/// A handle can only access file declarations for its own hierarchy version.
+///
+/// ```compile_fail,E0271
+/// use sakai::{cgroup::{common::V1, ReadableFile}, v2::cpu::CpuMax};
+/// fn requires_v1<F: ReadableFile<Version = V1>>() {}
+/// requires_v1::<CpuMax>();
+/// ```
 pub trait CgroupFile: sealed::File {
   /// Exact filename, or its template when a key is required.
   ///
@@ -64,27 +72,27 @@ macro_rules! cgroup_file {
     $(#[$doc])*
     #[non_exhaustive]
     pub struct $file;
-    $crate::cgroup::interface::cgroup_file!(file $file, $name $(; $version)?);
-    $crate::cgroup::interface::cgroup_file!(read $file => $value $(, $decode)?);
+    $crate::cgroup::common::interface::cgroup_file!(file $file, $name $(; $version)?);
+    $crate::cgroup::common::interface::cgroup_file!(read $file => $value $(, $decode)?);
   };
   (file $file:ty, $name:expr $(, $key:ty => $resolve:expr)? $(; $version:ty)?) => {
-    impl $crate::cgroup::interface::sealed::File for $file {}
+    impl $crate::cgroup::common::interface::sealed::File for $file {}
     impl $crate::cgroup::CgroupFile for $file {
-      type Version = $crate::cgroup::interface::cgroup_file!(@version $($version)?);
+      type Version = $crate::cgroup::common::interface::cgroup_file!(@version $($version)?);
       const FILE_NAME: &'static str = $name;
-      type Key = $crate::cgroup::interface::cgroup_file!(@key $($key)?);
+      type Key = $crate::cgroup::common::interface::cgroup_file!(@key $($key)?);
       $(fn filename(key: &Self::Key) -> std::borrow::Cow<'static, str> { ($resolve)(key).into() })?
     }
   };
   (@version $version:ty) => { $version };
-  (@version) => { $crate::cgroup::v2::Version };
+  (@version) => { $crate::cgroup::common::V2 };
   (@key $key:ty) => { $key };
   (@key) => { () };
   (read $file:ty => $value:ty $(, $decode:expr)?) => {
     impl $crate::cgroup::ReadableFile for $file {
       type Value = $value;
       fn decode(contents: &str) -> Result<Self::Value, $crate::error::ParseError<$crate::error::ParseValueError>> {
-        $crate::cgroup::interface::cgroup_file!(@decode contents $(, $decode)?)
+        $crate::cgroup::common::interface::cgroup_file!(@decode contents $(, $decode)?)
       }
     }
   };
@@ -99,13 +107,13 @@ macro_rules! cgroup_file {
     }
   };
   ($value:ty, $name:expr, Read $(; $version:ty)?) => {
-    $crate::cgroup::interface::cgroup_file!(file $value, $name $(; $version)?);
-    $crate::cgroup::interface::cgroup_file!(read $value => $value);
+    $crate::cgroup::common::interface::cgroup_file!(file $value, $name $(; $version)?);
+    $crate::cgroup::common::interface::cgroup_file!(read $value => $value);
   };
   ($value:ty, $name:expr, ReadWrite $(; $version:ty)?) => {
-    $crate::cgroup::interface::cgroup_file!(file $value, $name $(; $version)?);
-    $crate::cgroup::interface::cgroup_file!(read $value => $value);
-    $crate::cgroup::interface::cgroup_file!(write $value, 'a => &'a $value, <$value>::encode_cgroup);
+    $crate::cgroup::common::interface::cgroup_file!(file $value, $name $(; $version)?);
+    $crate::cgroup::common::interface::cgroup_file!(read $value => $value);
+    $crate::cgroup::common::interface::cgroup_file!(write $value, 'a => &'a $value, <$value>::encode_cgroup);
   };
 }
 pub(crate) use cgroup_file;
@@ -128,3 +136,43 @@ pub(in crate::cgroup) fn encode_keyed<Unit>(
   value.encode_field(&mut command, value_field)?;
   Ok(command)
 }
+
+macro_rules! cgroup_scalar_snapshot {
+  ($(#[$doc:meta])* $name:ident, $value:ty, $codec:ty, $field:literal) => {
+    $(#[$doc])*
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    #[non_exhaustive]
+    pub struct $name {
+      /// Value reported by the kernel.
+      pub value: $value,
+    }
+
+    $crate::parse::cgroup_value!(scalar $name, value: $codec, $field);
+  };
+}
+
+macro_rules! cgroup_scalars {
+  ($version:ty; $($(#[$doc:meta])* $name:ident, $file:literal, $value:ty, $codec:ty, $access:ident;)+) => {
+    $(
+      $crate::cgroup::common::interface::cgroup_scalar_snapshot!($(#[$doc])* $name, $value, $codec, $file);
+      $crate::cgroup::common::interface::cgroup_file!($name, $file, Read; $version);
+      $crate::cgroup::common::interface::cgroup_scalars!(@write $name, $value, $access);
+    )+
+  };
+  (@write $name:ident, $value:ty, Read) => {};
+  (@write $name:ident, $value:ty, ReadWrite) => {
+    $crate::cgroup::common::interface::cgroup_file!(write $name, 'a => $value, |value| $name { value }.encode_cgroup());
+  };
+}
+
+pub(crate) use cgroup_scalar_snapshot;
+pub(crate) use cgroup_scalars;
+
+macro_rules! cgroup_hugetlb_file {
+  ($file:ty, $suffix:literal $(; $version:ty)?) => {
+    $crate::cgroup::common::interface::cgroup_file!(file $file, concat!("hugetlb.<hugepagesize>.", $suffix),
+      $crate::cgroup::common::PageSize => |size: &$crate::cgroup::common::PageSize| size.file_name($suffix)
+      $(; $version)?);
+  };
+}
+pub(crate) use cgroup_hugetlb_file;

@@ -118,7 +118,7 @@ files. Treat that as `FileMissing`, not a parse failure or panic.
 
 ## P7 — Compatibility and mutation (after read metrics)
 
-- [ ] Add writes for CPU and memory with write-specific input types and
+- [x] Add writes for CPU and memory with write-specific input types and
       semantics; do not model writes as the inverse of reads.
 - [ ] Add typed cgroup v1/hybrid conversion helpers while keeping v1 units and
       `memory.stat` types distinct from v2.
@@ -127,7 +127,7 @@ files. Treat that as `FileMissing`, not a parse failure or panic.
 
 - [ ] Duplicate and extra (future) fields (explicitly out-of-scope for now)
 - [x] cgroup v1 discovery, hierarchy handles, and typed controller interfaces
-- [ ] cgroup v2 write
+- [x] Typed cgroup v2 configuration writes
 - [ ] Benchmark
 - [x] "Since Linux x.x" documentation — public Rust APIs link to Linux
       references, with mainline introduction versions for interfaces and
