@@ -9,7 +9,7 @@ use rustix::{
   fs::{Mode, OFlags, openat},
 };
 
-/// Reads a cgroup v2 interface file relative to an open cgroup directory.
+/// Reads a cgroup interface file relative to an open cgroup directory.
 pub(crate) fn read_file(cgroup: impl AsFd, interface: &str) -> io::Result<String> {
   let descriptor = open_interface(cgroup, interface, OFlags::RDONLY)?;
   let mut contents = String::new();
@@ -63,7 +63,7 @@ mod tests {
   #[test]
   fn reads_relative_to_cgroup_directory() {
     let directory = assert_ok!(rustix::fs::open(
-      concat!(env!("CARGO_MANIFEST_DIR"), "/src/cgroup/v2"),
+      concat!(env!("CARGO_MANIFEST_DIR"), "/src/cgroup/common"),
       OFlags::RDONLY | OFlags::CLOEXEC | OFlags::DIRECTORY,
       Mode::empty(),
     ));

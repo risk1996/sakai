@@ -1,4 +1,4 @@
-//! Linux cgroup v2 Python bindings.
+//! Linux cgroup Python bindings.
 
 use pyo3::{prelude::*, types::PyModule};
 
@@ -8,8 +8,8 @@ use self::{
   cpuset::{CpuList, CpusetPartition, CpusetReader, MemoryNodeList},
   dmem::{DmemCapacity, DmemCurrent, DmemLimits, DmemPeak, DmemReader},
   errors::{
-    CgroupParseError, DeletedCgroupError, InterfaceMissingError, NotCgroupV2Error, NotSupportedError, PythonError,
-    SakaiError,
+    CgroupParseError, DeletedCgroupError, InterfaceMissingError, NotCgroupV1Error, NotCgroupV2Error, NotSupportedError,
+    PythonError, SakaiError,
   },
   handle::Cgroup,
   hugetlb::{HugetlbEvents, HugetlbNumaStat, HugetlbReader},
@@ -49,18 +49,24 @@ mod rdma;
 pub(crate) mod stubs;
 #[cfg(test)]
 mod tests;
+mod v1;
 
-/// Read-only Linux cgroup v2 bindings backed by sakai, with native quantities.
+/// Read-only Linux cgroup bindings backed by sakai, with native quantities.
 #[pymodule(gil_used = true)]
 fn _sakai(module: &Bound<'_, PyModule>) -> PyResult<()> {
   crate::quantity::register(module)?;
   module.add("SakaiError", module.py().get_type::<SakaiError>())?;
   module.add("InterfaceMissingError", module.py().get_type::<InterfaceMissingError>())?;
+  module.add("NotCgroupV1Error", module.py().get_type::<NotCgroupV1Error>())?;
   module.add("NotCgroupV2Error", module.py().get_type::<NotCgroupV2Error>())?;
   module.add("DeletedCgroupError", module.py().get_type::<DeletedCgroupError>())?;
   module.add("CgroupParseError", module.py().get_type::<CgroupParseError>())?;
   module.add("NotSupportedError", module.py().get_type::<NotSupportedError>())?;
   module.add_class::<Cgroup>()?;
+  module.add_class::<v1::V1Cgroup>()?;
+  module.add_class::<v1::V1CpuReader>()?;
+  module.add_class::<v1::V1MemoryReader>()?;
+  module.add_class::<v1::V1PidsReader>()?;
   module.add_class::<EventPoller>()?;
   module.add_class::<ConfigurationWatcher>()?;
   module.add_class::<ChangeNotification>()?;

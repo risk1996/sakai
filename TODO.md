@@ -4,7 +4,7 @@ The implemented P0–P6 interfaces are in the initial release scope on both
 the Rust and Python sides. This inventory covers generic cgroup v2 interfaces
 and documented statistics, including optional newer-kernel files. Scheduler-
 specific BFQ tuning/debug interfaces and write-only actions are outside this
-read surface. P7 and later work is deferred.
+read surface.
 
 An interface item is complete when it has a typed public reader, key-based
 parsing where applicable, fixtures for supported and missing/older-kernel
@@ -118,16 +118,16 @@ files. Treat that as `FileMissing`, not a parse failure or panic.
 
 ## P7 — Compatibility and mutation (after read metrics)
 
-- [ ] Add writes for CPU and memory with write-specific input types and
+- [x] Add writes for CPU and memory with write-specific input types and
       semantics; do not model writes as the inverse of reads.
-- [ ] Add typed cgroup v1/hybrid conversion helpers while keeping v1 units and
-      `memory.stat` types distinct from v2.
+- [x] Preserve v1 wire units and expose a distinct v1 `memory.stat` type.
+- [ ] Add typed cgroup v1/hybrid conversion helpers.
 
 ## Others
 
 - [ ] Duplicate and extra (future) fields (explicitly out-of-scope for now)
-- [ ] cgroup v1
-- [ ] cgroup v2 write
+- [x] cgroup v1 discovery, hierarchy handles, and typed controller interfaces
+- [x] Typed cgroup v2 configuration writes
 - [ ] Benchmark
 - [x] "Since Linux x.x" documentation — public Rust APIs link to Linux
       references, with mainline introduction versions for interfaces and

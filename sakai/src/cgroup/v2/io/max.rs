@@ -1,12 +1,9 @@
-use std::{collections::BTreeMap, fmt::Write};
-
-use uom::si::{frequency::hertz, information_rate::byte_per_second};
+use std::collections::BTreeMap;
 
 use super::Device;
 use crate::{
-  error::ParseValueError,
   limit::MaxOr,
-  parse::{EncodeCgroup, ParseCgroup, cgroup_value},
+  parse::{ParseBandwidth, ParseIops, cgroup_value},
   unit::{BytesPerSecond, OperationsPerSecond},
   v2::interface::cgroup_file,
 };
@@ -133,30 +130,6 @@ impl IoMaxUpdate {
   }
 }
 
-pub(super) struct ParseBandwidth;
-
-impl ParseCgroup<ParseBandwidth> for BytesPerSecond {
-  type Error = ParseValueError;
-
-  fn parse_cgroup(value: &str) -> Result<Self, Self::Error> { Ok(Self::new::<byte_per_second>(value.parse()?)) }
-}
-
-pub(super) struct ParseIops;
-
-impl ParseCgroup<ParseIops> for OperationsPerSecond {
-  type Error = ParseValueError;
-
-  fn parse_cgroup(value: &str) -> Result<Self, Self::Error> { Ok(Self::new::<hertz>(value.parse()?)) }
-}
-
-impl EncodeCgroup<ParseBandwidth> for BytesPerSecond {
-  fn encode_token(&self, output: &mut String) -> Option<()> { write!(output, "{}", self.get::<byte_per_second>()).ok() }
-}
-
-impl EncodeCgroup<ParseIops> for OperationsPerSecond {
-  fn encode_token(&self, output: &mut String) -> Option<()> { write!(output, "{}", self.get::<hertz>()).ok() }
-}
-
 /// A complete or partial limit change for one device in `io.max`.
 #[derive(Debug, Clone, Copy)]
 #[non_exhaustive]
@@ -170,6 +143,7 @@ pub enum IoMaxCommand<'a> {
 #[cfg(test)]
 mod tests {
   use assertables::{assert_err, assert_ok};
+  use uom::si::{frequency::hertz, information_rate::byte_per_second};
 
   use super::*;
   use crate::parse::tests::{

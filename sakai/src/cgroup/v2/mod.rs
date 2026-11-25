@@ -46,9 +46,10 @@
 
 #[cfg(target_os = "linux")]
 pub use handle::Cgroup;
-pub use interface::{CgroupFile, ReadableFile, WritableFile};
 #[cfg(target_os = "linux")]
 pub use path::{CgroupPath, CgroupPathError};
+
+pub use super::{CgroupFile, ReadableFile, WritableFile, common::V2 as Version};
 
 pub mod core;
 pub mod cpu;
@@ -64,9 +65,7 @@ pub mod pids;
 pub mod rdma;
 
 #[cfg(target_os = "linux")]
-mod file;
-#[cfg(target_os = "linux")]
 mod handle;
-pub(crate) mod interface;
+pub(crate) use super::common::interface;
 #[cfg(target_os = "linux")]
 mod path;

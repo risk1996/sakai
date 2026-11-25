@@ -1,6 +1,6 @@
 # Sakai
 
-A Rust library for reading and configuring cgroup v2 on Linux. The parsers
+A Rust library for reading and configuring cgroups on Linux. The parsers
 are OS-independent. Linux Python bindings expose the readers.
 
 The `sakai` crate supports Rust 1.88 and newer. This is a fixed minimum,
@@ -32,6 +32,11 @@ It does not assume `/sys/fs/cgroup` is a unified hierarchy. Legacy-only hosts
 return `NotCgroupV2`; hybrid hosts may expose a v2 hierarchy without CPU controls.
 Missing interfaces return `Error::FileMissing`, including root exemptions and
 files unavailable on older kernels. Other errors retain their cause.
+
+For legacy controllers, open `sakai::v1::Cgroup::from_current_process("cpu")`
+and read `sakai::v1::cpu::CpuQuota`. Select `cpuacct`, `memory`, or another
+controller independently, since the process can have a different directory in
+each hierarchy. [Rust v1 usage](sakai/README.md#legacy-cgroup-v1)
 
 Every interface reader fetches fresh contents. Reading or editing public snapshot
 fields performs no I/O. Multiple reads are not an atomic snapshot.

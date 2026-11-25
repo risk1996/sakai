@@ -13,20 +13,23 @@ use tempfile::NamedTempFile;
 pub(super) struct Kernel {
   pub(super) name: &'static str,
   pub(super) smoke: bool,
+  pub(super) legacy: bool,
   sha256: &'static str,
 }
 
 impl Kernel {
   pub(super) const ALL: &[Self] = &[
-    Self::new("5.15", true, "1150nwy48n0nvm4iab0xiy9qm7gwjnbdhkwh09wi7iz3qwhrz1r3"),
-    Self::new("6.1", false, "0g3ap1x1yyyz54y2rnprs7vwbcpdak4ga501jgrrqjifv4890frh"),
-    Self::new("6.6", false, "1pzyn022b9dqp64wxd1aq2jir5v30fnv36qkv8495m02zvzb2irv"),
-    Self::new("6.12", false, "0f4789c3p6zliq57abw6c9n1kn18s69q9gl5fsxmy0xzqiscg2d3"),
-    Self::new("6.18", true, "0l95x6ig47c0il70ki2lfzqhzn33j5kpjnaxcvsp6vjmz61mi862"),
+    Self::new("5.15", true, true, "1150nwy48n0nvm4iab0xiy9qm7gwjnbdhkwh09wi7iz3qwhrz1r3"),
+    Self::new("6.1", false, false, "0g3ap1x1yyyz54y2rnprs7vwbcpdak4ga501jgrrqjifv4890frh"),
+    Self::new("6.6", false, false, "1pzyn022b9dqp64wxd1aq2jir5v30fnv36qkv8495m02zvzb2irv"),
+    Self::new("6.12", false, false, "0f4789c3p6zliq57abw6c9n1kn18s69q9gl5fsxmy0xzqiscg2d3"),
+    Self::new("6.18", true, false, "0l95x6ig47c0il70ki2lfzqhzn33j5kpjnaxcvsp6vjmz61mi862"),
   ];
   const ASSET_URL: &str = "https://github.com/danobi/vmtest/releases/download/test_assets";
 
-  const fn new(name: &'static str, smoke: bool, sha256: &'static str) -> Self { Self { name, smoke, sha256 } }
+  const fn new(name: &'static str, smoke: bool, legacy: bool, sha256: &'static str) -> Self {
+    Self { name, smoke, legacy, sha256 }
+  }
 
   pub(super) fn filename(&self) -> String { format!("bzImage-v{}-archlinux", self.name) }
 

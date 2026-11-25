@@ -4,7 +4,9 @@
 fixtures. On x86-64 Linux it runs directly with KVM. On macOS, the same
 Linux runner runs inside an amd64 container, using QEMU emulation. The guest
 shares the runner's root read-only and mounts a fresh writable cgroup v2
-hierarchy.
+hierarchy. The Linux 5.15 fixture also boots a separate hybrid guest to
+test v1 controller discovery, co-mounted CPU controllers, a named hierarchy,
+and CPU, memory, and PID limit writes.
 
 ```console
 devenv shell -- vmtest                         # 5.15 and 6.18

@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use crate::{
   error::{ParseError, ParseValueError},
-  parse::{EncodeCgroup, KeyedFields, ParseCgroup, ParseMicroseconds, cgroup_value},
+  parse::{KeyedFields, ParseBandwidthCount, ParseMicroseconds, cgroup_value},
   unit::{Count, Time},
   v2::interface::cgroup_file,
 };
@@ -171,27 +171,6 @@ cgroup_value! { keyed CpuBurstStat, CpuStatField::label, {
   nr_bursts: required ParseBandwidthCount => CpuStatField::NrBursts,
   burst: required ParseMicroseconds => CpuStatField::BurstUsec,
 } }
-
-struct ParseBandwidthCount;
-
-impl EncodeCgroup<ParseBandwidthCount> for Count {
-  fn encode_token(&self, output: &mut String) -> Option<()> {
-    EncodeCgroup::<crate::parse::ParseCount>::encode_token(self, output)
-  }
-}
-
-impl ParseCgroup<ParseBandwidthCount> for Count {
-  type Error = ParseValueError;
-
-  fn parse_cgroup(value: &str) -> Result<Self, Self::Error> {
-    let value = if value.starts_with('-') {
-      u64::from(u32::from_ne_bytes(value.parse::<i32>()?.to_ne_bytes()))
-    } else {
-      value.parse()?
-    };
-    Ok(Self { value, ..Default::default() })
-  }
-}
 
 impl FromStr for CpuStat {
   type Err = ParseError<ParseValueError>;

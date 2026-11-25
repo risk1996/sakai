@@ -9,12 +9,12 @@ use crate::{
 
 /// A process or thread ID reported in the reader's PID namespace.
 ///
-/// `cgroup.procs` reports process leaders; `cgroup.threads` reports individual
-/// threads. These IDs can be recycled immediately after a read and do not pin
+/// `cgroup.procs` reports process leaders. The v1 `tasks` and v2 `cgroup.threads` files
+/// report individual threads. These IDs can be recycled immediately after a read and do not pin
 /// processes. Zero represents a task invisible in that namespace, not a
 /// process to target. `try_new` validates the nonnegative signed 32-bit range;
 /// `AsRef` and `into_inner` expose the numeric identifier.
-/// See [Linux process and thread lists](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
+/// See [Linux v2 process and thread lists](https://docs.kernel.org/admin-guide/cgroup-v2.html#core-interface-files).
 /// For namespace-invisible zero entries, see [kernel list output](https://github.com/torvalds/linux/blob/v6.1/kernel/cgroup/cgroup.c)
 /// and [PID namespace conversion](https://github.com/torvalds/linux/blob/v6.1/include/linux/pid.h).
 #[nutype(validate(predicate = |id| *id >= 0), derive(Debug, Clone, Copy, PartialEq, Eq, Hash, AsRef))]
@@ -24,7 +24,7 @@ pub struct TaskId(i32);
 cgroup_value! { token TaskId: TaskId, TASK_ID }
 
 impl TaskId {
-  pub(super) fn parse_list(contents: &str) -> Result<Vec<Self>, ParseError<ParseValueError>> {
+  pub(crate) fn parse_list(contents: &str) -> Result<Vec<Self>, ParseError<ParseValueError>> {
     contents
       .lines()
       .filter(|line| !line.trim().is_empty())

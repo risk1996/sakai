@@ -12,7 +12,7 @@ use super::{
 pub(super) struct PythonPath;
 
 impl PythonPath {
-  fn extract<T>(object: &Bound<'_, T>) -> PyResult<PathBuf> {
+  pub(super) fn extract<T>(object: &Bound<'_, T>) -> PyResult<PathBuf> {
     // fsdecode first applies os.fspath and decodes bytes with surrogateescape.
     // PyO3 0.29's PathBuf extractor accepts only str results from os.fspath.
     object.py().import("os")?.call_method1("fsdecode", (object.as_any(),))?.extract()

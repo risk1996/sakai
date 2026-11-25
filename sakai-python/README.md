@@ -1,11 +1,11 @@
 # Sakai Python bindings
 
-`sakai` exposes the current read-only Linux cgroup v2 readers from
+`sakai` exposes read-only Linux cgroup readers from
 the `sakai` Rust crate. Python 3.11 or newer is required. The native module
 uses the `cp311-abi3` stable ABI for regular CPython; free-threaded CPython
 needs a separate wheel and is not supported by this build.
 
-On Linux with cgroup v2 and glibc 2.17 or newer, install the alpha wheel
+On Linux with glibc 2.17 or newer, install the alpha wheel
 for x86_64 or AArch64:
 
 ```sh
@@ -29,6 +29,29 @@ try:
 except InterfaceMissingError as error:
   print(f"Unavailable interface: {error.path}")
 ```
+
+### Legacy cgroup v1
+
+Open a controller explicitly with `V1Cgroup`. This API provides task and process
+lists and readers for CPU bandwidth and accounting, memory and combined
+memory/swap accounting, and PID counts and limits.
+
+```python
+from sakai import V1Cgroup
+
+cpu = V1Cgroup.current("cpu")
+print(cpu.cpu().quota(), cpu.cpu().period())
+memory = V1Cgroup.current("memory")
+print(memory.memory().usage().bytes)
+```
+
+On a hybrid host, use `Cgroup` for v2 and `V1Cgroup` for controllers assigned
+to a v1 hierarchy. The legacy memory reader's `.limit()` retains the kernel's
+numeric unlimited sentinel in a `Bytes` value. A missing v1 membership or mount
+raises `SakaiError`, and a path on the wrong filesystem raises
+`NotCgroupV1Error`. [Linux cgroup v1 guide](https://docs.kernel.org/admin-guide/cgroup-v1/index.html)
+
+### Cgroup v2
 
 Every reader method opens a fresh read-only kernel interface. Readings from separate
 methods are not atomic together. Limits use `MaxOr[T]`, where `T` is the quantity type for that field.

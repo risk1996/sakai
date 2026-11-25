@@ -3,12 +3,13 @@
 //! Configured lists express requests for tasks in this cgroup; effective lists
 //! describe the online resources granted by its parent. These are identifiers,
 //! not counts or quantities. Reads never change placement or migrate memory.
-//! See [Linux cpuset interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpuset-interface-files).
+//! An empty configuration inherits from the nearest ancestor with a nonempty\n//! request, or from all available resources. Configured lists are absent at the\n//! hierarchy root. An empty effective list represents an empty grant.\n//! See [Linux cpuset interfaces](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpuset-interface-files).
 
 pub use list::{CpuList, MemoryNodeList};
 pub use partition::CpusetPartition;
 
 use super::interface::cgroup_file;
+use crate::cgroup::common::cpuset::placement_command;
 
 mod list;
 mod partition;
@@ -47,11 +48,3 @@ cgroup_file!(alias
   CpusExclusive, "cpuset.cpus.exclusive" => CpuList
 );
 cgroup_file!(write CpusExclusive, 'a => &'a CpuList, |value: &CpuList| placement_command(value.encode_cgroup()));
-
-fn placement_command(command: Result<String, crate::error::EncodeError>) -> Result<String, crate::error::EncodeError> {
-  let mut command = command?;
-  if command.is_empty() {
-    command.push('\n');
-  }
-  Ok(command)
-}

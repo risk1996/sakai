@@ -3,12 +3,11 @@
 //! HugeTLB pages are distinct from transparent huge pages. Each supported page
 //! size has its own interfaces; reads do not allocate pages or reservations.
 
-use std::{collections::BTreeMap, fmt, fmt::Write, str::FromStr};
+use std::{collections::BTreeMap, fmt::Write, str::FromStr};
 
-use nutype::nutype;
-use uom::si::information::byte;
-
+pub use crate::cgroup::common::PageSize;
 use crate::{
+  cgroup::common::interface::{cgroup_hugetlb_file, cgroup_scalar_snapshot},
   error::{ParseError, ParseValueError},
   limit::MaxOr,
   parse::{EncodeCgroup, KeyedFields, ParseBytes, ParseCgroup, ParseCount, cgroup_value},
@@ -16,113 +15,31 @@ use crate::{
   v2::interface::cgroup_file,
 };
 
-/// A HugeTLB page size expressed in bytes, independent of the system page size.
-///
-/// `try_new` accepts powers of two of at least 1 KiB; this validates the name,
-/// not whether the running kernel supports that size. Parse kernel labels such
-/// as `64KB`, `2MB`, or `1GB`, whose suffixes denote binary units. Labels must
-/// use the kernel's canonical unit and decimal spelling. `AsRef` and
-/// `into_inner` expose the byte quantity.
-///
-/// ```
-/// use sakai::v2::hugetlb::PageSize;
-/// use uom::si::information::byte;
-///
-/// let size = "2MB".parse::<PageSize>()?;
-/// assert_eq!(size.as_ref().get::<byte>(), 2_097_152);
-/// assert_eq!(size.to_string(), "2MB");
-/// # Ok::<(), Box<dyn std::error::Error>>(())
-/// ```
-///
-/// See [Linux HugeTLB filenames](https://github.com/torvalds/linux/blob/v5.15/mm/hugetlb_cgroup.c).
-#[nutype(
-  validate(predicate = |size: &Bytes| {
-    let bytes = size.get::<byte>();
-    bytes >= PageSize::KIBIBYTE && bytes.is_power_of_two()
-  }),
-  derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, AsRef)
-)]
-#[non_exhaustive]
-pub struct PageSize(Bytes);
-
-cgroup_value! { display PageSize }
-
-impl PageSize {
-  const GIBIBYTE: u64 = 1 << 30;
-  const KIBIBYTE: u64 = 1 << 10;
-  const MEBIBYTE: u64 = 1 << 20;
-
-  fn file_name(&self, suffix: &str) -> String { format!("hugetlb.{self}.{suffix}") }
-}
-
-impl fmt::Display for PageSize {
-  #[expect(clippy::arithmetic_side_effects, reason = "selected binary unit divisors are positive constants")]
-  fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-    let bytes = self.as_ref().get::<byte>();
-    let (unit, suffix) = if bytes >= Self::GIBIBYTE {
-      (Self::GIBIBYTE, "GB")
-    } else if bytes >= Self::MEBIBYTE {
-      (Self::MEBIBYTE, "MB")
-    } else {
-      (Self::KIBIBYTE, "KB")
-    };
-    write!(formatter, "{}{suffix}", bytes / unit)
-  }
-}
-
-impl FromStr for PageSize {
-  type Err = ParseError<ParseValueError>;
-
-  fn from_str(label: &str) -> Result<Self, Self::Err> {
-    let invalid = || ParseError::invalid(label, "page_size", label, ParseValueError::OutOfRange);
-    let (number, unit) = if let Some(number) = label.strip_suffix("GB") {
-      (number, Self::GIBIBYTE)
-    } else if let Some(number) = label.strip_suffix("MB") {
-      (number, Self::MEBIBYTE)
-    } else if let Some(number) = label.strip_suffix("KB") {
-      (number, Self::KIBIBYTE)
-    } else {
-      return Err(invalid());
-    };
-    let bytes = number.parse::<u64>().ok().and_then(|number| number.checked_mul(unit)).ok_or_else(invalid)?;
-    let size = Self::try_new(Bytes::new::<byte>(bytes)).map_err(|_error| invalid())?;
-    if size.to_string() != label {
-      return Err(invalid());
-    }
-    Ok(size)
-  }
-}
-
-macro_rules! hugetlb_file {
-  ($name:ty, $suffix:literal) => {
-    cgroup_file!(file $name, concat!("hugetlb.<hugepagesize>.", $suffix),
-      PageSize => |size: &PageSize| size.file_name($suffix));
-  };
-}
-
-macro_rules! scalar {
+macro_rules! cgroup_hugetlb_scalar {
   ($name:ident, $value:ty, $suffix:literal, $field:literal, $documentation:literal $(, $encode:expr)?) => {
-    #[doc = $documentation]
-    ///
-    /// Values can change between reads.
-    /// See [Linux HugeTLB accounting](https://docs.kernel.org/admin-guide/cgroup-v1/hugetlb.html)
-    /// and [v2 source](https://github.com/torvalds/linux/blob/v5.15/mm/hugetlb_cgroup.c).
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-    #[non_exhaustive]
-    pub struct $name {
-      /// Stored quantity or limit in bytes.
-      pub value: $value,
-    }
-
-    cgroup_value! { scalar $name, value: ParseBytes, $field }
-    hugetlb_file!($name, $suffix);
+    cgroup_scalar_snapshot!(
+      #[doc = $documentation]
+      ///
+      /// Values can change between reads.
+      /// See [Linux HugeTLB accounting](https://docs.kernel.org/admin-guide/cgroup-v1/hugetlb.html)
+      /// and [v2 source](https://github.com/torvalds/linux/blob/v5.15/mm/hugetlb_cgroup.c).
+      #[derive(Hash)]
+      $name, $value, ParseBytes, $field
+    );
+    cgroup_hugetlb_file!($name, $suffix);
     cgroup_file!(read $name => $name);
     $(cgroup_file!(write $name, 'a => $value, $encode);)?
   };
 }
 
-scalar!(HugetlbCurrent, Bytes, "current", "current", "Hierarchical faulted HugeTLB usage in bytes for one page size.");
-scalar!(
+cgroup_hugetlb_scalar!(
+  HugetlbCurrent,
+  Bytes,
+  "current",
+  "current",
+  "Hierarchical faulted HugeTLB usage in bytes for one page size."
+);
+cgroup_hugetlb_scalar!(
   HugetlbMax,
   MaxOr<Bytes>,
   "max",
@@ -130,7 +47,7 @@ scalar!(
   "Configured HugeTLB fault limit in bytes, or `max`; ancestors can still constrain usage.",
   |value| HugetlbMax { value }.encode_cgroup()
 );
-scalar!(
+cgroup_hugetlb_scalar!(
   HugetlbReservedCurrent,
   Bytes,
   "rsvd.current",
@@ -138,7 +55,7 @@ scalar!(
   "Hierarchical reservation-accounting usage in bytes: reserved pages plus faulted pages without prior reservations, \
    not only unused reservations."
 );
-scalar!(
+cgroup_hugetlb_scalar!(
   HugetlbReservedMax,
   MaxOr<Bytes>,
   "rsvd.max",
@@ -164,7 +81,7 @@ pub struct HugetlbEvents {
 }
 
 cgroup_value! { keyed HugetlbEvents, |_| "value", { max: required ParseCount => "max" } }
-hugetlb_file!(HugetlbEvents, "events");
+cgroup_hugetlb_file!(HugetlbEvents, "events");
 cgroup_file!(read HugetlbEvents => HugetlbEvents);
 
 /// Hierarchical in-use HugeTLB bytes and NUMA distribution for one page size.
@@ -184,7 +101,7 @@ pub struct HugetlbNumaStat {
   pub nodes: BTreeMap<u32, Bytes>,
 }
 
-hugetlb_file!(HugetlbNumaStat, "numa_stat");
+cgroup_hugetlb_file!(HugetlbNumaStat, "numa_stat");
 cgroup_file!(read HugetlbNumaStat => HugetlbNumaStat);
 
 impl HugetlbNumaStat {
@@ -233,12 +150,13 @@ impl FromStr for HugetlbNumaStat {
 #[non_exhaustive]
 pub struct HugetlbEventsLocal;
 
-hugetlb_file!(HugetlbEventsLocal, "events.local");
+cgroup_hugetlb_file!(HugetlbEventsLocal, "events.local");
 cgroup_file!(read HugetlbEventsLocal => HugetlbEvents);
 
 #[cfg(test)]
 mod tests {
   use assertables::{assert_err, assert_ok};
+  use uom::si::information::byte;
 
   use super::*;
   use crate::parse::tests::{

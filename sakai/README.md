@@ -1,6 +1,6 @@
 # Sakai
 
-Linux cgroup v2 metrics and configuration, with portable parsers and typed values.
+Linux cgroup metrics and configuration, with portable parsers and typed values.
 Rust 1.88 or newer is required. Linux 5.15 is the oldest kernel in the test
 matrix; newer interfaces depend on kernel version and configuration.
 
@@ -10,6 +10,34 @@ matrix; newer interfaces depend on kernel version and configuration.
 [dependencies]
 sakai = "0.1.0-alpha.1"
 ```
+
+## Legacy cgroup v1
+
+Open a controller or named hierarchy with `sakai::v1::Cgroup`. Co-mounted
+controllers such as `cpu` and `cpuacct` resolve to the same directory. On a
+hybrid host, discover a v1 controller and the v2 hierarchy independently.
+
+```rust,no_run
+#[cfg(target_os = "linux")]
+fn legacy_cpu(pid: u32) -> Result<(), sakai::Error> {
+  use sakai::v1::{Cgroup, cpu::{CpuPeriod, CpuQuota}, cpuacct::CpuUsage};
+
+  let cpu = Cgroup::from_pid(pid, "cpu")?;
+  let accounting = Cgroup::from_pid(pid, "cpuacct")?;
+  let quota = cpu.read_value::<CpuQuota>()?.value;
+  let period = cpu.read_value::<CpuPeriod>()?.value;
+  let usage = accounting.read_value::<CpuUsage>()?.value;
+  println!("{quota:?} per {period:?}; used {usage:?}");
+  Ok(())
+}
+```
+
+The v1 modules cover membership, CPU scheduling and accounting, memory,
+PIDs, cpuset, block I/O, freezer, device rules, HugeTLB, network classification
+and priorities, RDMA, and miscellaneous resources. Each typed write addresses
+one interface. CPU quota and period are separate files, and v1 memory-limit
+reads retain the kernel's numeric unlimited sentinel. See the
+[Linux cgroup v1 guide](https://docs.kernel.org/admin-guide/cgroup-v1/index.html).
 
 ## Read a cgroup on Linux
 
